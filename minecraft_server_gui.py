@@ -9,6 +9,25 @@ import json
 import shutil
 import glob
 import sys
+
+# Attempt to hide the Python interpreter console window on Windows
+if sys.platform == "win32":
+    try:
+        import ctypes
+        # SW_HIDE = 0. This is the value for hiding the window.
+        # Get a handle to the console window associated with the current process.
+        # If the script is run with pythonw.exe, GetConsoleWindow() will return 0 (NULL),
+        # and ShowWindow(0, ...) will do nothing, which is the desired behavior.
+        console_window_handle = ctypes.windll.kernel32.GetConsoleWindow()
+        if console_window_handle != 0:
+            ctypes.windll.user32.ShowWindow(console_window_handle, 0) # 0 corresponds to SW_HIDE
+    except ImportError:
+        # ctypes might not be available in some minimal Python installations (though unlikely for a GUI app)
+        pass # Silently ignore if ctypes cannot be imported
+    except Exception:
+        # Catch any other unexpected errors during the ctypes calls to prevent crashing
+        pass # Silently ignore other errors
+
 matplotlib.use('Agg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -61,7 +80,11 @@ class ServerControlGUI:
         # --- Definición de Estilos Personalizados --- 
         self.style.configure('.', background=PRIMARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, borderwidth=0, focusthickness=0, highlightthickness=0)
         self.style.configure('TFrame', background=PRIMARY_BG)
-        self.style.configure('Card.TFrame', background=SECONDARY_BG, relief='flat') # Para tarjetas
+        # Card.TFrame: For main cards, now with a border
+        self.style.configure('Card.TFrame', background=SECONDARY_BG, relief='solid', borderwidth=1, bordercolor=TERTIARY_BG)
+        # CardInner.TFrame: For frames within a Card, sharing Card's BG but no extra border
+        self.style.configure('CardInner.TFrame', background=SECONDARY_BG)
+
         self.style.configure('TLabel', background=SECONDARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, padding=5)
         self.style.configure('Title.TLabel', background=SECONDARY_BG, foreground=ACCENT_COLOR, font=FONT_UI_TITLE, padding=(10,15,10,10))
         self.style.configure('Header.TLabel', background=SECONDARY_BG, foreground=TEXT_SECONDARY, font=FONT_UI_BOLD, padding=6)
@@ -87,9 +110,86 @@ class ServerControlGUI:
         
         self.style.configure('TSeparator', background=TERTIARY_BG)
         
+        # Estilos para TEntry (cajas de texto)
+        self.style.configure('TEntry',
+                             fieldbackground=PRIMARY_BG,
+                             foreground=TEXT_PRIMARY,
+                             insertcolor=ACCENT_COLOR, # Color del cursor
+                             font=FONT_UI_NORMAL,
+                             padding=(6,6),
+                             relief='flat',
+                             borderwidth=1)
+        self.style.map('TEntry',
+                       bordercolor=[('focus', ACCENT_COLOR), ('', TERTIARY_BG)],
+                       fieldbackground=[('focus', SECONDARY_BG), ('disabled', SECONDARY_BG)],
+                       foreground=[('focus', ACCENT_COLOR), ('disabled', TEXT_SECONDARY)])
+
+        # Estilos para TCombobox (listas desplegables)
+        self.style.configure('TCombobox',
+                             fieldbackground=PRIMARY_BG,
+                             foreground=TEXT_PRIMARY,
+                             selectbackground=SECONDARY_BG, # Fondo del item seleccionado en el dropdown
+                             selectforeground=ACCENT_COLOR, # Texto del item seleccionado en el dropdown
+                             insertcolor=ACCENT_COLOR, # Cursor
+                             arrowcolor=TEXT_PRIMARY,
+                             font=FONT_UI_NORMAL,
+                             padding=(6,6), # Padding igual que TEntry
+                             relief='flat')
+        self.style.map('TCombobox',
+                       bordercolor=[('focus', ACCENT_COLOR), ('readonly', TERTIARY_BG), ('', TERTIARY_BG)],
+                       fieldbackground=[
+                           ('readonly', PRIMARY_BG),      # Estado por defecto para props (son readonly)
+                           ('focus', SECONDARY_BG),       # Al enfocar (si no es readonly)
+                           ('active', SECONDARY_BG),      # Cuando el dropdown está activo
+                           ('disabled', SECONDARY_BG)
+                       ],
+                       foreground=[
+                           ('readonly', TEXT_PRIMARY),    # Texto por defecto para props
+                           ('focus', ACCENT_COLOR),       # Texto al enfocar
+                           ('disabled', TEXT_SECONDARY)
+                       ],
+                       arrowcolor=[('hover', ACCENT_COLOR), ('pressed', ACCENT_COLOR), ('readonly', TEXT_PRIMARY), ('disabled', TEXT_SECONDARY)],
+                       background=[ # Color de fondo del widget combobox (área de la flecha)
+                           ('readonly', PRIMARY_BG),
+                           ('active', SECONDARY_BG),
+                           ('hover', SECONDARY_BG),
+                           ('disabled', PRIMARY_BG)
+                       ])
+        # Para el Listbox DENTRO del Combobox (necesario para algunos temas/plataformas)
+        self.master.option_add('*TCombobox*Listbox.background', SECONDARY_BG)
+        self.master.option_add('*TCombobox*Listbox.foreground', TEXT_PRIMARY)
+        self.master.option_add('*TCombobox*Listbox.selectBackground', ACCENT_COLOR)
+        self.master.option_add('*TCombobox*Listbox.selectForeground', PRIMARY_BG)
+        self.master.option_add('*TCombobox*Listbox.font', FONT_UI_NORMAL)
+        self.master.option_add('*TCombobox*Listbox.borderWidth', 0)
+        self.master.option_add('*TCombobox*Listbox.relief', 'flat')
+
         # Scrollbars (requiere más trabajo para un look 100% custom)
         self.style.configure("Vertical.TScrollbar", background=TERTIARY_BG, troughcolor=SECONDARY_BG, bordercolor=TERTIARY_BG, arrowcolor=TEXT_PRIMARY, gripcount=0)
         self.style.map("Vertical.TScrollbar", background=[('active', ACCENT_COLOR)])
+
+        # Custom Treeview style for use on cards
+        self.style.configure('CardView.Treeview',
+                             background=SECONDARY_BG,
+                             fieldbackground=SECONDARY_BG, # Background of the item area
+                             foreground=TEXT_PRIMARY,
+                             rowheight=28, # Increased row height for better spacing
+                             font=FONT_UI_NORMAL,
+                             relief='flat',
+                             borderwidth=0)
+        self.style.map('CardView.Treeview',
+                       background=[('selected', ACCENT_HOVER)],
+                       foreground=[('selected', TEXT_PRIMARY)]) # Ensure selected text is readable
+
+        self.style.configure('CardView.Treeview.Heading',
+                             background=TERTIARY_BG, # A slightly different background for headers
+                             foreground=TEXT_PRIMARY,
+                             font=FONT_UI_BOLD,
+                             relief='flat', # Flat look for headings
+                             padding=(8, 8)) # Generous padding for headings
+        self.style.map('CardView.Treeview.Heading',
+                       background=[('active', ACCENT_COLOR), ('hover', ACCENT_COLOR)], # Highlight on hover/active
+                       relief=[('active', 'groove'), ('hover', 'ridge')])
 
         # Estilo para Checkbutton (usado como Switch)
         self.style.configure('Switch.TCheckbutton', font=FONT_UI_NORMAL, padding=5)
@@ -99,6 +199,13 @@ class ServerControlGUI:
 
         # Eliminar selector de tema (ya no se usa ttkthemes)
         # --- Fin de Estilos --- 
+
+        # Flag for multi-line player list parsing - Initialize these BEFORE load_server_properties
+        self.expecting_player_list_next_line = False
+        self.player_count_line_prefix = "There are " 
+        self.player_count_line_suffix = " players online:"
+
+        self.selected_player_name = None # For kick/ban actions
 
         # Pestañas con iconos (los iconos se mantienen)
         self.notebook = ttk.Notebook(master, style='TNotebook')
@@ -113,22 +220,30 @@ class ServerControlGUI:
         self.notebook.add(self.properties_tab, text='⚙️  Server Properties')
         self._create_properties_tab_widgets()
         self.resources_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
-        self.notebook.add(self.resources_tab, text='📈 Recursos')
+        self.notebook.add(self.resources_tab, text='📈 System Resources')
         self._create_resources_tab_widgets()
         self.players_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
-        self.notebook.add(self.players_tab, text='👥 Jugadores')
+        self.notebook.add(self.players_tab, text='👥 Players')
         self._create_players_tab_widgets()
         self.ops_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
-        self.notebook.add(self.ops_tab, text='⭐ Ops')
+        self.notebook.add(self.ops_tab, text='⭐ Operators')
         self._create_ops_tab_widgets()
         self.worlds_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
-        self.notebook.add(self.worlds_tab, text='🌍 Mundos')
+        self.notebook.add(self.worlds_tab, text='🌍 Worlds')
         self._create_worlds_tab_widgets()
         self.stats_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
-        self.notebook.add(self.stats_tab, text='📊 Estadísticas')
+        self.notebook.add(self.stats_tab, text='📊 Statistics')
         self._create_stats_tab_widgets()
 
         self.load_server_properties()
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
+    def _on_tab_changed(self, event):
+        selected_tab_index = self.notebook.index(self.notebook.select())
+        # Players tab is index 3 (0-indexed)
+        if selected_tab_index == 3: # Players tab
+            if self.server_running: # Only update if server is supposed to be running
+                self.update_players_list()
 
     def _bind_hover(self, widget, normal_bg, hover_bg):
         # Necesita acceder a widget.cget("style") y parsearlo o tener estilos dedicados para hover
@@ -155,7 +270,7 @@ class ServerControlGUI:
         title = ttk.Label(card, text="Server Controls", style='Title.TLabel')
         title.pack(anchor='w', pady=(0, 20))
 
-        controls_frame = ttk.Frame(card, style='Card.TFrame') # Fondo de tarjeta
+        controls_frame = ttk.Frame(card, style='CardInner.TFrame') # Fondo de tarjeta
         controls_frame.pack(fill=tk.X)
 
         self.start_button = ttk.Button(controls_frame, text="Start Server", command=self.start_server_thread, style="Accent.TButton")
@@ -185,29 +300,28 @@ class ServerControlGUI:
         self.console_output_area.tag_configure("usercmd", foreground=CONSOLE_FG_CUSTOM, font=(FONT_CONSOLE_CUSTOM[0], FONT_CONSOLE_CUSTOM[1], 'bold'))
         self.console_output_area.tag_configure("normal", foreground=TEXT_SECONDARY)
 
-        entry_frame = ttk.Frame(console_card, style='Card.TFrame')
+        entry_frame = ttk.Frame(console_card, style='CardInner.TFrame')
         entry_frame.pack(fill=tk.X, pady=(15, 0))
-        self.command_entry = tk.Entry(entry_frame, font=FONT_CONSOLE_CUSTOM, 
-                                      bg=PRIMARY_BG, fg=TEXT_PRIMARY, insertbackground=ACCENT_COLOR, 
-                                      relief='flat', borderwidth=0, highlightthickness=0, bd=0)
+        self.command_entry = ttk.Entry(entry_frame, font=FONT_CONSOLE_CUSTOM, style='TEntry')
         self.command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=10, ipadx=10)
         self.command_entry.bind('<Return>', self.send_command_from_entry)
         self.command_entry.config(state='disabled')
         # Placeholder
-        self.command_entry.insert(0, 'Escribe un comando aquí...')
-        self.command_entry.config(fg='#888888')
+        self.command_entry.insert(0, 'Type a command here...')
+        self.command_entry.config(foreground='#888888') # Placeholder color
+
         def on_focus_in(event):
-            if self.command_entry.get() == 'Escribe un comando aquí...':
+            if self.command_entry.get() == 'Type a command here...':
                 self.command_entry.delete(0, tk.END)
-                self.command_entry.config(fg=ACCENT_COLOR)
+                self.command_entry.config(foreground=TEXT_PRIMARY) # Use styled foreground for normal text
         def on_focus_out(event):
             if not self.command_entry.get():
-                self.command_entry.insert(0, 'Escribe un comando aquí...')
-                self.command_entry.config(fg='#888888')
+                self.command_entry.insert(0, 'Type a command here...')
+                self.command_entry.config(foreground='#888888') # Placeholder color
         self.command_entry.bind('<FocusIn>', on_focus_in)
         self.command_entry.bind('<FocusOut>', on_focus_out)
         # Botón Send grande y alineado a la derecha
-        send_btn = ttk.Button(entry_frame, text='Enviar', command=self.send_command_from_button, style='Accent.TButton')
+        send_btn = ttk.Button(entry_frame, text='Send', command=self.send_command_from_button, style='Accent.TButton')
         send_btn.pack(side=tk.RIGHT, ipadx=16, ipady=6)
         self._bind_hover(send_btn, ACCENT_COLOR, ACCENT_HOVER)
         self.send_btn = send_btn
@@ -220,7 +334,7 @@ class ServerControlGUI:
 
         canvas = tk.Canvas(container, bg=SECONDARY_BG, highlightthickness=0)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
-        self.properties_scrollable_frame = ttk.Frame(canvas, style='Card.TFrame') # Frame que contendrá los widgets
+        self.properties_scrollable_frame = ttk.Frame(canvas, style='CardInner.TFrame') # Frame que contendrá los widgets
 
         self.properties_scrollable_frame.bind(
             "<Configure>",
@@ -238,13 +352,13 @@ class ServerControlGUI:
         title.pack(anchor='w', pady=(0, 10), padx=10)
 
         # Frame para los botones de acción
-        properties_controls_frame = ttk.Frame(self.properties_scrollable_frame, style='Card.TFrame')
+        properties_controls_frame = ttk.Frame(self.properties_scrollable_frame, style='CardInner.TFrame')
         properties_controls_frame.pack(fill=tk.X, pady=(5,15), padx=10)
         
-        self.load_props_button = ttk.Button(properties_controls_frame, text="Recargar Propiedades", command=self.load_server_properties, style="Accent.TButton")
+        self.load_props_button = ttk.Button(properties_controls_frame, text="Reload Properties", command=self.load_server_properties, style="Accent.TButton")
         self.load_props_button.pack(side=tk.LEFT, padx=(0,10))
         
-        self.save_props_button = ttk.Button(properties_controls_frame, text="Guardar Propiedades", command=self.save_server_properties, style="Accent2.TButton")
+        self.save_props_button = ttk.Button(properties_controls_frame, text="Save Properties", command=self.save_server_properties, style="Accent2.TButton")
         self.save_props_button.pack(side=tk.LEFT)
 
         # Diccionario para almacenar los widgets de propiedades y sus valores originales
@@ -252,7 +366,7 @@ class ServerControlGUI:
         self.property_original_values = {}
 
         # Área para propiedades no manejadas explícitamente (opcional, o para más tarde)
-        ttk.Label(self.properties_scrollable_frame, text="Propiedades Adicionales (avanzado):", style='Header.TLabel').pack(anchor='w', pady=(20,5), padx=10)
+        ttk.Label(self.properties_scrollable_frame, text="Additional Properties (Advanced):", style='Header.TLabel').pack(anchor='w', pady=(20,5), padx=10)
         self.additional_properties_text_area = scrolledtext.ScrolledText(self.properties_scrollable_frame, wrap=tk.WORD, height=10, width=70, 
                                                               bg=PRIMARY_BG, fg=TEXT_PRIMARY, 
                                                               insertbackground=ACCENT_COLOR, font=FONT_CONSOLE_CUSTOM, 
@@ -263,7 +377,7 @@ class ServerControlGUI:
         # Usar target_frame si se especifica, sino el por defecto.
         parent_frame = target_frame if target_frame else self.properties_scrollable_frame
 
-        prop_frame = ttk.Frame(parent_frame, style='Card.TFrame')
+        prop_frame = ttk.Frame(parent_frame, style='CardInner.TFrame')
         # Insertar el nuevo frame de propiedad ANTES del widget especificado (ej. el área de adicionales)
         if insert_before_widget:
             prop_frame.pack(fill=tk.X, pady=4, padx=10, before=insert_before_widget)
@@ -308,7 +422,7 @@ class ServerControlGUI:
     def _create_resources_tab_widgets(self):
         card = ttk.Frame(self.resources_tab, style='Card.TFrame', padding=30)
         card.pack(fill=tk.BOTH, expand=True)
-        title = ttk.Label(card, text="Uso de Recursos del Servidor", style='Title.TLabel')
+        title = ttk.Label(card, text="Server Resource Usage", style='Title.TLabel')
         title.pack(anchor='w', pady=(0, 20))
 
         # Info de depuración
@@ -316,7 +430,7 @@ class ServerControlGUI:
         self.debug_label.pack(anchor='w', pady=(0, 10))
 
         # CPU
-        cpu_frame = ttk.Frame(card, style='Card.TFrame')
+        cpu_frame = ttk.Frame(card, style='CardInner.TFrame')
         cpu_frame.pack(fill=tk.X, pady=10)
         cpu_icon = ttk.Label(cpu_frame, text='🖥️', font=('Segoe UI Emoji', 24), background=SECONDARY_BG)
         cpu_icon.pack(side=tk.LEFT, padx=(0, 10))
@@ -328,7 +442,7 @@ class ServerControlGUI:
         self.cpu_bar.pack(side=tk.LEFT, padx=20, fill=tk.X, expand=True)
 
         # RAM
-        ram_frame = ttk.Frame(card, style='Card.TFrame')
+        ram_frame = ttk.Frame(card, style='CardInner.TFrame')
         ram_frame.pack(fill=tk.X, pady=10)
         ram_icon = ttk.Label(ram_frame, text='💾', font=('Segoe UI Emoji', 24), background=SECONDARY_BG)
         ram_icon.pack(side=tk.LEFT, padx=(0, 10))
@@ -422,7 +536,7 @@ class ServerControlGUI:
                     ram_used = mem_info.rss / (1024 * 1024)  # MB
                     ram_total = psutil.virtual_memory().total / (1024 * 1024)  # MB
                     ram_percent = (ram_used / ram_total) * 100 if ram_total > 0 else 0
-                    self.cpu_percent_label.config(text=f"{cpu_per_core:.1f}% por núcleo ({num_cores} núcleos)")
+                    self.cpu_percent_label.config(text=f"{cpu_per_core:.1f}% per core ({num_cores} cores)")
                     self.cpu_bar['value'] = min(cpu_per_core, 100)
                     self.ram_label.config(text=f"{ram_used:.0f} MB / {ram_total:.0f} MB")
                     self.ram_bar['value'] = ram_percent
@@ -466,7 +580,7 @@ class ServerControlGUI:
         # Limpiar el área de texto de propiedades adicionales también
         self.additional_properties_text_area.configure(state='normal')
         self.additional_properties_text_area.delete('1.0', tk.END)
-        self.additional_properties_text_area.insert('1.0', "# Las propiedades no parseadas o comentarios largos podrían aparecer aquí en el futuro.")
+        self.additional_properties_text_area.insert('1.0', "# Unparsed properties or long comments might appear here in the future.")
         self.additional_properties_text_area.configure(state='disabled')
 
         self.server_properties_lines = [] # Para guardar el orden y comentarios
@@ -479,17 +593,17 @@ class ServerControlGUI:
         }
         # Nombres más amigables para las etiquetas
         friendly_names = {
-            "max-players": "Max. Jugadores:",
-            "server-port": "Puerto del Servidor:",
-            "level-name": "Nombre del Mundo:",
-            "online-mode": "Modo Online:",
-            "pvp": "Permitir PvP:",
-            "spawn-animals": "Generar Animales:",
-            "spawn-monsters": "Generar Monstruos:",
-            "spawn-npcs": "Generar NPCs:",
-            "allow-flight": "Permitir Volar:",
-            "enable-command-block": "Habilitar Bloque de Comandos:",
-            "motd": "Mensaje del Día (MOTD):"
+            "max-players": "Max Players:",
+            "server-port": "Server Port:",
+            "level-name": "World Name:",
+            "online-mode": "Online Mode:",
+            "pvp": "Allow PvP:",
+            "spawn-animals": "Spawn Animals:",
+            "spawn-monsters": "Spawn Monsters:",
+            "spawn-npcs": "Spawn NPCs:",
+            "allow-flight": "Allow Flight:",
+            "enable-command-block": "Enable Command Block:",
+            "motd": "Message of the Day (MOTD):"
         }
 
         try:
@@ -511,7 +625,7 @@ class ServerControlGUI:
                         options = None
                         # Usar nombre amigable o generar uno
                         label_text = friendly_names.get(key, f"{key.replace('-', ' ').title()}:")
-                        description = f"Propiedad original: {key}\nValor actual: {value}" 
+                        description = f"Original property: {key}\\nCurrent value: {value}" 
 
                         if key in special_properties:
                             widget_type = special_properties[key]["type"]
@@ -534,10 +648,10 @@ class ServerControlGUI:
             self.additional_properties_text_area.insert('1.0', f"# Error: {self.server_properties_path} not found.")
             self.additional_properties_text_area.configure(state='disabled')
             messagebox.showerror("Error", f"server.properties not found at {self.server_properties_path}")
-            self.log_to_console(f"Error: {self.server_properties_path} not found.\n", "error")
+            self.log_to_console(f"Error: {self.server_properties_path} not found.\\n", "error")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load server.properties: {e}")
-            self.log_to_console(f"Failed to load server.properties: {e}\n", "error")
+            self.log_to_console(f"Failed to load server.properties: {e}\\n", "error")
 
     def save_server_properties(self):
         try:
@@ -578,41 +692,81 @@ class ServerControlGUI:
             with open(self.server_properties_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(new_content_lines) + '\n') # Escribir líneas y asegurar una nueva línea al final
             
-            messagebox.showinfo("Success", "server.properties guardado exitosamente!")
-            self.log_to_console("server.properties guardado exitosamente.\n", "info")
+            messagebox.showinfo("Success", "server.properties saved successfully!")
+            self.log_to_console("server.properties saved successfully.\\n", "info")
             
             # Opcional: Recargar las propiedades para reflejar cualquier normalización (ej. true/false)
             # y actualizar los original_values si es necesario, o simplemente asumir que la UI ya está al día.
             self.load_server_properties() # Recargar para que la UI y los datos internos estén sincronizados
 
         except Exception as e:
-            messagebox.showerror("Error", f"Error al guardar server.properties: {e}")
-            self.log_to_console(f"Error al guardar server.properties: {e}\n", "error")
+            messagebox.showerror("Error", f"Error saving server.properties: {e}")
+            self.log_to_console(f"Error saving server.properties: {e}\\n", "error")
 
     def log_to_console(self, message, level="normal", animate=False):
         self.console_output_area.configure(state='normal')
         tag = level if level in ("error", "info", "warning", "usercmd") else "normal"
+        
+        original_message_for_console = message # Keep the original message for display
+
+        # Player list parsing logic
+        message_stripped = message.strip()
+
+        if self.expecting_player_list_next_line:
+            # This line should contain the player names
+            current_players = [p.strip() for p in message_stripped.split(',') if p.strip()]
+            self.players_connected = current_players
+            print(f"DEBUG: Players on next line: {self.players_connected}") # DEBUG
+            self._refresh_players_tree()
+            self.expecting_player_list_next_line = False # Reset flag
+        
+        elif self.player_count_line_prefix in message_stripped and self.player_count_line_suffix in message_stripped:
+            try:
+                # Extract the relevant part of the message that starts with player_count_line_prefix
+                # This handles cases where there might be timestamps or other info before "There are..."
+                start_index = message_stripped.find(self.player_count_line_prefix)
+                relevant_message_part = message_stripped[start_index:]
+
+                parts = relevant_message_part.split(self.player_count_line_suffix, 1)
+                player_names_part = parts[1].strip()
+                
+                if player_names_part: # Players are on the same line
+                    current_players = [p.strip() for p in player_names_part.split(',') if p.strip()]
+                    self.players_connected = current_players
+                    print(f"DEBUG: Players on same line: {self.players_connected}") # DEBUG
+                    self._refresh_players_tree()
+                    self.expecting_player_list_next_line = False
+                else:
+                    # Player names might be on the next line, or there are no players
+                    count_part_text = parts[0][len(self.player_count_line_prefix):].strip() # Should be like "X of a max Y"
+                    if count_part_text.startswith("0"): # "0 of a max..."
+                        self.players_connected = [] # No players
+                        print("DEBUG: Zero players detected from count line.") # DEBUG
+                        self._refresh_players_tree()
+                        self.expecting_player_list_next_line = False
+                    else:
+                        # Non-zero players, but names not on this line, so expect them on the next
+                        print(f"DEBUG: Expecting player list on next line. Count part: {count_part_text}") # DEBUG
+                        self.expecting_player_list_next_line = True
+                        # Player list will be updated when the next line is processed
+            except Exception as e: # pylint: disable=broad-except
+                print(f"DEBUG: Error parsing player count line: {e}") # DEBUG
+                self.expecting_player_list_next_line = False # Reset on any parsing error
+                # Original message will still be logged below
+                pass # Avoid crashing GUI on unexpected format
+
+        # Insert the original, unmodified message into the console GUI
         if animate:
-            for char in message:
+            for char in original_message_for_console:
                 self.console_output_area.insert(tk.END, char, tag)
                 self.console_output_area.see(tk.END)
                 self.console_output_area.update_idletasks()
                 self.master.after(1)
         else:
-            self.console_output_area.insert(tk.END, message, tag)
+            self.console_output_area.insert(tk.END, original_message_for_console, tag)
             self.console_output_area.see(tk.END)
+        
         self.console_output_area.configure(state='disabled')
-        # Parseo de jugadores conectados
-        if message.startswith('There are') and 'players online:' in message:
-            try:
-                # Ejemplo: 'There are 2 of a max of 20 players online: Steve, Alex'
-                parts = message.split(':', 1)
-                if len(parts) == 2:
-                    players = [p.strip() for p in parts[1].split(',') if p.strip()]
-                    self.players_connected = players
-                    self._refresh_players_tree()
-            except Exception:
-                pass
 
     def start_server_thread(self):
         if not os.path.exists(self.run_bat_path):
@@ -641,7 +795,7 @@ class ServerControlGUI:
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=self.script_dir,
                 shell=True
             )
@@ -665,11 +819,11 @@ class ServerControlGUI:
 
     def send_command_from_entry(self, event=None):
         cmd = self.command_entry.get().strip()
-        if cmd and cmd != 'Escribe un comando aquí...':
+        if cmd and cmd != 'Type a command here...':
             self.send_command_to_server(cmd)
             self.command_entry.delete(0, tk.END)
-            self.command_entry.insert(0, 'Escribe un comando aquí...')
-            self.command_entry.config(fg='#888888')
+            self.command_entry.insert(0, 'Type a command here...')
+            self.command_entry.config(foreground='#888888')
 
     def send_command_from_button(self):
         self.send_command_from_entry()
@@ -698,23 +852,63 @@ class ServerControlGUI:
     def _create_players_tab_widgets(self):
         card = ttk.Frame(self.players_tab, style='Card.TFrame', padding=30)
         card.pack(fill=tk.BOTH, expand=True)
-        title = ttk.Label(card, text="Jugadores conectados", style='Title.TLabel')
+        title = ttk.Label(card, text="Connected Players", style='Title.TLabel')
         title.pack(anchor='w', pady=(0, 20))
-        # Tabla de jugadores
-        columns = ("Jugador", "Acciones")
-        self.players_tree = ttk.Treeview(card, columns=columns, show='headings', style='Card.TFrame', height=10)
-        self.players_tree.heading("Jugador", text="Jugador")
-        self.players_tree.heading("Acciones", text="Acciones")
-        self.players_tree.column("Jugador", width=200, anchor='center')
-        self.players_tree.column("Acciones", width=200, anchor='center')
-        self.players_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        # Botón para refrescar manualmente
-        refresh_btn = ttk.Button(card, text='Refrescar', command=self.update_players_list, style='Accent.TButton')
-        refresh_btn.pack(anchor='e', pady=(10,0))
+        
+        # Frame for Treeview and its scrollbar (if needed, though height is fixed here)
+        tree_frame = ttk.Frame(card, style='CardInner.TFrame')
+        tree_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        # Tabla de jugadores - Only Player Name column now
+        columns = ("Player",)
+        self.players_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', style='CardView.Treeview', height=10)
+        self.players_tree.heading("Player", text="Player")
+        self.players_tree.column("Player", width=300, anchor='w') # Anchor w for left alignment
+        self.players_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) # Pack to left to allow buttons on right or bottom
+
+        # Scrollbar for Treeview (optional, good practice)
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.players_tree.yview, style="Vertical.TScrollbar")
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.players_tree.configure(yscrollcommand=tree_scrollbar.set)
+
+        self.players_tree.bind("<<TreeviewSelect>>", self._on_player_select)
+
+        # Frame for action buttons (Kick, Ban, Refresh)
+        actions_frame = ttk.Frame(card, style='CardInner.TFrame')
+        actions_frame.pack(fill=tk.X, pady=(10,0))
+
+        self.kick_button = ttk.Button(actions_frame, text="Kick Selected", command=self._kick_selected_player, style="Accent2.TButton", state=tk.DISABLED)
+        self.kick_button.pack(side=tk.LEFT, padx=5)
+        self._bind_hover(self.kick_button, TERTIARY_BG, ACCENT_COLOR)
+
+        self.ban_button = ttk.Button(actions_frame, text="Ban Selected", command=self._ban_selected_player, style="Accent2.TButton", state=tk.DISABLED)
+        self.ban_button.pack(side=tk.LEFT, padx=5)
+        self._bind_hover(self.ban_button, TERTIARY_BG, ACCENT_COLOR)
+        
+        # Botón para refrescar manualmente - moved to the right of action buttons
+        refresh_btn = ttk.Button(actions_frame, text='Refresh', command=self.update_players_list, style='Accent.TButton')
+        refresh_btn.pack(side=tk.RIGHT, padx=5) # Use side=tk.RIGHT to push it to the far right
         self._bind_hover(refresh_btn, ACCENT_COLOR, ACCENT_HOVER)
-        # Actualización periódica
+        
         self.players_connected = []
-        self.update_players_list()
+
+    def _on_player_select(self, event=None): # event is passed by the binding
+        selected_items = self.players_tree.selection()
+        if selected_items: # If something is selected
+            item = selected_items[0] # Get the first selected item
+            player_name_tuple = self.players_tree.item(item, 'values')
+            if player_name_tuple: # Ensure 'values' is not empty
+                self.selected_player_name = player_name_tuple[0]
+                self.kick_button.config(state=tk.NORMAL)
+                self.ban_button.config(state=tk.NORMAL)
+                print(f"DEBUG: Player selected: {self.selected_player_name}") # DEBUG
+                return
+        
+        # If no selection or error in getting name, disable buttons
+        self.selected_player_name = None
+        self.kick_button.config(state=tk.DISABLED)
+        self.ban_button.config(state=tk.DISABLED)
+        print("DEBUG: Player selection cleared or invalid.") # DEBUG
 
     def update_players_list(self):
         # Envía el comando 'list' al servidor y espera la respuesta para actualizar la lista de jugadores
@@ -722,44 +916,45 @@ class ServerControlGUI:
             self.players_tree.delete(*self.players_tree.get_children())
             return
         self.send_command_to_server('list')
-        # La respuesta se parsea en handle_server_output
-        self.master.after(2000, self.update_players_list)
+        # La respuesta se parsea en handle_server_output  <- This comment is key. It's parsed in log_to_console
+        # self.master.after(2000, self.update_players_list) # REMOVE THIS RECURSIVE CALL
 
     def _refresh_players_tree(self):
+        print(f"DEBUG: _refresh_players_tree called. self.players_connected = {self.players_connected}") # DEBUG
         self.players_tree.delete(*self.players_tree.get_children())
         for player in self.players_connected:
-            self.players_tree.insert('', 'end', values=(player, 'Expulsar | Banear'))
+            self.players_tree.insert('', 'end', values=(player,)) # Only player name in values
 
     def _create_ops_tab_widgets(self):
         card = ttk.Frame(self.ops_tab, style='Card.TFrame', padding=30)
         card.pack(fill=tk.BOTH, expand=True)
-        title = ttk.Label(card, text="Operadores (Ops)", style='Title.TLabel')
+        title = ttk.Label(card, text="Operators (Ops)", style='Title.TLabel')
         title.pack(anchor='w', pady=(0, 20))
         # Tabla de ops
-        columns = ("Nombre", "UUID", "Nivel", "Acciones")
-        self.ops_tree = ttk.Treeview(card, columns=columns, show='headings', style='Card.TFrame', height=10)
+        columns = ("Name", "UUID", "Level", "Actions")
+        self.ops_tree = ttk.Treeview(card, columns=columns, show='headings', style='CardView.Treeview', height=10)
         for col in columns:
             self.ops_tree.heading(col, text=col)
             self.ops_tree.column(col, width=120 if col!="Acciones" else 140, anchor='center')
         self.ops_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         # Botón para añadir operador
-        add_frame = ttk.Frame(card, style='Card.TFrame')
+        add_frame = ttk.Frame(card, style='CardInner.TFrame')
         add_frame.pack(fill=tk.X, pady=(10,0))
         self.new_op_entry = tk.Entry(add_frame, font=FONT_CONSOLE_CUSTOM, bg=PRIMARY_BG, fg=TEXT_PRIMARY, insertbackground=ACCENT_COLOR, relief='flat', borderwidth=2, highlightthickness=1, highlightbackground=ACCENT_COLOR, highlightcolor=ACCENT_COLOR)
         self.new_op_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=6)
-        self.new_op_entry.insert(0, 'Nombre de usuario')
+        self.new_op_entry.insert(0, 'Username')
         self.new_op_entry.config(fg='#888888')
         def on_focus_in(event):
-            if self.new_op_entry.get() == 'Nombre de usuario':
+            if self.new_op_entry.get() == 'Username':
                 self.new_op_entry.delete(0, tk.END)
                 self.new_op_entry.config(fg=TEXT_PRIMARY)
         def on_focus_out(event):
             if not self.new_op_entry.get():
-                self.new_op_entry.insert(0, 'Nombre de usuario')
+                self.new_op_entry.insert(0, 'Username')
                 self.new_op_entry.config(fg='#888888')
         self.new_op_entry.bind('<FocusIn>', on_focus_in)
         self.new_op_entry.bind('<FocusOut>', on_focus_out)
-        add_btn = ttk.Button(add_frame, text='Añadir OP', command=self.add_op, style='Accent.TButton')
+        add_btn = ttk.Button(add_frame, text='Add OP', command=self.add_op, style='Accent.TButton')
         add_btn.pack(side=tk.RIGHT, ipadx=10, ipady=3)
         self._bind_hover(add_btn, ACCENT_COLOR, ACCENT_HOVER)
         # Cargar ops
@@ -781,32 +976,32 @@ class ServerControlGUI:
             name = op.get('name', '-')
             uuid = op.get('uuid', '-')
             level = op.get('level', '-')
-            self.ops_tree.insert('', 'end', values=(name, uuid, level, 'Quitar'))
+            self.ops_tree.insert('', 'end', values=(name, uuid, level, 'Remove'))
 
     def add_op(self):
         username = self.new_op_entry.get().strip()
-        if not username or username == 'Nombre de usuario':
-            messagebox.showwarning('Añadir OP', 'Introduce un nombre de usuario válido.')
+        if not username or username == 'Username':
+            messagebox.showwarning('Add OP', 'Please enter a valid username.')
             return
         # Enviar comando op al servidor
         self.send_command_to_server(f'op {username}')
-        messagebox.showinfo('Añadir OP', f'Se ha enviado el comando para añadir a {username} como operador. Si el usuario existe, aparecerá en la lista tras refrescar.')
+        messagebox.showinfo('Add OP', f'Command sent to add {username} as an operator. If the user exists, they will appear in the list after a refresh.')
         self.new_op_entry.delete(0, tk.END)
-        self.new_op_entry.insert(0, 'Nombre de usuario')
+        self.new_op_entry.insert(0, 'Username')
         self.new_op_entry.config(fg='#888888')
         self.master.after(2000, self.update_ops_list)
 
     def _create_worlds_tab_widgets(self):
         card = ttk.Frame(self.worlds_tab, style='Card.TFrame', padding=30)
         card.pack(fill=tk.BOTH, expand=True)
-        title = ttk.Label(card, text="🌍 Mundos del Servidor", style='Title.TLabel')
+        title = ttk.Label(card, text="🌍 Server Worlds", style='Title.TLabel')
         title.pack(anchor='w', pady=(0, 20))
         # Tabla de mundos visual con botones
-        self.worlds_list_frame = ttk.Frame(card, style='Card.TFrame')
+        self.worlds_list_frame = ttk.Frame(card, style='CardInner.TFrame')
         self.worlds_list_frame.pack(fill=tk.BOTH, expand=True)
         self._refresh_worlds_visual()
         # Botón para refrescar
-        refresh_btn = ttk.Button(card, text='Refrescar', command=self._refresh_worlds_visual, style='Accent.TButton')
+        refresh_btn = ttk.Button(card, text='Refresh', command=self._refresh_worlds_visual, style='Accent.TButton')
         refresh_btn.pack(anchor='e', pady=(10,0))
         self._bind_hover(refresh_btn, ACCENT_COLOR, ACCENT_HOVER)
 
@@ -814,20 +1009,20 @@ class ServerControlGUI:
         for widget in self.worlds_list_frame.winfo_children():
             widget.destroy()
         # Header
-        header = ttk.Frame(self.worlds_list_frame, style='Card.TFrame')
+        header = ttk.Frame(self.worlds_list_frame, style='CardInner.TFrame')
         header.pack(fill=tk.X, pady=(0,5))
-        ttk.Label(header, text='🌍 Mundo', style='TLabel', width=20, anchor='center').pack(side=tk.LEFT, padx=5)
-        ttk.Label(header, text='Tamaño', style='TLabel', width=15, anchor='center').pack(side=tk.LEFT, padx=5)
+        ttk.Label(header, text='🌍 World', style='TLabel', width=20, anchor='center').pack(side=tk.LEFT, padx=5)
+        ttk.Label(header, text='Size', style='TLabel', width=15, anchor='center').pack(side=tk.LEFT, padx=5)
         ttk.Label(header, text='Backup', style='TLabel', width=10, anchor='center').pack(side=tk.LEFT, padx=5)
         # Lista de mundos
         world_names = [d for d in os.listdir(self.script_dir) if os.path.isdir(os.path.join(self.script_dir, d)) and d.startswith('world')]
         if not world_names:
-            ttk.Label(self.worlds_list_frame, text='No se encontraron mundos.', style='TLabel').pack(pady=20)
+            ttk.Label(self.worlds_list_frame, text='No worlds found.', style='TLabel').pack(pady=20)
             return
         for name in world_names:
             path = os.path.join(self.script_dir, name)
             size = self._format_size(self._get_folder_size(path))
-            row = ttk.Frame(self.worlds_list_frame, style='Card.TFrame')
+            row = ttk.Frame(self.worlds_list_frame, style='CardInner.TFrame')
             row.pack(fill=tk.X, pady=4)
             ttk.Label(row, text=f'🌎 {name}', style='TLabel', width=20, anchor='center').pack(side=tk.LEFT, padx=5)
             ttk.Label(row, text=size, style='TLabel', width=15, anchor='center').pack(side=tk.LEFT, padx=5)
@@ -841,9 +1036,9 @@ class ServerControlGUI:
         backup_path = os.path.join(self.script_dir, backup_name)
         try:
             shutil.make_archive(world_path + '_backup', 'zip', world_path)
-            messagebox.showinfo('Backup', f'Backup creado: {backup_name}')
+            messagebox.showinfo('Backup', f'Backup created: {backup_name}')
         except Exception as e:
-            messagebox.showerror('Backup', f'Error al crear backup: {e}')
+            messagebox.showerror('Backup', f'Error creating backup: {e}')
 
     def _get_folder_size(self, folder):
         total = 0
@@ -869,21 +1064,21 @@ class ServerControlGUI:
     def _create_stats_tab_widgets(self):
         card = ttk.Frame(self.stats_tab, style='Card.TFrame', padding=30)
         card.pack(fill=tk.BOTH, expand=True)
-        title = ttk.Label(card, text="📊 Estadísticas de Jugadores", style='Title.TLabel', font=("Segoe UI Semibold", 18))
+        title = ttk.Label(card, text="📊 Player Statistics", style='Title.TLabel', font=("Segoe UI Semibold", 18))
         title.pack(anchor='w', pady=(0, 20))
         # Encabezados coloridos
-        header_frame = ttk.Frame(card, style='Card.TFrame')
+        header_frame = ttk.Frame(card, style='CardInner.TFrame')
         header_frame.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(header_frame, text='👤 Nombre', style='TLabel', width=18, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
+        ttk.Label(header_frame, text='👤 Name', style='TLabel', width=18, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
         ttk.Label(header_frame, text='⎈ UUID', style='TLabel', width=28, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
-        ttk.Label(header_frame, text='⏱️ Tiempo', style='TLabel', width=12, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
-        ttk.Label(header_frame, text='💀 Muertes', style='TLabel', width=10, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ERROR_FG_CUSTOM).pack(side=tk.LEFT, padx=5)
-        ttk.Label(header_frame, text='⛏️ Minados', style='TLabel', width=12, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
+        ttk.Label(header_frame, text='⏱️ Time Played', style='TLabel', width=12, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
+        ttk.Label(header_frame, text='💀 Deaths', style='TLabel', width=10, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ERROR_FG_CUSTOM).pack(side=tk.LEFT, padx=5)
+        ttk.Label(header_frame, text='⛏️ Blocks Mined', style='TLabel', width=12, anchor='center', font=("Segoe UI", 12, "bold"), foreground=ACCENT_COLOR).pack(side=tk.LEFT, padx=5)
         # Frame para filas
-        self.stats_rows_frame = ttk.Frame(card, style='Card.TFrame')
+        self.stats_rows_frame = ttk.Frame(card, style='CardInner.TFrame')
         self.stats_rows_frame.pack(fill=tk.BOTH, expand=True)
         # Botón para refrescar
-        refresh_btn = ttk.Button(card, text='Refrescar', command=self.update_stats_list, style='Accent.TButton')
+        refresh_btn = ttk.Button(card, text='Refresh', command=self.update_stats_list, style='Accent.TButton')
         refresh_btn.pack(anchor='e', pady=(10,0))
         self._bind_hover(refresh_btn, ACCENT_COLOR, ACCENT_HOVER)
         self.update_stats_list()
@@ -977,6 +1172,29 @@ class ServerControlGUI:
             tooltip.withdraw()
         widget.bind('<Enter>', enter)
         widget.bind('<Leave>', leave)
+
+    # --- Methods for Player Actions (Kick/Ban) ---
+    def _kick_selected_player(self):
+        if self.selected_player_name:
+            command = f"kick {self.selected_player_name}"
+            self.send_command_to_server(command)
+            self.log_to_console(f"Sent command: {command}\n", "info")
+            # Optionally, deselect or refresh list after action
+            self.players_tree.selection_remove(self.players_tree.selection()) # Deselect
+            self.update_players_list() # Refresh list
+        else:
+            self.log_to_console("No player selected to kick.\n", "warning")
+
+    def _ban_selected_player(self):
+        if self.selected_player_name:
+            command = f"ban {self.selected_player_name}"
+            self.send_command_to_server(command)
+            self.log_to_console(f"Sent command: {command}\n", "info")
+            # Optionally, deselect or refresh list after action
+            self.players_tree.selection_remove(self.players_tree.selection()) # Deselect
+            self.update_players_list() # Refresh list
+        else:
+            self.log_to_console("No player selected to ban.\n", "warning")
 
 if __name__ == "__main__":
     root = tk.Tk() # Ya no es ThemedTk
