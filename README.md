@@ -29,16 +29,6 @@ A Python-based graphical user interface for managing a Minecraft server.
     python minecraft_server_gui.py
     ```
 
-## Using the Executable (Recommended for ease of use)
-
-If an executable version (e.g., `MinecraftServerGUI.exe` on Windows) is provided:
-
-1.  **Download the executable.**
-2.  **Place the executable in your server directory:**
-    **Crucially, place the `MinecraftServerGUI.exe` (or equivalent for your OS) directly into your Minecraft server's root directory.** This is the same directory that contains your `run.bat` (or equivalent) and server data folders like `world`.
-3.  **Run the executable:**
-    Double-click the `MinecraftServerGUI.exe` (or run it from the terminal if preferred).
-    No Python installation or `pip install` steps are needed for the executable version.
 
 ## Application Features
 
