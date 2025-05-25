@@ -9,6 +9,8 @@ import json
 import shutil
 import glob
 import sys
+import random # Added for particle animation
+import re # Added for mod name extraction
 
 # Attempt to hide the Python interpreter console window on Windows
 if sys.platform == "win32":
@@ -65,14 +67,29 @@ class ServerControlGUI:
 
         self.run_bat_path = os.path.join(self.script_dir, "run.bat")
         self.server_properties_path = os.path.join(self.script_dir, "server.properties")
+        self.banned_ips_path = os.path.join(self.script_dir, "banned-ips.json")
+        self.banned_players_path = os.path.join(self.script_dir, "banned-players.json")
+        self.mods_dir_path = os.path.join(self.script_dir, "mods")
+        self.config_dir_path = os.path.join(self.script_dir, "config")
+        self.changelog_path = os.path.join(self.script_dir, "changelog.txt")
+
         self.master = master
         master.title("Minecraft Server Control")
         master.geometry("950x720")
         master.configure(bg=PRIMARY_BG)
 
+        # Particle Animation Canvas - Placed early to be in the background
+        self._init_particle_animation() # Call before other widgets if it fills the whole window
+
         # Inicializar atributos de estado del servidor ANTES de crear widgets que puedan usarlos
         self.server_process = None
         self.server_running = False
+
+        # Selection states for various lists
+        self.selected_player_name = None # For kick/ban actions
+        self.selected_banned_ip = None
+        self.selected_banned_player_name = None # Store name for pardon command
+        self.current_selected_mod_info = None # For mod config loading and deletion
 
         self.style = ttk.Style()
         self.style.theme_use('default') # Empezar con un tema base simple de Tk
@@ -205,7 +222,7 @@ class ServerControlGUI:
         self.player_count_line_prefix = "There are " 
         self.player_count_line_suffix = " players online:"
 
-        self.selected_player_name = None # For kick/ban actions
+        self._init_particle_animation()
 
         # Pestañas con iconos (los iconos se mantienen)
         self.notebook = ttk.Notebook(master, style='TNotebook')
@@ -234,16 +251,105 @@ class ServerControlGUI:
         self.stats_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
         self.notebook.add(self.stats_tab, text='📊 Statistics')
         self._create_stats_tab_widgets()
+        self.bans_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
+        self.notebook.add(self.bans_tab, text='🚫 Bans')
+        self._create_bans_tab_widgets()
+        self.mods_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
+        self.notebook.add(self.mods_tab, text='🧩 Mods')
+        self._create_mods_tab_widgets()
+        self.app_settings_tab = ttk.Frame(self.notebook, style='TFrame', padding=10)
+        self.notebook.add(self.app_settings_tab, text='⚙️ App Settings')
+        self._create_app_settings_tab_widgets()
 
         self.load_server_properties()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
+    def _init_particle_animation(self):
+        self.particle_canvas = tk.Canvas(self.master, bg=PRIMARY_BG, highlightthickness=0)
+        self.particle_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.master.lower(self.particle_canvas) # Ensure canvas is behind other widgets
+
+        self.particles = []
+        self.num_particles = 70 # Increased number of particles
+        self.particle_colors = [TEXT_SECONDARY, TERTIARY_BG, '#555555', '#6C6C6C', '#7F7F7F'] # Adjusted for more visibility
+        
+        # Get current window dimensions; may need to update if window resizes significantly
+        # For simplicity, we'll use initial geometry. For responsive particles, a resize handler is needed.
+        self.master.update_idletasks() # Ensure geometry is up-to-date
+        self.canvas_width = self.master.winfo_width()
+        self.canvas_height = self.master.winfo_height()
+
+        for _ in range(self.num_particles):
+            x = random.uniform(0, self.canvas_width)
+            y = random.uniform(0, self.canvas_height)
+            size = random.uniform(2, 4) # Increased size
+            # Slightly faster speeds
+            dx = random.uniform(-0.5, 0.5) 
+            dy = random.uniform(-0.5, 0.5)
+            # Ensure particles have some movement
+            while abs(dx) < 0.1 and abs(dy) < 0.1: # Ensure some minimum movement
+                dx = random.uniform(-0.5, 0.5)
+                dy = random.uniform(-0.5, 0.5)
+
+            color = random.choice(self.particle_colors)
+            # Create the particle on the canvas and store its ID and properties
+            particle_id = self.particle_canvas.create_oval(x, y, x + size, y + size, fill=color, outline="")
+            self.particles.append({'id': particle_id, 'x': x, 'y': y, 'dx': dx, 'dy': dy, 'size': size, 'color': color})
+        
+        self._animate_particles()
+
+    def _animate_particles(self):
+        if not self.master.winfo_exists(): # Stop animation if window is destroyed
+            return
+
+        # Update canvas dimensions in case of resize (simple approach)
+        # A more robust way involves binding to <Configure> event on the canvas or master
+        current_width = self.master.winfo_width()
+        current_height = self.master.winfo_height()
+        if self.canvas_width != current_width or self.canvas_height != current_height:
+            self.canvas_width = current_width
+            self.canvas_height = current_height
+            # Could optionally re-initialize particles or adjust their positions here
+
+        for p in self.particles:
+            current_coords = self.particle_canvas.coords(p['id'])
+            if not current_coords: # Particle might have been deleted or canvas cleared
+                continue
+
+            # Update internal position based on dx, dy
+            p['x'] += p['dx']
+            p['y'] += p['dy']
+
+            # Boundary checks (bounce)
+            if p['x'] < 0 or (p['x'] + p['size']) > self.canvas_width:
+                p['dx'] *= -1
+                p['x'] = max(0, min(p['x'], self.canvas_width - p['size'])) # Clamp position
+            if p['y'] < 0 or (p['y'] + p['size']) > self.canvas_height:
+                p['dy'] *= -1
+                p['y'] = max(0, min(p['y'], self.canvas_height - p['size'])) # Clamp position
+            
+            # Move the particle on canvas
+            self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+        
+        self.master.after(30, self._animate_particles) # Approx 33 FPS
+
     def _on_tab_changed(self, event):
         selected_tab_index = self.notebook.index(self.notebook.select())
         # Players tab is index 3 (0-indexed)
+        # Worlds tab is index 5
+        # Stats tab is index 6
+        # Bans tab is index 7 (newly added)
+        # Mods tab is index 8 (newly added)
+        # App Settings tab is index 9 (newly added)
         if selected_tab_index == 3: # Players tab
             if self.server_running: # Only update if server is supposed to be running
                 self.update_players_list()
+        elif selected_tab_index == 7: # Bans tab
+            self._load_bans()
+        elif selected_tab_index == 8: # Mods tab
+            self._load_mods_list()
+        elif selected_tab_index == 9: # App Settings tab
+            self._load_changelog()
 
     def _bind_hover(self, widget, normal_bg, hover_bg):
         # Necesita acceder a widget.cget("style") y parsearlo o tener estilos dedicados para hover
@@ -1195,6 +1301,593 @@ class ServerControlGUI:
             self.update_players_list() # Refresh list
         else:
             self.log_to_console("No player selected to ban.\n", "warning")
+
+    # --- BAN MANAGEMENT --- 
+    def _create_bans_tab_widgets(self):
+        main_card = ttk.Frame(self.bans_tab, style='Card.TFrame', padding=15)
+        main_card.pack(fill=tk.BOTH, expand=True)
+
+        # Refresh button at the top
+        refresh_bans_button = ttk.Button(main_card, text="Refresh Bans", command=self._load_bans, style="Accent.TButton")
+        refresh_bans_button.pack(anchor='ne', pady=(0,10), padx=5)
+        self._bind_hover(refresh_bans_button, ACCENT_COLOR, ACCENT_HOVER)
+
+        # --- Banned IPs Section ---
+        ips_card = ttk.Frame(main_card, style='CardInner.TFrame', padding=15)
+        ips_card.pack(fill=tk.BOTH, expand=True, pady=(0,10))
+        ttk.Label(ips_card, text="Banned IPs", style='Title.TLabel', font=FONT_UI_BOLD).pack(anchor='w', pady=(0,10))
+
+        ip_tree_frame = ttk.Frame(ips_card, style='CardInner.TFrame')
+        ip_tree_frame.pack(fill=tk.BOTH, expand=True)
+        ip_columns = ("IP Address", "Created", "Source", "Expires", "Reason")
+        self.banned_ips_tree = ttk.Treeview(ip_tree_frame, columns=ip_columns, show='headings', style='CardView.Treeview', height=6)
+        for col in ip_columns:
+            self.banned_ips_tree.heading(col, text=col)
+            self.banned_ips_tree.column(col, width=120, anchor='w')
+        self.banned_ips_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ip_scrollbar = ttk.Scrollbar(ip_tree_frame, orient="vertical", command=self.banned_ips_tree.yview, style="Vertical.TScrollbar")
+        ip_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.banned_ips_tree.configure(yscrollcommand=ip_scrollbar.set)
+        self.banned_ips_tree.bind("<<TreeviewSelect>>", self._on_banned_ip_select)
+
+        self.unban_ip_button = ttk.Button(ips_card, text="Pardon Selected IP", command=self._unban_selected_ip, style="Accent2.TButton", state=tk.DISABLED)
+        self.unban_ip_button.pack(pady=(10,0), anchor='w')
+        self._bind_hover(self.unban_ip_button, TERTIARY_BG, ACCENT_COLOR)
+
+        # --- Banned Players Section ---
+        players_card = ttk.Frame(main_card, style='CardInner.TFrame', padding=15)
+        players_card.pack(fill=tk.BOTH, expand=True, pady=(10,0))
+        ttk.Label(players_card, text="Banned Players", style='Title.TLabel', font=FONT_UI_BOLD).pack(anchor='w', pady=(0,10))
+
+        player_tree_frame = ttk.Frame(players_card, style='CardInner.TFrame')
+        player_tree_frame.pack(fill=tk.BOTH, expand=True)
+        player_columns = ("Username", "UUID", "Created", "Source", "Expires", "Reason")
+        self.banned_players_tree = ttk.Treeview(player_tree_frame, columns=player_columns, show='headings', style='CardView.Treeview', height=6)
+        for col in player_columns:
+            self.banned_players_tree.heading(col, text=col)
+            self.banned_players_tree.column(col, width=100, anchor='w')
+        self.banned_players_tree.column("UUID", width=180)
+        self.banned_players_tree.column("Reason", width=150)
+        self.banned_players_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        player_scrollbar = ttk.Scrollbar(player_tree_frame, orient="vertical", command=self.banned_players_tree.yview, style="Vertical.TScrollbar")
+        player_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.banned_players_tree.configure(yscrollcommand=player_scrollbar.set)
+        self.banned_players_tree.bind("<<TreeviewSelect>>", self._on_banned_player_select)
+
+        self.unban_player_button = ttk.Button(players_card, text="Pardon Selected Player", command=self._unban_selected_player, style="Accent2.TButton", state=tk.DISABLED)
+        self.unban_player_button.pack(pady=(10,0), anchor='w')
+        self._bind_hover(self.unban_player_button, TERTIARY_BG, ACCENT_COLOR)
+        
+        self.selected_banned_ip = None
+        self.selected_banned_player_name = None # Store name for pardon command
+
+        self._load_bans() # Initial load
+
+    def _on_banned_ip_select(self, event=None):
+        selected_items = self.banned_ips_tree.selection()
+        if selected_items:
+            item_values = self.banned_ips_tree.item(selected_items[0], 'values')
+            if item_values:
+                self.selected_banned_ip = item_values[0] # IP is the first column
+                self.unban_ip_button.config(state=tk.NORMAL)
+                print(f"DEBUG: Banned IP selected: {self.selected_banned_ip}")
+                return
+        self.selected_banned_ip = None
+        self.unban_ip_button.config(state=tk.DISABLED)
+
+    def _on_banned_player_select(self, event=None):
+        selected_items = self.banned_players_tree.selection()
+        if selected_items:
+            item_values = self.banned_players_tree.item(selected_items[0], 'values')
+            if item_values:
+                self.selected_banned_player_name = item_values[0] # Username is the first column
+                self.unban_player_button.config(state=tk.NORMAL)
+                print(f"DEBUG: Banned Player selected: {self.selected_banned_player_name}")
+                return
+        self.selected_banned_player_name = None
+        self.unban_player_button.config(state=tk.DISABLED)
+
+    def _load_bans(self):
+        self._load_banned_ips()
+        self._load_banned_players()
+
+    def _load_banned_ips(self):
+        self.banned_ips_tree.delete(*self.banned_ips_tree.get_children())
+        try:
+            if os.path.exists(self.banned_ips_path):
+                with open(self.banned_ips_path, 'r', encoding='utf-8') as f:
+                    banned_ips_data = json.load(f)
+                for ban_entry in banned_ips_data:
+                    self.banned_ips_tree.insert('', 'end', values=(
+                        ban_entry.get('ip', 'N/A'),
+                        ban_entry.get('created', 'N/A'),
+                        ban_entry.get('source', 'N/A'),
+                        ban_entry.get('expires', 'N/A'),
+                        ban_entry.get('reason', 'N/A')
+                    ))
+            else:
+                self.log_to_console(f"Ban file not found: {self.banned_ips_path}\n", "warning")
+        except Exception as e:
+            self.log_to_console(f"Error loading banned IPs: {e}\n", "error")
+            messagebox.showerror("Error Loading Bans", f"Failed to load {self.banned_ips_path}:\n{e}")
+
+    def _load_banned_players(self):
+        self.banned_players_tree.delete(*self.banned_players_tree.get_children())
+        try:
+            if os.path.exists(self.banned_players_path):
+                with open(self.banned_players_path, 'r', encoding='utf-8') as f:
+                    banned_players_data = json.load(f)
+                for ban_entry in banned_players_data:
+                    self.banned_players_tree.insert('', 'end', values=(
+                        ban_entry.get('name', 'N/A'),
+                        ban_entry.get('uuid', 'N/A'),
+                        ban_entry.get('created', 'N/A'),
+                        ban_entry.get('source', 'N/A'),
+                        ban_entry.get('expires', 'N/A'),
+                        ban_entry.get('reason', 'N/A')
+                    ))
+            else:
+                self.log_to_console(f"Ban file not found: {self.banned_players_path}\n", "warning")
+        except Exception as e:
+            self.log_to_console(f"Error loading banned players: {e}\n", "error")
+            messagebox.showerror("Error Loading Bans", f"Failed to load {self.banned_players_path}:\n{e}")
+
+    def _unban_selected_ip(self):
+        if self.selected_banned_ip:
+            command = f"pardon-ip {self.selected_banned_ip}"
+            self.send_command_to_server(command)
+            self.log_to_console(f"Sent command: {command}\n", "info")
+            self.selected_banned_ip = None # Deselect
+            self.unban_ip_button.config(state=tk.DISABLED)
+            self._load_bans() # Refresh lists
+        else:
+            self.log_to_console("No IP selected to pardon.\n", "warning")
+
+    def _unban_selected_player(self):
+        if self.selected_banned_player_name:
+            command = f"pardon {self.selected_banned_player_name}"
+            self.send_command_to_server(command)
+            self.log_to_console(f"Sent command: {command}\n", "info")
+            self.selected_banned_player_name = None # Deselect
+            self.unban_player_button.config(state=tk.DISABLED)
+            self._load_bans() # Refresh lists
+        else:
+            self.log_to_console("No player selected to pardon.\n", "warning")
+
+    # --- MOD MANAGEMENT ---   
+    def _create_mods_tab_widgets(self):
+        main_card = ttk.Frame(self.mods_tab, style='Card.TFrame', padding=15)
+        main_card.pack(fill=tk.BOTH, expand=True)
+
+        # Top action buttons frame
+        top_actions_frame = ttk.Frame(main_card, style='CardInner.TFrame')
+        top_actions_frame.pack(fill=tk.X, pady=(0,10))
+
+        open_mods_folder_btn = ttk.Button(top_actions_frame, text="Open Mods Folder", command=self._open_mods_folder, style="Accent2.TButton")
+        open_mods_folder_btn.pack(side=tk.LEFT, padx=5)
+        self._bind_hover(open_mods_folder_btn, TERTIARY_BG, ACCENT_COLOR)
+
+        open_config_folder_btn = ttk.Button(top_actions_frame, text="Open Config Folder", command=self._open_config_folder, style="Accent2.TButton")
+        open_config_folder_btn.pack(side=tk.LEFT, padx=5)
+        self._bind_hover(open_config_folder_btn, TERTIARY_BG, ACCENT_COLOR)
+
+        refresh_mods_btn = ttk.Button(top_actions_frame, text="Refresh Mod List", command=self._load_mods_list, style="Accent.TButton")
+        refresh_mods_btn.pack(side=tk.RIGHT, padx=5) # Refresh on the right
+        self._bind_hover(refresh_mods_btn, ACCENT_COLOR, ACCENT_HOVER)
+        
+        # PanedWindow for resizable sections: Mod List | Config Editor
+        paned_window = ttk.PanedWindow(main_card, orient=tk.HORIZONTAL)
+        paned_window.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        # Left Pane: Mod List
+        mod_list_frame = ttk.Frame(paned_window, style='CardInner.TFrame', padding=(10,5))
+        paned_window.add(mod_list_frame, weight=1) # Add with weight for resizing
+
+        ttk.Label(mod_list_frame, text="Installed Mods (.jar files)", style='Header.TLabel').pack(anchor='w', pady=(0,5))
+        mod_tree_frame = ttk.Frame(mod_list_frame, style='CardInner.TFrame')
+        mod_tree_frame.pack(fill=tk.BOTH, expand=True)
+        mod_columns = ("Mod File", "Detected Config")
+        self.mods_tree = ttk.Treeview(mod_tree_frame, columns=mod_columns, show='headings', style='CardView.Treeview', height=15)
+        self.mods_tree.heading("Mod File", text="Mod File")
+        self.mods_tree.heading("Detected Config", text="Detected Config File")
+        self.mods_tree.column("Mod File", width=200, anchor='w')
+        self.mods_tree.column("Detected Config", width=200, anchor='w')
+        self.mods_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        mod_scrollbar = ttk.Scrollbar(mod_tree_frame, orient="vertical", command=self.mods_tree.yview, style="Vertical.TScrollbar")
+        mod_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.mods_tree.configure(yscrollcommand=mod_scrollbar.set)
+        self.mods_tree.bind("<<TreeviewSelect>>", self._on_mod_select)
+
+        # Delete Mod Button - below the mod list tree
+        self.delete_mod_button = ttk.Button(mod_list_frame, text="Delete Selected Mod", command=self._delete_selected_mod, style="Accent2.TButton", state=tk.DISABLED)
+        self.delete_mod_button.pack(pady=(10,0), anchor='sw') # Anchor to south-west
+        self._bind_hover(self.delete_mod_button, TERTIARY_BG, ACCENT_COLOR)
+
+        # Right Pane: Config Editor
+        config_editor_frame = ttk.Frame(paned_window, style='CardInner.TFrame', padding=(10,5))
+        paned_window.add(config_editor_frame, weight=2) # Give more weight to editor
+
+        ttk.Label(config_editor_frame, text="Configuration File Editor", style='Header.TLabel').pack(anchor='w', pady=(0,5))
+        self.mod_config_text_area = scrolledtext.ScrolledText(config_editor_frame, wrap=tk.WORD, height=15, 
+                                                            bg=PRIMARY_BG, fg=TEXT_PRIMARY, 
+                                                            insertbackground=ACCENT_COLOR, font=FONT_CONSOLE_CUSTOM, 
+                                                            relief='solid', borderwidth=1, highlightthickness=0, bd=0, padx=5, pady=5)
+        self.mod_config_text_area.pack(fill=tk.BOTH, expand=True, pady=(0,10))
+        self.mod_config_text_area.configure(state='disabled') # Disabled initially
+
+        self.save_mod_config_button = ttk.Button(config_editor_frame, text="Save Config Changes", command=self._save_mod_config, style="Accent.TButton", state=tk.DISABLED)
+        self.save_mod_config_button.pack(anchor='se')
+        self._bind_hover(self.save_mod_config_button, ACCENT_COLOR, ACCENT_HOVER)
+
+        self.current_mod_config_path = None
+        self.mod_data = [] # To store tuples of (jar_file, display_name, config_path_or_None)
+
+        self._load_mods_list() # Initial load
+
+    def _extract_mod_id(self, jar_filename):
+        # Try to remove common versioning patterns and file extension
+        # e.g., "jei-1.16.5-7.7.1.139.jar" -> "jei"
+        # e.g., "OptiFine_1.16.5_HD_U_G8.jar" -> "OptiFine"
+        # This is a heuristic and might need refinement for complex names
+        match = re.match(r"([a-zA-Z0-9_]+)([-_ ]+[0-9].*)?(\.jar)", jar_filename, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+        # Fallback: remove .jar and take the part before first digit/special char if common pattern fails
+        name_part = jar_filename.replace(".jar", "")
+        fallback_match = re.match(r"([a-zA-Z_]+)", name_part)
+        return fallback_match.group(1).lower() if fallback_match else name_part.lower()
+
+    def _find_mod_config_file(self, mod_id):
+        if not os.path.isdir(self.config_dir_path):
+            return None
+        
+        # Common config file extensions/patterns
+        # Order matters: more specific (like -common) before generic
+        config_patterns = [
+            f"{mod_id}-common.toml", f"{mod_id}-client.toml", f"{mod_id}-server.toml",
+            f"{mod_id}.toml", f"{mod_id}.cfg", f"{mod_id}.json", f"{mod_id}.properties",
+            # Mod specific subfolders
+            os.path.join(mod_id, f"{mod_id}.cfg"), os.path.join(mod_id, f"{mod_id}.toml"),
+            os.path.join(mod_id, "main.cfg"), os.path.join(mod_id, "config.cfg"),
+        ]
+        # Some mods use mixed case or exact jar name for config
+        config_patterns.extend([f"{mod_id}.CFG", f"{mod_id}.PROPERTIES"]) 
+
+        for pattern in config_patterns:
+            potential_path = os.path.join(self.config_dir_path, pattern)
+            if os.path.isfile(potential_path):
+                return potential_path
+        
+        # Check for a folder named after the mod_id itself (e.g., /config/jei/ for JEI settings)
+        # If such a folder exists, we might not pick a single file, but indicate the folder exists.
+        # For simplicity, let's return the folder path if it exists and no specific file was found yet.
+        # Or, we can just not return anything if a single file isn't obvious.
+        # For now, let's keep it simple: only return if a specific file is found.
+        return None
+
+    def _load_mods_list(self):
+        self.mods_tree.delete(*self.mods_tree.get_children())
+        self.mod_data.clear()
+        self.mod_config_text_area.configure(state='disabled')
+        self.save_mod_config_button.config(state=tk.DISABLED)
+        self.current_mod_config_path = None
+        self.delete_mod_button.config(state=tk.DISABLED) # Disable delete button too
+        self.current_selected_mod_info = None # Clear selected mod info
+        self.mod_config_text_area.delete('1.0', tk.END)
+
+        if not os.path.isdir(self.mods_dir_path):
+            self.log_to_console(f"Mods directory not found: {self.mods_dir_path}\n", "warning")
+            # Display a message in the Treeview area if possible or a label
+            # For now, just log and leave the tree empty.
+            ttk.Label(self.mods_tree, text=f"Mods folder not found: {self.mods_dir_path}").pack(pady=20)
+            return
+
+        try:
+            jar_files = [f for f in os.listdir(self.mods_dir_path) if f.lower().endswith('.jar')]
+            if not jar_files:
+                 ttk.Label(self.mods_tree, text="No .jar files found in the mods folder.").pack(pady=20)
+
+            for jar_file in sorted(jar_files, key=str.lower):
+                mod_id = self._extract_mod_id(jar_file)
+                config_file_path = self._find_mod_config_file(mod_id)
+                config_display_name = os.path.basename(config_file_path) if config_file_path else "N/A"
+                
+                self.mods_tree.insert('', 'end', values=(jar_file, config_display_name))
+                self.mod_data.append({'jar': jar_file, 'id': mod_id, 'config_path': config_file_path})
+            
+        except Exception as e:
+            self.log_to_console(f"Error loading mods list: {e}\n", "error")
+            messagebox.showerror("Error Loading Mods", f"Failed to list mods: {e}")
+
+    def _on_mod_select(self, event=None):
+        selected_items = self.mods_tree.selection()
+        self.mod_config_text_area.configure(state='disabled')
+        self.save_mod_config_button.config(state=tk.DISABLED)
+        self.delete_mod_button.config(state=tk.DISABLED) # Disable delete button too
+        self.current_mod_config_path = None
+        self.current_selected_mod_info = None # Clear selected mod info
+        self.mod_config_text_area.delete('1.0', tk.END)
+
+        if not selected_items:
+            return
+        
+        selected_tree_item = selected_items[0]
+        # Find the corresponding mod_data entry based on the selected Treeview item
+        # This assumes the Treeview is populated in the same order as mod_data, 
+        # or we need a more robust way to link Treeview items to mod_data indices.
+        # For simplicity, let's iterate: (Can be optimized if many mods)
+        selected_jar_name = self.mods_tree.item(selected_tree_item, 'values')[0]
+        
+        selected_mod_info = None
+        for mod_info_iter in self.mod_data:
+            if mod_info_iter['jar'] == selected_jar_name:
+                selected_mod_info = mod_info_iter
+                break
+        
+        self.current_selected_mod_info = selected_mod_info # Store for potential deletion
+
+        if selected_mod_info and selected_mod_info['config_path']:
+            self.current_mod_config_path = selected_mod_info['config_path']
+            try:
+                with open(self.current_mod_config_path, 'r', encoding='utf-8') as f:
+                    config_content = f.read()
+                self.mod_config_text_area.configure(state='normal')
+                self.mod_config_text_area.insert('1.0', config_content)
+                self.save_mod_config_button.config(state=tk.NORMAL)
+                self.delete_mod_button.config(state=tk.NORMAL) # Enable delete button
+                self.log_to_console(f"Loaded config for {selected_jar_name}: {os.path.basename(self.current_mod_config_path)}\n", "info")
+            except Exception as e:
+                self.log_to_console(f"Error loading mod config {self.current_mod_config_path}: {e}\n", "error")
+                messagebox.showerror("Error Loading Config", f"Could not read {os.path.basename(self.current_mod_config_path)}:\n{e}")
+                self.mod_config_text_area.insert('1.0', f"# Could not load: {os.path.basename(self.current_mod_config_path)}\n# Error: {e}")
+        elif selected_mod_info: # Mod selected, but no config file found/loaded
+            self.delete_mod_button.config(state=tk.NORMAL) # Still allow deleting the JAR
+            self.log_to_console(f"No associated config file found or loaded for {selected_jar_name}.\n", "info")
+            self.mod_config_text_area.insert('1.0', f"# No configuration file automatically detected for {selected_jar_name}.")
+        else:
+             self.log_to_console(f"Could not find mod data for selected item: {selected_jar_name}.\n", "warning") # Should not happen
+
+    def _save_mod_config(self):
+        if not self.current_mod_config_path:
+            messagebox.showwarning("Save Error", "No configuration file is currently loaded.")
+            return
+        if not self.mod_config_text_area.get("1.0", tk.END).strip(): # Check if empty
+            messagebox.showwarning("Save Error", "Cannot save empty configuration.")
+            return
+
+        try:
+            content_to_save = self.mod_config_text_area.get("1.0", tk.END).strip() # Get all content, strip trailing newline if any from ScrolledText
+            # Ensure a newline at the end of the file as many configs expect it
+            if not content_to_save.endswith('\n'):
+                 content_to_save += '\n'
+
+            with open(self.current_mod_config_path, 'w', encoding='utf-8') as f:
+                f.write(content_to_save)
+            self.log_to_console(f"Saved config: {os.path.basename(self.current_mod_config_path)}\n", "info")
+            messagebox.showinfo("Save Successful", f"{os.path.basename(self.current_mod_config_path)} saved successfully.")
+            # Optionally, reload the mod list or config to confirm changes visually or clear dirty state
+        except Exception as e:
+            self.log_to_console(f"Error saving mod config {self.current_mod_config_path}: {e}\n", "error")
+            messagebox.showerror("Save Error", f"Could not save {os.path.basename(self.current_mod_config_path)}:\n{e}")
+
+    def _open_mods_folder(self):
+        if os.path.isdir(self.mods_dir_path):
+            try:
+                if sys.platform == "win32":
+                    os.startfile(self.mods_dir_path)
+                elif sys.platform == "darwin": # macOS
+                    subprocess.run(["open", self.mods_dir_path], check=True)
+                else: # Linux and other POSIX
+                    subprocess.run(["xdg-open", self.mods_dir_path], check=True)
+            except Exception as e:
+                messagebox.showerror("Open Folder Error", f"Could not open mods folder: {e}")
+        else:
+            messagebox.showwarning("Open Folder Error", f"Mods folder not found: {self.mods_dir_path}")
+
+    def _open_config_folder(self):
+        if os.path.isdir(self.config_dir_path):
+            try:
+                if sys.platform == "win32":
+                    os.startfile(self.config_dir_path)
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", self.config_dir_path], check=True)
+                else:
+                    subprocess.run(["xdg-open", self.config_dir_path], check=True)
+            except Exception as e:
+                messagebox.showerror("Open Folder Error", f"Could not open config folder: {e}")
+        else:
+            messagebox.showwarning("Open Folder Error", f"Config folder not found: {self.config_dir_path}")
+
+    def _delete_selected_mod(self):
+        if not self.current_selected_mod_info or not self.current_selected_mod_info.get('jar'):
+            messagebox.showwarning("Delete Error", "No mod selected or mod information is incomplete.")
+            return
+
+        mod_jar_name = self.current_selected_mod_info['jar']
+        mod_jar_path = os.path.join(self.mods_dir_path, mod_jar_name)
+        
+        config_path_to_delete = self.current_selected_mod_info.get('config_path')
+        config_name_display = os.path.basename(config_path_to_delete) if config_path_to_delete else "no associated config file"
+
+        confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}' and {config_name_display}?This action cannot be undone."
+        if config_path_to_delete and not os.path.exists(config_path_to_delete):
+            confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}'? (Associated config file {config_name_display} not found or already deleted). This action cannot be undone."
+        elif not config_path_to_delete:
+             confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}'? (No associated config file was detected). This action cannot be undone."
+
+
+        if messagebox.askyesno("Confirm Delete Mod", confirm_message):
+            deleted_jar = False
+            deleted_config = False
+            errors = []
+
+            # Delete JAR file
+            try:
+                if os.path.exists(mod_jar_path):
+                    os.remove(mod_jar_path)
+                    self.log_to_console(f"Deleted mod JAR: {mod_jar_name}\n", "info")
+                    deleted_jar = True
+                else:
+                    self.log_to_console(f"Mod JAR not found for deletion: {mod_jar_name}\n", "warning")
+                    errors.append(f"JAR file '{mod_jar_name}' not found.")
+            except Exception as e:
+                self.log_to_console(f"Error deleting mod JAR {mod_jar_name}: {e}\n", "error")
+                errors.append(f"Could not delete '{mod_jar_name}': {e}")
+
+            # Delete associated config file
+            if config_path_to_delete and os.path.exists(config_path_to_delete):
+                try:
+                    os.remove(config_path_to_delete)
+                    self.log_to_console(f"Deleted associated config: {os.path.basename(config_path_to_delete)}\n", "info")
+                    deleted_config = True
+                except Exception as e:
+                    self.log_to_console(f"Error deleting mod config {os.path.basename(config_path_to_delete)}: {e}\n", "error")
+                    errors.append(f"Could not delete config '{os.path.basename(config_path_to_delete)}': {e}")
+            
+            if not errors:
+                messagebox.showinfo("Delete Successful", f"Successfully deleted '{mod_jar_name}' and its associated configuration.")
+            else:
+                summary_message = "Deletion process completed with issues:\n"
+                if deleted_jar: summary_message += f"- Mod '{mod_jar_name}' was deleted.\n"
+                if deleted_config: summary_message += f"- Config '{config_name_display}' was deleted.\n"
+                summary_message += "\nErrors encountered:\n" + "\n".join(errors)
+                messagebox.showwarning("Delete Partially Successful", summary_message)
+
+            self._load_mods_list() # Refresh the list
+            # Clear selection states as the item is gone
+            self.current_selected_mod_info = None
+            self.current_mod_config_path = None
+            self.mod_config_text_area.configure(state='disabled')
+            self.mod_config_text_area.delete('1.0', tk.END)
+            self.save_mod_config_button.config(state=tk.DISABLED)
+            self.delete_mod_button.config(state=tk.DISABLED)
+
+    # --- APP SETTINGS & CHANGELOG ---
+    def _create_app_settings_tab_widgets(self):
+        main_card = ttk.Frame(self.app_settings_tab, style='Card.TFrame', padding=15)
+        main_card.pack(fill=tk.BOTH, expand=True)
+
+        # --- Application Information Section ---
+        info_card = ttk.Frame(main_card, style='CardInner.TFrame', padding=15)
+        info_card.pack(fill=tk.X, pady=(0,10)) # Fill X, place at top
+        ttk.Label(info_card, text="Application Information", style='Title.TLabel', font=FONT_UI_BOLD).pack(anchor='w', pady=(0,10))
+        
+        app_name_text = "Minecraft Server Control GUI"
+        app_version_text = "1.2.1" # Example version, update as needed
+        app_author_text = "CalaKuad1"
+        app_description_text = "A comprehensive tool to manage your Minecraft server with ease, view stats, manage players, mods, and more."
+
+        ttk.Label(info_card, text=f"Name: {app_name_text}", style='TLabel').pack(anchor='w')
+        ttk.Label(info_card, text=f"Version: {app_version_text}", style='TLabel').pack(anchor='w')
+        ttk.Label(info_card, text=f"Author(s): {app_author_text}", style='TLabel').pack(anchor='w')
+        # Update wraplength dynamically or set a reasonable fixed one
+        # For dynamic, it needs to be done after the window is drawn or on configure events.
+        # Simple approach: use a large enough fixed value based on typical window width.
+        description_label = ttk.Label(info_card, text=f"Description: {app_description_text}", style='TLabel', wraplength=650) # Adjust wraplength as needed
+        description_label.pack(anchor='w', pady=(5,0), fill=tk.X)
+
+        # --- Changelog Section (Read-Only) ---
+        changelog_card = ttk.Frame(main_card, style='CardInner.TFrame', padding=15)
+        changelog_card.pack(fill=tk.BOTH, expand=True, pady=(10,10))
+        ttk.Label(changelog_card, text="Application Changelog", style='Title.TLabel', font=FONT_UI_BOLD).pack(anchor='w', pady=(0,10))
+
+        self.changelog_text_area = scrolledtext.ScrolledText(changelog_card, wrap=tk.WORD, height=10,
+                                                             bg=PRIMARY_BG, fg=TEXT_SECONDARY, # Adjusted fg for read-only text
+                                                             insertbackground=ACCENT_COLOR, font=FONT_CONSOLE_CUSTOM,
+                                                             relief='solid', borderwidth=1, highlightthickness=0, bd=0, padx=5, pady=5)
+        self.changelog_text_area.pack(fill=tk.BOTH, expand=True, pady=(0,0))
+        # No Save Changelog button - it's read-only now
+
+        # --- Placeholder for App Configuration Section ---
+        app_config_card = ttk.Frame(main_card, style='CardInner.TFrame', padding=15)
+        app_config_card.pack(fill=tk.X, pady=(10,0))
+        ttk.Label(app_config_card, text="Other Application Settings", style='Title.TLabel', font=FONT_UI_BOLD).pack(anchor='w', pady=(0,5))
+        ttk.Label(app_config_card, text="(Future application-specific settings will appear here)", style='TLabel').pack(anchor='w', pady=(0,10))
+
+        self._load_changelog() # Initial load
+
+    def _load_changelog(self):
+        self.changelog_text_area.configure(state='normal') # Enable to insert text
+        self.changelog_text_area.delete('1.0', tk.END)
+        try:
+            if os.path.exists(self.changelog_path):
+                with open(self.changelog_path, 'r', encoding='utf-8') as f:
+                    changelog_content = f.read()
+                self.changelog_text_area.insert('1.0', changelog_content)
+            else:
+                default_text = "# Application Changelog\n\n(Changelog file not found. This file should be created and maintained by the application developer.)\n"
+                self.changelog_text_area.insert('1.0', default_text)
+        except Exception as e:
+            messagebox.showerror("Error Loading Changelog", f"Failed to load {self.changelog_path}:\n{e}")
+            self.changelog_text_area.insert('1.0', f"# Error loading changelog: {e}")
+        finally:
+            self.changelog_text_area.configure(state='disabled') # Make read-only
+
+    # Removed _save_changelog method as it's no longer needed
+
+    def _delete_selected_mod(self):
+        if not self.current_selected_mod_info or not self.current_selected_mod_info.get('jar'):
+            messagebox.showwarning("Delete Error", "No mod selected or mod information is incomplete.")
+            return
+
+        mod_jar_name = self.current_selected_mod_info['jar']
+        mod_jar_path = os.path.join(self.mods_dir_path, mod_jar_name)
+        
+        config_path_to_delete = self.current_selected_mod_info.get('config_path')
+        config_name_display = os.path.basename(config_path_to_delete) if config_path_to_delete else "no associated config file"
+
+        confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}' and {config_name_display}?This action cannot be undone."
+        if config_path_to_delete and not os.path.exists(config_path_to_delete):
+            confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}'? (Associated config file {config_name_display} not found or already deleted). This action cannot be undone."
+        elif not config_path_to_delete:
+             confirm_message = f"Are you sure you want to delete the mod '{mod_jar_name}'? (No associated config file was detected). This action cannot be undone."
+
+
+        if messagebox.askyesno("Confirm Delete Mod", confirm_message):
+            deleted_jar = False
+            deleted_config = False
+            errors = []
+
+            # Delete JAR file
+            try:
+                if os.path.exists(mod_jar_path):
+                    os.remove(mod_jar_path)
+                    self.log_to_console(f"Deleted mod JAR: {mod_jar_name}\n", "info")
+                    deleted_jar = True
+                else:
+                    self.log_to_console(f"Mod JAR not found for deletion: {mod_jar_name}\n", "warning")
+                    errors.append(f"JAR file '{mod_jar_name}' not found.")
+            except Exception as e:
+                self.log_to_console(f"Error deleting mod JAR {mod_jar_name}: {e}\n", "error")
+                errors.append(f"Could not delete '{mod_jar_name}': {e}")
+
+            # Delete associated config file
+            if config_path_to_delete and os.path.exists(config_path_to_delete):
+                try:
+                    os.remove(config_path_to_delete)
+                    self.log_to_console(f"Deleted associated config: {os.path.basename(config_path_to_delete)}\n", "info")
+                    deleted_config = True
+                except Exception as e:
+                    self.log_to_console(f"Error deleting mod config {os.path.basename(config_path_to_delete)}: {e}\n", "error")
+                    errors.append(f"Could not delete config '{os.path.basename(config_path_to_delete)}': {e}")
+            
+            if not errors:
+                messagebox.showinfo("Delete Successful", f"Successfully deleted '{mod_jar_name}' and its associated configuration.")
+            else:
+                summary_message = "Deletion process completed with issues:\n"
+                if deleted_jar: summary_message += f"- Mod '{mod_jar_name}' was deleted.\n"
+                if deleted_config: summary_message += f"- Config '{config_name_display}' was deleted.\n"
+                summary_message += "\nErrors encountered:\n" + "\n".join(errors)
+                messagebox.showwarning("Delete Partially Successful", summary_message)
+
+            self._load_mods_list() # Refresh the list
+            # Clear selection states as the item is gone
+            self.current_selected_mod_info = None
+            self.current_mod_config_path = None
+            self.mod_config_text_area.configure(state='disabled')
+            self.mod_config_text_area.delete('1.0', tk.END)
+            self.save_mod_config_button.config(state=tk.DISABLED)
+            self.delete_mod_button.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     root = tk.Tk() # Ya no es ThemedTk
