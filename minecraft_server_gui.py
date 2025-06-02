@@ -11,6 +11,8 @@ import glob
 import sys
 import random # Added for particle animation
 import re # Added for mod name extraction
+import uuid # Added for offline OP UUID generation
+import hashlib # Added for offline OP UUID generation
 
 # Attempt to hide the Python interpreter console window on Windows
 if sys.platform == "win32":
@@ -98,6 +100,7 @@ class ServerControlGUI:
         self.player_count_line_suffix = " players online:"
 
         self.property_row_frames = [] # Initialize here
+        self.server_config_properties = {} # Initialize dictionary for server properties
         self.active_view_id = None # ID of the currently displayed view
         self.transition_in_progress = False # Flag to prevent overlapping transitions
 
@@ -921,6 +924,7 @@ class ServerControlGUI:
                     key = key.strip()
                     value = value.strip()
                     properties_to_display.append((key, value))
+                    self.server_config_properties[key] = value # Populate the server config properties
 
             current_row_frame = None
             controls_in_current_row = 0
@@ -1353,12 +1357,41 @@ class ServerControlGUI:
 
     def update_ops_list(self):
         ops_path = os.path.join(self.script_dir, 'ops.json')
-        try:
-            with open(ops_path, 'r', encoding='utf-8') as f:
-                self.ops_list = json.load(f)
-        except Exception:
-            self.ops_list = [] # Default to empty list on error
-        self._refresh_ops_display() # Renamed call
+        new_ops_data = [] # Default to empty if file not found or error
+        
+        if os.path.exists(ops_path):
+            try:
+                with open(ops_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if not content.strip(): # Check if file content is empty or only whitespace
+                        self.log_to_console("ops.json is empty. Operator list will be empty.", "info")
+                        # new_ops_data remains []
+                    else:
+                        loaded_json = json.loads(content)
+                        if isinstance(loaded_json, list):
+                            new_ops_data = loaded_json
+                        else:
+                            self.log_to_console(f"ops.json does not contain a valid JSON list. Found type: {type(loaded_json)}. Operator list will be empty.", "error")
+                            messagebox.showwarning("Ops Load Warning", "ops.json content is not a list. Operator list may be incorrect or empty.")
+                            # new_ops_data remains []
+            except json.JSONDecodeError as jde:
+                self.log_to_console(f"Error decoding ops.json: {jde}. Operator list will be treated as empty.", "error")
+                messagebox.showerror("Ops Load Error", f"Failed to decode ops.json: {jde}. Please check the file contents.")
+                # new_ops_data remains []
+            except IOError as ioe:
+                self.log_to_console(f"IOError reading ops.json: {ioe}. Operator list will be treated as empty.", "error")
+                messagebox.showerror("Ops Load Error", f"Could not read ops.json: {ioe}")
+                # new_ops_data remains []
+            except Exception as e:
+                self.log_to_console(f"Unexpected error loading ops.json: {e}. Operator list will be treated as empty.", "error")
+                messagebox.showerror("Ops Load Error", f"An unexpected error occurred while loading ops list: {e}")
+                # new_ops_data remains []
+        else:
+            self.log_to_console("ops.json not found. Operator list is empty.", "info")
+            # new_ops_data remains []
+
+        self.ops_list = new_ops_data
+        self._refresh_ops_display()
 
     def _refresh_ops_display(self): # Renamed from _refresh_ops_tree
         if not hasattr(self, 'scrollable_ops_list_frame') or not self.scrollable_ops_list_frame.winfo_exists():
@@ -1400,22 +1433,173 @@ class ServerControlGUI:
             messagebox.showwarning('Add OP', 'Please enter a valid username.')
             return
         # Enviar comando op al servidor
-        self.send_command_to_server(f'op {username}')
-        # messagebox.showinfo('Add OP', f'Command sent to add {username} as an operator. If the user exists, they will appear in the list after a refresh.')
-        self.log_to_console(f"Sent command to add {username} as an operator. Refreshing Ops list soon.\n", "info")
-        self.new_op_entry.delete(0, tk.END)
-        self.new_op_entry.insert(0, 'Username')
-        self.new_op_entry.config(fg='#888888')
-        self.master.after(1500, self.update_ops_list) # Refresh list after a delay
+        if self.server_running:
+            # Server is running, send command
+            self.send_command_to_server(f'op {username}')
+            self.log_to_console(f"Sent command to add {username} as an operator. Refreshing Ops list soon.", "info")
+            # Clear input field
+            self.new_op_entry.delete(0, tk.END)
+            self.new_op_entry.insert(0, 'Username') # Placeholder text
+            self.new_op_entry.config(fg='#888888') # Placeholder color
+            self.master.focus_set() # Remove focus from entry
+            # Refresh list after a delay to allow server to process
+            self.master.after(1500, self.update_ops_list)
+        else:
+            # Server is not running, modify ops.json directly
+            ops_path = os.path.join(self.script_dir, 'ops.json')
+            current_ops = []
+
+            # Load existing ops.json
+            if os.path.exists(ops_path):
+                try:
+                    with open(ops_path, 'r', encoding='utf-8') as f:
+                        loaded_data = json.load(f)
+                    if isinstance(loaded_data, list):
+                        current_ops = loaded_data
+                    else:
+                        self.log_to_console("Warning: ops.json content is not a list. Initializing as empty.", "warning")
+                        messagebox.showwarning("Add OP Warning", "ops.json content was not a list. It will be treated as empty for this operation.")
+                        current_ops = [] # Treat as empty if not a list
+                except json.JSONDecodeError:
+                    self.log_to_console("Warning: ops.json is corrupted. Initializing as empty for OP addition.", "warning")
+                    messagebox.showwarning("Add OP Warning", "ops.json is corrupted. It will be treated as empty for this operation.")
+                    current_ops = [] # Treat as empty if corrupted
+                except Exception as e:
+                    self.log_to_console(f"Error reading ops.json: {e}. Cannot add OP offline.", "error")
+                    messagebox.showerror("Add OP Error", f"Could not read ops.json: {e}")
+                    return
+
+            # Check if player (by name, case-insensitive) is already in the list
+            player_already_op = False
+            for op_entry_item in current_ops:
+                if op_entry_item.get('name', '').lower() == username.lower():
+                    player_already_op = True
+                    break
+            
+            if player_already_op:
+                self.log_to_console(f"{username} is already listed in ops.json. No changes made to the file.", "info")
+            else:
+                # Player not found, add them
+                effective_uuid = f"PLACEHOLDER_UUID_FOR_{username}" # Default placeholder
+                
+                # Ensure self.server_config_properties is available; it's loaded in __init__
+                is_online_mode = self.server_config_properties.get('online-mode', 'true').lower() == 'true'
+
+                if not is_online_mode:
+                    try:
+                        effective_uuid = ServerControlGUI._generate_offline_uuid(username)
+                        self.log_to_console(f"Generated offline UUID for {username}: {effective_uuid}", "info")
+                    except Exception as e:
+                        self.log_to_console(f"Could not generate offline UUID for {username}: {e}. Using placeholder.", "warning")
+                        # effective_uuid remains the placeholder
+                else: # online-mode is true
+                    self.log_to_console(f"Server is in online-mode. Cannot determine official UUID for {username} while server is offline. Using placeholder.", "warning")
+                    messagebox.showwarning("Add OP (Offline - Online Mode)", 
+                                           f"Server is in online-mode. Adding {username} to ops.json with a placeholder UUID. "
+                                           f"The server may need to correct this when it's online and the player joins, or if 'op {username}' is run via console.")
+
+                new_op_entry_data = {
+                    "uuid": effective_uuid,
+                    "name": username,
+                    "level": 4,  # Default OP level for Minecraft
+                    "bypassesPlayerLimit": False
+                }
+                current_ops.append(new_op_entry_data)
+                
+                try:
+                    with open(ops_path, 'w', encoding='utf-8') as f:
+                        json.dump(current_ops, f, indent=2)
+                    self.log_to_console(f"Added {username} to ops.json (server offline).", "info")
+                except Exception as e:
+                    self.log_to_console(f"Error writing to ops.json: {e}", "error")
+                    messagebox.showerror("Add OP Error", f"Could not write to ops.json: {e}")
+                    return # Don't proceed if write failed
+            
+            # Clear input field and refresh list (common for both player_already_op and new_player_added scenarios if successful till here)
+            self.new_op_entry.delete(0, tk.END)
+            self.new_op_entry.insert(0, 'Username') # Placeholder text
+            self.new_op_entry.config(fg='#888888') # Placeholder color
+            self.master.focus_set() # Remove focus from entry
+            # Refresh list (shorter delay as it's a local file change or no change)
+            self.master.after(100, self.update_ops_list)
 
     def _deop_player(self, player_name):
         if player_name and player_name != 'N/A':
-            command = f"deop {player_name}"
-            self.send_command_to_server(command)
-            self.log_to_console(f"Sent command to deop {player_name}. Refreshing Ops list soon.\n", "info")
-            self.master.after(1500, self.update_ops_list) # Refresh list after a delay to allow server to process
+            if self.server_running:
+                command = f"deop {player_name}"
+                self.send_command_to_server(command)
+                self.log_to_console(f"Sent command to deop {player_name}. Refreshing Ops list soon.", "info")
+                self.master.after(1500, self.update_ops_list) # Refresh list after a delay for server processing
+            else:
+                # Server is not running, modify ops.json directly
+                self.log_to_console(f"Attempting to deop {player_name} (server offline).", "info") # Added log
+                ops_path = os.path.join(self.script_dir, 'ops.json')
+                current_ops = []
+                player_found_for_deop = False
+
+                if os.path.exists(ops_path):
+                    try:
+                        with open(ops_path, 'r', encoding='utf-8') as f:
+                            loaded_data = json.load(f)
+                        if isinstance(loaded_data, list):
+                            current_ops = loaded_data
+                            self.log_to_console(f"Offline deop: Loaded ops.json content: {current_ops}", "info") # Added log
+                        else:
+                            self.log_to_console("Warning: ops.json content is not a list. Cannot deop offline.", "warning")
+                            messagebox.showwarning("DeOp Warning", "ops.json content was not a list. DeOp operation aborted.")
+                            return
+                    except json.JSONDecodeError:
+                        self.log_to_console("Warning: ops.json is corrupted. Cannot deop offline.", "warning")
+                        messagebox.showwarning("DeOp Warning", "ops.json is corrupted. DeOp operation aborted.")
+                        return
+                    except Exception as e:
+                        self.log_to_console(f"Error reading ops.json: {e}. Cannot deop offline.", "error")
+                        messagebox.showerror("DeOp Error", f"Could not read ops.json: {e}")
+                        return
+                else:
+                    self.log_to_console("ops.json not found. Cannot deop offline.", "warning")
+                    messagebox.showwarning("DeOp Warning", "ops.json not found. DeOp operation aborted.")
+                    return
+
+                # Find and remove the player (case-insensitive)
+                updated_ops = []
+                for op_entry in current_ops:
+                    op_name_in_file = op_entry.get('name', '')
+                    # Added detailed log for checking each entry
+                    self.log_to_console(f"Offline deop: Checking entry: {op_entry}. Name in file: '{op_name_in_file}' (lower: '{op_name_in_file.lower()}'). Target: '{player_name}' (lower: '{player_name.lower()}').", "info")
+                    if op_name_in_file.lower() == player_name.lower():
+                        player_found_for_deop = True
+                        self.log_to_console(f"Offline deop: Match found for {player_name}. Player will be removed.", "info") # Added log
+                        # Don't add this entry to updated_ops, effectively removing them
+                    else:
+                        updated_ops.append(op_entry)
+                
+                self.log_to_console(f"Offline deop: player_found_for_deop = {player_found_for_deop}", "info") # Added log
+                self.log_to_console(f"Offline deop: Ops list that will be written (updated_ops): {updated_ops}", "info") # Added log
+
+                if player_found_for_deop:
+                    try:
+                        with open(ops_path, 'w', encoding='utf-8') as f:
+                            json.dump(updated_ops, f, indent=2)
+                        self.log_to_console(f"Removed {player_name} from ops.json (server offline). File written successfully.", "info") # Updated log
+                        # Verification re-read
+                        try:
+                            with open(ops_path, 'r', encoding='utf-8') as f_verify:
+                                verify_data = json.load(f_verify)
+                            self.log_to_console(f"Offline deop: Verification read of ops.json after write: {verify_data}", "info") # Added log
+                        except Exception as e_verify:
+                            self.log_to_console(f"Offline deop: Error during verification re-read of ops.json: {e_verify}", "error") # Added log
+                    except Exception as e:
+                        self.log_to_console(f"Error writing to ops.json during deop: {e}", "error")
+                        messagebox.showerror("DeOp Error", f"Could not write to ops.json: {e}")
+                        return # Don't refresh if write failed
+                else:
+                    self.log_to_console(f"{player_name} not found in ops.json. No changes made to the file.", "info") # Updated log
+                
+                # Refresh list (shorter delay as it's a local file change or no change)
+                self.master.after(100, self.update_ops_list)
         else:
-            self.log_to_console("Invalid player name to deop.\n", "warning")
+            self.log_to_console("Invalid player name to deop.", "warning")
 
     def _create_worlds_view_widgets(self, parent_frame):
         card = ttk.Frame(parent_frame, style='Card.TFrame', padding=30)
@@ -2321,6 +2505,26 @@ class ServerControlGUI:
             pass # Will be reset when starting or if it fails
         if self.server_running and self.server_process is not None : # Successfully restarted
              self._restart_check_counter = 0
+
+    @staticmethod
+    def _generate_offline_uuid(username):
+        # Minecraft offline UUID generation (version 3 based on MD5)
+        # This method generates a UUID version 3, which is what Minecraft uses for offline players.
+        # The input string "OfflinePlayer:" + username is hashed using MD5.
+        # Specific bytes of the hash are then manipulated to set the UUID version and variant.
+        hash_bytes = hashlib.md5(("OfflinePlayer:" + username).encode('utf-8')).digest()
+        
+        b = list(hash_bytes) # Convert bytes to list of ints for manipulation
+        
+        # Set version to 3 (xxxxxxxx-xxxx-3xxx-xxxx-xxxxxxxxxxxx)
+        # This affects the 7th byte (index 6 of 0-indexed 16-byte array)
+        b[6] = (b[6] & 0x0F) | 0x30
+        
+        # Set variant to Leach-Salz (RFC 4122: xxxxxxxx-xxxx-xxxx-Vxxx-xxxxxxxxxxxx where V is 8,9,A,or B)
+        # This affects the 9th byte (index 8 of 0-indexed 16-byte array)
+        b[8] = (b[8] & 0x3F) | 0x80
+            
+        return str(uuid.UUID(bytes=bytes(b)))
 
 
 if __name__ == "__main__":
