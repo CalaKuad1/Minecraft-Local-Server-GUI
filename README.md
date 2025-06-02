@@ -43,7 +43,7 @@ The application will open, allowing you to:
 *   View basic player statistics.
 
 ## Notes
-
+*   This project was made for fun, vibe coding, I don't have good programming skills. Open for feedback. Ty
 *   The application identifies the server process by looking for Java processes associated with "forge" or "minecraft" in their command line, or by proximity to the script's/executable's directory. Resource monitoring accuracy depends on correctly identifying the server process.
 *   **The `run.bat` (or equivalent) file must be in the same directory as `minecraft_server_gui.py` or `MinecraftServerGUI.exe` (i.e., the server's root directory).**
 *   The server properties, ops list, and world information are loaded from files expected to be in the server directory (e.g., `server.properties`, `ops.json`, `world/` folder). 
