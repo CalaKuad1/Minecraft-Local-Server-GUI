@@ -1,24 +1,47 @@
 # Application Changelog
 
-## Version 1.2.1 - YYYY-MM-DD 
-(Corresponds to the version in App Info - update date as needed)
-- Added "App Settings" tab with Application Information and read-only Changelog.
-- Added "Delete Selected Mod" functionality with confirmation to the "Mods" tab.
-- Implemented basic "Mods" tab:
-    - Lists .jar files from the /mods folder.
-    - Attempts to find and display associated config files from the /config folder.
-    - Allows text-based editing and saving of detected config files.
-    - Added "Open Mods Folder" and "Open Config Folder" buttons.
-- Added "Bans" tab:
-    - Displays banned IPs from `banned-ips.json`.
-    - Displays banned players from `banned-players.json`.
-    - Allows pardoning selected IPs and players.
-- Implemented Kick and Ban buttons for selected players in the "Players" tab.
-- Improved player list detection to handle multi-line server responses.
-- Added option to hide the Python interpreter console on startup (Windows).
-- Added subtle background particle animation for visual flair.
-- Translated UI to English.
-- Themed various UI elements for a modern dark look.
+## Version 1.2.2 - YYYY-MM-DD
+- Implemented view transitions: Added a subtle "dip to background" fade effect when switching between different sections/tabs in the GUI for a smoother user experience.
+
+**Core UI Enhancements & Modernization:**
+- Replaced placeholder top bar with a functional header:
+    - Includes "Minecraft Server Dashboard" title.
+    - Dynamic server status label (Offline, Online, Starting, Stopping, Restarting) with distinct styles.
+    - "Restart Server" button, dynamically enabled/disabled.
+- Implemented `restart_server` and `_check_if_stopped_then_start` methods for robust server restarting.
+- Standardized typography for section headers within views (e.g., "Connected Players") using `Header.TLabel`.
+- Improved scrollbar aesthetics (`Vertical.TScrollbar`) for better dark theme integration (trough color, thumb background, flat relief).
+- Refined particle animation for subtlety: reduced particle count, more subdued colors, smaller size and speed.
+- Standardized `ScrolledText` widget styling (console, config editors, changelog) to `flat` relief with a 1px border.
+
+**Layout & Style Improvements by View:**
+- **Dashboard View:**
+    - Refactored "Server Controls" (Start/Stop buttons) and "Server Console" into separate, parallel `Card.TFrame` widgets.
+- **General List Views (Treeview Replacement & Actionable Rows):**
+    - Updated `CardView.Treeview` selection style: `ACCENT_COLOR` background, `PRIMARY_BG` foreground for clarity (where Treeview is still used or was recently replaced).
+    - **Worlds View:** Replaced Treeview. Each world row now displays name/size and a "💾 Backup" button.
+    - **Mods View:** Replaced `mods_tree` with a scrollable list. Each mod row shows JAR name/config path, with "⚙️ View" and "🗑️ Del" buttons. Implemented `_load_mod_config_for_editing` and `_delete_specific_mod`.
+    - **Bans View:** Replaced `banned_ips_tree` and `banned_players_tree`. Each ban entry shows details and a "⚖️ Pardon" button. Implemented `_pardon_ip` and `_pardon_player`.
+    - **Players View:** Replaced `players_tree`. Each player row displays name, with "👢 Kick" and "🚫 Ban" buttons. Refactored kick/ban methods.
+    - **Ops View:** Replaced `ops_tree`. Each operator row displays details and a "⚡ DeOp" button. Implemented `_deop_player(name)`.
+- **Server Properties View:**
+    - Enhanced `Switch.TCheckbutton` style for clearer on/off visual (green/grey).
+    - Refactored `_add_property_control` to pack controls side-by-side in a parent row frame.
+    - Significantly updated `load_server_properties` for a multi-column layout (2-3 properties per row) for compactness.
+    - Fixed `AttributeError` for `property_row_frames` initialization.
+- **Input Fields & Dropdowns (`TEntry`, `TCombobox`):**
+    - Added hover effects: `bordercolor` to `ACCENT_HOVER`, `fieldbackground` to `SECONDARY_BG`.
+    - Increased `borderwidth` to 2px on focus/hover, reverting to 1px otherwise.
+- **Button Styles:**
+    - Created `ActionRow.TButton` style for small inline action buttons in list rows (smaller font, reduced padding).
+    - Removed explicit `ipadx`/`ipady` from main action buttons to rely on style padding for consistency.
+- **Spacing and Padding Review:**
+    - Adjusted padding in Properties view (canvas, individual property controls).
+    - Adjusted padding in Resources view (main card, title, graph frame).
+    - Adjusted padding in Stats view (main card, title).
+
+**Other:**
+- Added "App Settings" tab with Application Information and a read-only Changelog viewer.
 
 ## Version 1.0.0 - YYYY-MM-DD 
 (Initial version placeholder)
