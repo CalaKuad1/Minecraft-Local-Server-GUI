@@ -13,6 +13,9 @@ import random # Added for particle animation
 import re # Added for mod name extraction
 import uuid # Added for offline OP UUID generation
 import hashlib # Added for offline OP UUID generation
+from PIL import Image, ImageTk, UnidentifiedImageError # For avatars
+import requests # For avatars
+import io # For avatars
 
 # Attempt to hide the Python interpreter console window on Windows
 if sys.platform == "win32":
@@ -37,22 +40,24 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Paleta de colores Moderna Oscura
-PRIMARY_BG = '#18191A'
-SECONDARY_BG = '#242526'
-TERTIARY_BG = '#3A3B3C'
-ACCENT_COLOR = '#00A2FF'
-ACCENT_HOVER = '#007ACC'
-SUCCESS_COLOR = '#28A745' # Green for online/success states, similar to image
-TEXT_PRIMARY = '#E4E6EB'
-TEXT_SECONDARY = '#B0B3B8'
-CONSOLE_FG_CUSTOM = '#33FF57'
-ERROR_FG_CUSTOM = '#FF4D4D'
-WARNING_FG_CUSTOM = '#FFBB33'
-# Tipografía Moderna
-FONT_UI_NORMAL = ('Segoe UI', 11)
-FONT_UI_BOLD = ('Segoe UI Semibold', 12)
-FONT_UI_TITLE = ('Segoe UI Light', 22)
-FONT_CONSOLE_CUSTOM = ('Consolas', 11)
+PRIMARY_BG = '#1E1F22'  # Darker, slightly desaturated
+SECONDARY_BG = '#2B2D30' # Panel/Card background, a bit lighter than primary
+TERTIARY_BG = '#202124'  # For distinct areas like top bar or sidebar sections (if not card-styled)
+ACCENT_COLOR = '#00BFFF' # Deep Sky Blue - vibrant and modern
+ACCENT_HOVER = '#009ACD' # Slightly darker/desaturated for hover
+SUCCESS_COLOR = '#32CD32' # Lime Green - vibrant success
+TEXT_PRIMARY = '#F0F0F0'   # Lighter text for better contrast on dark BG
+TEXT_SECONDARY = '#A0A0A0' # Softer grey for secondary text
+CONSOLE_FG_CUSTOM = '#40E0D0' # Turquoise for console text
+ERROR_FG_CUSTOM = '#FF6347'   # Tomato red for errors
+WARNING_FG_CUSTOM = '#FFD700' # Gold for warnings
+
+# Tipografía Moderna (Adjusted sizes and weights)
+FONT_UI_NORMAL = ('Segoe UI', 12) # Base size increased
+FONT_UI_BOLD = ('Segoe UI Semibold', 13) # Increased size for bold elements
+FONT_UI_HEADER = ('Segoe UI Semibold', 14) # Specific for major headers within cards
+FONT_UI_TITLE = ('Segoe UI Bold', 26)    # Changed to Bold for thicker appearance
+FONT_CONSOLE_CUSTOM = ('Consolas', 12) # Slightly larger console font
 
 class ServerControlGUI:
     def __init__(self, master):
@@ -80,9 +85,32 @@ class ServerControlGUI:
         master.title("Minecraft Server Control")
         master.geometry("950x720")
         master.configure(bg=PRIMARY_BG)
+        master.bind("<Button-1>", self._handle_global_click) # Global click binding
 
-        # Particle Animation Canvas - Placed early to be in the background
-        self._init_particle_animation() # Call before other widgets if it fills the whole window
+        # --- Main Application Structure ---
+        main_app_frame = ttk.Frame(master, style='TFrame') # This will use PRIMARY_BG by default
+        main_app_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Particle Animation Canvas - Initialize with main_app_frame as parent
+        # This will create the canvas, place it to fill main_app_frame, and lower it.
+        self._init_particle_animation(main_app_frame)
+
+        # Click Effect Overlay Toplevel and Canvas
+        self.click_effect_toplevel = tk.Toplevel(master)
+        self.click_effect_toplevel.overrideredirect(True) # Frameless
+        self.click_effect_toplevel.attributes("-topmost", True) # Keep on top
+        # Attempt to make the Toplevel background transparent (Windows specific for 'white')
+        # A common color unlikely to be used for particles directly, e.g., a specific off-white or light grey
+        self.transparent_color_key = "#FEFEFE" # Using a near-white color
+        self.click_effect_toplevel.attributes("-transparentcolor", self.transparent_color_key)
+        self.click_effect_toplevel.configure(bg=self.transparent_color_key)
+        self.click_effect_toplevel.withdraw() # Start hidden
+
+        self.click_effect_drawing_canvas = tk.Canvas(self.click_effect_toplevel, bg=self.transparent_color_key, highlightthickness=0)
+        self.click_effect_drawing_canvas.pack(fill=tk.BOTH, expand=True)
+        
+        self.click_effect_particles = []
+        self.click_effect_toplevel_after_id = None 
 
         # Inicializar atributos de estado del servidor ANTES de crear widgets que puedan usarlos
         self.server_process = None
@@ -96,58 +124,58 @@ class ServerControlGUI:
 
         # Flag for multi-line player list parsing - Initialize these BEFORE any logging can occur
         self.expecting_player_list_next_line = False
-        self.player_count_line_prefix = "There are " 
+        self.player_count_line_prefix = "There are "
         self.player_count_line_suffix = " players online:"
 
         self.property_row_frames = [] # Initialize here
         self.server_config_properties = {} # Initialize dictionary for server properties
         self.active_view_id = None # ID of the currently displayed view
         self.transition_in_progress = False # Flag to prevent overlapping transitions
+        self.placeholder_avatar = self._create_placeholder_avatar(size=(24,24)) # Create placeholder
+        self.particles_initialized = False # Flag for particle distribution
+        self.canvas_width = 0 # Initial canvas width before actual measurement
+        self.canvas_height = 0 # Initial canvas height before actual measurement
+        self.avatar_cache = {} # Cache for fetched avatars
 
         self.style = ttk.Style()
-        self.style.theme_use('default') 
+        self.style.theme_use('default')
 
         # --- Custom Styles (Consolidated) ---
         self._configure_styles()
 
-        # Create the transition overlay frame (after styles are configured)
-        # self.transition_overlay = ttk.Frame(self.content_area_frame, style='TransitionOverlay.TFrame') # Moved lower
-
-        # --- Main Application Structure ---
-        # Main frame to hold sidebar and content area
-        main_app_frame = ttk.Frame(master, style='TFrame')
-        main_app_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Sidebar Frame
-        self.sidebar_frame = ttk.Frame(main_app_frame, width=200, style='Card.TFrame') # Use Card style for distinct bg
+        # Sidebar Frame - child of main_app_frame
+        self.sidebar_frame = ttk.Frame(main_app_frame, width=200, style='Card.TFrame') # Use Card style (SECONDARY_BG)
         self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(10,0), pady=10)
         self.sidebar_frame.pack_propagate(False) # Prevent frame from shrinking to fit content
 
-        # Top Bar (Enhanced)
-        self.top_bar_frame = ttk.Frame(main_app_frame, height=70, style='Header.TFrame')
-        self.top_bar_frame.pack(side=tk.TOP, fill=tk.X, padx=(5,10), pady=(10,5))
+        # Top Bar (Enhanced) - child of main_app_frame
+        self.top_bar_frame = ttk.Frame(main_app_frame, height=70, style='Header.TFrame') # Uses TERTIARY_BG
+        self.top_bar_frame.pack(side=tk.TOP, fill=tk.X, padx=(5,10), pady=(10,5)) # Packed after sidebar
         self.top_bar_frame.pack_propagate(False)
 
-        self.server_title_label = ttk.Label(self.top_bar_frame, text="Minecraft Server Dashboard", font=FONT_UI_TITLE, style='Title.TLabel', background=TERTIARY_BG)
-        self.server_title_label.pack(side=tk.LEFT, padx=20, pady=5)
+        # Configure grid layout for top_bar_frame
+        self.top_bar_frame.columnconfigure(0, weight=1) # Title column expands
+        self.top_bar_frame.columnconfigure(1, weight=0) # Actions column does not expand
 
-        # Frame for status and buttons on the right
-        top_bar_actions_frame = ttk.Frame(self.top_bar_frame, style='Header.TFrame')
-        top_bar_actions_frame.pack(side=tk.RIGHT, padx=20, pady=5)
+        self.server_title_label = ttk.Label(self.top_bar_frame, text="Minecraft Server Dashboard", font=FONT_UI_TITLE, style='Title.TLabel', background=TERTIARY_BG)
+        self.server_title_label.grid(row=0, column=0, sticky='ew', padx=(15, 5), pady=5)
+
+        top_bar_actions_frame = ttk.Frame(self.top_bar_frame, style='Header.TFrame') # Uses TERTIARY_BG
+        top_bar_actions_frame.grid(row=0, column=1, sticky='e', padx=(0, 15), pady=5)
 
         self.server_status_label = ttk.Label(top_bar_actions_frame, text="Status: Offline", font=FONT_UI_BOLD, style='StatusOffline.TLabel', background=TERTIARY_BG)
         self.server_status_label.pack(side=tk.LEFT, padx=(0,15))
+
         
         self.restart_button = ttk.Button(top_bar_actions_frame, text="Restart Server", command=self.restart_server, style="Accent2.TButton", state=tk.DISABLED)
         self.restart_button.pack(side=tk.LEFT)
-        # TODO: Add server status indicators and quick action buttons (Stop, Kill, Restart) here later
 
-        # Content Area Frame (where tab content will now go)
-        self.content_area_frame = ttk.Frame(main_app_frame, style='TFrame') # Base background for content area
-        self.content_area_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5,10), pady=(5,10))
+        # Content Area Frame (where tab content will now go) - child of main_app_frame
+        self.content_area_frame = ttk.Frame(main_app_frame, style='TFrame') # Base background for content area (PRIMARY_BG)
+        self.content_area_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5,10), pady=(5,10)) # Packed after sidebar & top bar
 
         # Initialize the transition overlay frame AFTER content_area_frame is created
-        self.transition_overlay = ttk.Frame(self.content_area_frame, style='TransitionOverlay.TFrame')
+        self.transition_overlay = ttk.Frame(self.content_area_frame, style='TransitionOverlay.TFrame') # Uses PRIMARY_BG for dip effect
 
         # --- Dictionary to store content frames for each view ---
         self.view_frames = {}
@@ -170,7 +198,7 @@ class ServerControlGUI:
 
         for view_info in self.views_config:
             # Create the frame for this view, parent is content_area_frame
-            frame = ttk.Frame(self.content_area_frame, style='TFrame', padding=0)
+            frame = ttk.Frame(self.content_area_frame, style='TFrame', padding=0) # View frames will have PRIMARY_BG
             self.view_frames[view_info['id']] = frame
             # Call the method to populate this frame (e.g., self._create_control_tab_widgets(frame))
             view_info['create_method'](frame) # Pass the frame as the parent
@@ -183,7 +211,6 @@ class ServerControlGUI:
 
         # Load initial data and show the first view (e.g., control/dashboard)
         self.load_server_properties()
-        # self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed) # REMOVE: No longer using notebook
         self._show_view('control') # Show the control/dashboard view by default
         self._update_server_status_display() # Initialize server status display
 
@@ -193,32 +220,31 @@ class ServerControlGUI:
         self.style.configure('.', background=PRIMARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, borderwidth=0, focusthickness=0, highlightthickness=0)
         self.style.configure('TFrame', background=PRIMARY_BG)
         self.style.configure('Card.TFrame', background=SECONDARY_BG, relief='solid', borderwidth=1, bordercolor=TERTIARY_BG)
-        self.style.configure('Header.TFrame', background=TERTIARY_BG) # For top bar
+        self.style.configure('Header.TFrame', background=TERTIARY_BG)
         self.style.configure('CardInner.TFrame', background=SECONDARY_BG)
-        self.style.configure('TransitionOverlay.TFrame', background=PRIMARY_BG) # Style for the transition overlay
-        self.style.configure('TLabel', background=SECONDARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, padding=5)
-        self.style.configure('Title.TLabel', background=SECONDARY_BG, foreground=ACCENT_COLOR, font=FONT_UI_TITLE, padding=(10,15,10,10))
-        self.style.configure('Header.TLabel', background=SECONDARY_BG, foreground=TEXT_SECONDARY, font=FONT_UI_BOLD, padding=6)
+        self.style.configure('TransitionOverlay.TFrame', background=PRIMARY_BG)
         
-        # Status Label Styles for Top Bar
+        self.style.configure('TLabel', background=SECONDARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, padding=5)
+        self.style.configure('Title.TLabel', background=TERTIARY_BG, foreground=ACCENT_COLOR, font=FONT_UI_TITLE, padding=(5,15,5,10))
+        self.style.configure('Header.TLabel', background=SECONDARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_HEADER, padding=(8, 8, 8, 4))
+        
         self.style.configure('StatusOnline.TLabel', background=TERTIARY_BG, foreground=SUCCESS_COLOR, font=FONT_UI_BOLD)
         self.style.configure('StatusOffline.TLabel', background=TERTIARY_BG, foreground=ERROR_FG_CUSTOM, font=FONT_UI_BOLD)
         self.style.configure('StatusStarting.TLabel', background=TERTIARY_BG, foreground=WARNING_FG_CUSTOM, font=FONT_UI_BOLD)
 
-        # Pestañas (Notebook)
         self.style.configure('TNotebook', background=PRIMARY_BG, borderwidth=0)
         self.style.configure('TNotebook.Tab', font=FONT_UI_BOLD, padding=[18, 8], relief='flat')
         self.style.map('TNotebook.Tab',
                        background=[('selected', SECONDARY_BG), ('!selected', PRIMARY_BG)],
                        foreground=[('selected', ACCENT_COLOR), ('!selected', TEXT_SECONDARY)],
-                       expand=[('selected', [1, 1, 1, 0])]) # Ligero relieve en la pestaña activa
+                       expand=[('selected', [1, 1, 1, 0])])
 
-        # Botones
-        button_padding = [12, 8, 12, 8]
+        button_padding = [14, 10, 14, 10]
         self.style.configure('Accent.TButton', font=FONT_UI_BOLD, padding=button_padding, relief='flat', borderwidth=0)
         self.style.map('Accent.TButton', 
                        background=[('pressed', ACCENT_HOVER), ('active', ACCENT_HOVER), ('', ACCENT_COLOR)], 
                        foreground=[('', PRIMARY_BG)])
+        
         self.style.configure('Accent2.TButton', font=FONT_UI_BOLD, padding=button_padding, relief='flat', borderwidth=0)
         self.style.map('Accent2.TButton',
                        background=[('pressed', ACCENT_COLOR), ('active', ACCENT_COLOR), ('', TERTIARY_BG)],
@@ -226,56 +252,54 @@ class ServerControlGUI:
         
         self.style.configure('TSeparator', background=TERTIARY_BG)
         
-        # Estilos para TEntry (cajas de texto)
         self.style.configure('TEntry',
                              fieldbackground=PRIMARY_BG,
                              foreground=TEXT_PRIMARY,
-                             insertcolor=ACCENT_COLOR, # Color del cursor
+                             insertcolor=ACCENT_COLOR,
                              font=FONT_UI_NORMAL,
-                             padding=(6,6),
+                             padding=(8,8),
                              relief='flat',
                              borderwidth=1)
         self.style.map('TEntry',
                        bordercolor=[('focus', ACCENT_COLOR), ('hover', ACCENT_HOVER), ('', TERTIARY_BG)],
-                       fieldbackground=[('focus', SECONDARY_BG), ('hover', SECONDARY_BG), ('disabled', SECONDARY_BG)],
+                       fieldbackground=[('focus', SECONDARY_BG), ('hover', SECONDARY_BG), ('disabled', TERTIARY_BG)],
                        foreground=[('focus', ACCENT_COLOR), ('disabled', TEXT_SECONDARY)],
                        borderwidth=[('focus', 2), ('hover', 2), ('', 1)])
 
-        # Estilos para TCombobox (listas desplegables)
         self.style.configure('TCombobox',
                              fieldbackground=PRIMARY_BG,
                              foreground=TEXT_PRIMARY,
-                             selectbackground=SECONDARY_BG, # Fondo del item seleccionado en el dropdown
-                             selectforeground=ACCENT_COLOR, # Texto del item seleccionado en el dropdown
-                             insertcolor=ACCENT_COLOR, # Cursor
+                             selectbackground=SECONDARY_BG,
+                             selectforeground=ACCENT_COLOR, 
+                             insertcolor=ACCENT_COLOR, 
                              arrowcolor=TEXT_PRIMARY,
                              font=FONT_UI_NORMAL,
-                             padding=(6,6), # Padding igual que TEntry
+                             padding=(8,8),
                              relief='flat',
                              borderwidth=1)
         self.style.map('TCombobox',
                        bordercolor=[('focus', ACCENT_COLOR), ('hover', ACCENT_HOVER), ('readonly', TERTIARY_BG), ('', TERTIARY_BG)],
                        fieldbackground=[
-                           ('readonly', PRIMARY_BG),      # Estado por defecto para props (son readonly)
-                           ('focus', SECONDARY_BG),       # Al enfocar (si no es readonly)
-                           ('hover', SECONDARY_BG),       # Al pasar el raton por encima (si no es readonly)
-                           ('active', SECONDARY_BG),      # Cuando el dropdown está activo                            
-                           ('disabled', SECONDARY_BG)
+                           ('readonly', PRIMARY_BG),      
+                           ('focus', SECONDARY_BG),       
+                           ('hover', SECONDARY_BG),      
+                           ('active', SECONDARY_BG),
+                           ('disabled', TERTIARY_BG)
                        ],
                        foreground=[
-                           ('readonly', TEXT_PRIMARY),    # Texto por defecto para props
-                           ('focus', ACCENT_COLOR),       # Texto al enfocar                           
+                           ('readonly', TEXT_PRIMARY),    
+                           ('focus', ACCENT_COLOR),       
                            ('disabled', TEXT_SECONDARY)
                        ],
                        arrowcolor=[('hover', ACCENT_COLOR), ('pressed', ACCENT_COLOR), ('readonly', TEXT_PRIMARY), ('disabled', TEXT_SECONDARY)],
-                       background=[ # Color de fondo del widget combobox (área de la flecha)
+                       background=[ 
                            ('readonly', PRIMARY_BG),
-                           ('active', SECONDARY_BG), # Cuando el dropdown está activo
-                           ('hover', SECONDARY_BG), # Cuando el mouse está sobre el widget (incluida la flecha)
+                           ('active', SECONDARY_BG),
+                           ('hover', SECONDARY_BG),
                            ('disabled', PRIMARY_BG)
                        ],
                        borderwidth=[('focus', 2), ('hover', 2), ('readonly', 1), ('', 1)])
-        # Para el Listbox DENTRO del Combobox (necesario para algunos temas/plataformas)
+        
         self.master.option_add('*TCombobox*Listbox.background', SECONDARY_BG)
         self.master.option_add('*TCombobox*Listbox.foreground', TEXT_PRIMARY)
         self.master.option_add('*TCombobox*Listbox.selectBackground', ACCENT_COLOR)
@@ -284,136 +308,170 @@ class ServerControlGUI:
         self.master.option_add('*TCombobox*Listbox.borderWidth', 0)
         self.master.option_add('*TCombobox*Listbox.relief', 'flat')
 
-        # Scrollbars (requiere más trabajo para un look 100% custom)
         self.style.configure("Vertical.TScrollbar", 
-                             background=TERTIARY_BG,       # Color of the slider/thumb
-                             troughcolor=PRIMARY_BG,      # Color of the channel/track
-                             bordercolor=TERTIARY_BG,   # Border of the scrollbar itself
-                             arrowcolor=TEXT_PRIMARY,     # Color of the arrows (if visible)
+                             background=ACCENT_HOVER,
+                             troughcolor=PRIMARY_BG,      
+                             bordercolor=TERTIARY_BG,   
+                             arrowcolor=TEXT_PRIMARY,     
                              relief='flat', 
-                             gripcount=0)            # Hides grip on some themes if not 0
+                             gripcount=0)
         self.style.map("Vertical.TScrollbar", 
-                       background=[('active', ACCENT_COLOR), ('pressed', ACCENT_HOVER)], # Thumb color on active/pressed
-                       arrowcolor=[('active', ACCENT_COLOR)] # Optional: arrow color change on active scrollbar
+                       background=[('active', ACCENT_COLOR), ('pressed', ACCENT_HOVER)], 
+                       arrowcolor=[('active', ACCENT_COLOR)]
                        )
 
-        # Custom Treeview style for use on cards
         self.style.configure('CardView.Treeview',
                              background=SECONDARY_BG,
-                             fieldbackground=SECONDARY_BG, # Background of the item area
+                             fieldbackground=SECONDARY_BG, 
                              foreground=TEXT_PRIMARY,
-                             rowheight=28, # Increased row height for better spacing
+                             rowheight=30,
                              font=FONT_UI_NORMAL,
                              relief='flat',
                              borderwidth=0)
         self.style.map('CardView.Treeview',
-                       background=[('selected', ACCENT_COLOR)], # Changed from ACCENT_HOVER
-                       foreground=[('selected', PRIMARY_BG)])   # Changed from TEXT_PRIMARY
+                       background=[('selected', ACCENT_COLOR)],
+                       foreground=[('selected', PRIMARY_BG)])
 
         self.style.configure('CardView.Treeview.Heading',
-                             background=TERTIARY_BG, # A slightly different background for headers
+                             background=TERTIARY_BG,
                              foreground=TEXT_PRIMARY,
                              font=FONT_UI_BOLD,
-                             relief='flat', # Flat look for headings
-                             padding=(8, 8)) # Generous padding for headings
+                             relief='flat',
+                             padding=(10, 10))
         self.style.map('CardView.Treeview.Heading',
-                       background=[('active', ACCENT_COLOR), ('hover', ACCENT_COLOR)], # Highlight on hover/active
+                       background=[('active', ACCENT_HOVER), ('hover', ACCENT_HOVER)],
                        relief=[('active', 'groove'), ('hover', 'ridge')])
 
-        # Estilo para Checkbutton (usado como Switch)
         self.style.configure('Switch.TCheckbutton', 
                              font=FONT_UI_NORMAL, 
-                             padding=(10, 5, 10, 5), # Added more horizontal padding
+                             padding=(10, 8, 10, 8),
                              relief='flat', 
-                             indicatordiameter=15) # Attempt to make the indicator a bit larger
+                             indicatordiameter=18)
         self.style.map('Switch.TCheckbutton',
-                       indicatorcolor=[('selected', SUCCESS_COLOR), ('pressed', SUCCESS_COLOR), # Green for ON
-                                       ('!selected', TEXT_SECONDARY), ('disabled', TERTIARY_BG)], # Greyish for OFF
-                       background=[('active', SECONDARY_BG), ('', SECONDARY_BG)], # Consistent background
-                       foreground=[('', TEXT_PRIMARY)]) # Text color
+                       indicatorcolor=[('selected', SUCCESS_COLOR), ('pressed', SUCCESS_COLOR),
+                                       ('!selected', TEXT_SECONDARY), ('disabled', TERTIARY_BG)],
+                       background=[('active', SECONDARY_BG), ('', SECONDARY_BG)],
+                       foreground=[('', TEXT_PRIMARY)])
 
-        # Style for smaller action buttons in list rows
-        FONT_ACTION_ROW = (FONT_UI_NORMAL[0], FONT_UI_NORMAL[1] - 1) # e.g., Segoe UI, 10
-        action_row_button_padding = [8, 5, 8, 5] # Reduced h-padding, consistent v-padding
+        FONT_ACTION_ROW = (FONT_UI_NORMAL[0], FONT_UI_NORMAL[1] - 2)
+        action_row_button_padding = [10, 6, 10, 6]
         self.style.configure('ActionRow.TButton', font=FONT_ACTION_ROW, padding=action_row_button_padding, relief='flat', borderwidth=0)
         self.style.map('ActionRow.TButton',
                        background=[('pressed', ACCENT_COLOR), ('active', ACCENT_COLOR), ('', TERTIARY_BG)],
                        foreground=[('pressed', TEXT_PRIMARY), ('active', TEXT_PRIMARY), ('', TEXT_PRIMARY)])
 
-        # Sidebar Button Style
-        self.style.configure('Sidebar.TButton', font=FONT_UI_BOLD, padding=(15, 10, 15, 10), relief='flat', borderwidth=0, anchor=tk.W) # Added anchor=tk.W here
+        self.style.configure('Sidebar.TButton', font=FONT_UI_BOLD, padding=(18, 12, 18, 12), relief='flat', borderwidth=0, anchor=tk.W)
         self.style.map('Sidebar.TButton',
-                       background=[('pressed', ACCENT_COLOR), ('active', ACCENT_COLOR), ('selected', ACCENT_COLOR), ('', SECONDARY_BG)],
-                       foreground=[('pressed', PRIMARY_BG), ('active', PRIMARY_BG), ('selected', PRIMARY_BG), ('', TEXT_PRIMARY)])
+                       background=[('pressed', ACCENT_HOVER), ('active', ACCENT_HOVER), ('selected', ACCENT_COLOR), ('', SECONDARY_BG)],
+                       foreground=[('pressed', PRIMARY_BG), ('active', PRIMARY_BG), ('selected', TEXT_PRIMARY), ('', TEXT_PRIMARY)])
 
-    def _init_particle_animation(self):
-        self.particle_canvas = tk.Canvas(self.master, bg=PRIMARY_BG, highlightthickness=0)
-        self.particle_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        self.master.lower(self.particle_canvas) # Ensure canvas is behind other widgets
+    def _init_particle_animation(self, parent_widget):
+        self.particle_canvas = tk.Canvas(parent_widget, bg=PRIMARY_BG, highlightthickness=0)
+        self.particle_canvas.place(x=0, y=0, relwidth=1, relheight=1) 
+        tk.Misc.lower(self.particle_canvas) 
+        # self.particle_canvas.bind("<Button-1>", self._on_canvas_click) # REMOVED Bind left mouse click
 
         self.particles = []
-        self.num_particles = 35 # Reduced from 70
-        self.particle_colors = [TERTIARY_BG, '#2C2D2E', '#303132', '#28292A'] # More subdued, darker colors
+        self.num_particles = 400 # Reducido de 1200 a 400 para optimización
+        self.particle_colors = [TERTIARY_BG, SECONDARY_BG, '#35373A', ACCENT_COLOR]
         
-        # Get current window dimensions; may need to update if window resizes significantly
-        # For simplicity, we'll use initial geometry. For responsive particles, a resize handler is needed.
-        self.master.update_idletasks() # Ensure geometry is up-to-date
-        self.canvas_width = self.master.winfo_width()
-        self.canvas_height = self.master.winfo_height()
-
         for _ in range(self.num_particles):
-            x = random.uniform(0, self.canvas_width)
-            y = random.uniform(0, self.canvas_height)
-            size = random.uniform(1, 2.5) # Reduced size
-            # Slightly faster speeds
-            dx = random.uniform(-0.2, 0.2) # Reduced speed
-            dy = random.uniform(-0.2, 0.2) # Reduced speed
-            # Ensure particles have some movement
-            while abs(dx) < 0.05 and abs(dy) < 0.05: # Ensure some minimum movement, adjusted for slower speed
-                dx = random.uniform(-0.2, 0.2)
-                dy = random.uniform(-0.2, 0.2)
-
+            size = random.uniform(2, 5) # Aumentado el rango de tamaño de (1,3) a (2,5)
+            dx = random.uniform(-0.3, 0.3)
+            dy = random.uniform(-0.3, 0.3)
+            while abs(dx) < 0.05 and abs(dy) < 0.05:
+                dx = random.uniform(-0.3, 0.3)
+                dy = random.uniform(-0.3, 0.3)
             color = random.choice(self.particle_colors)
-            # Create the particle on the canvas and store its ID and properties
-            particle_id = self.particle_canvas.create_oval(x, y, x + size, y + size, fill=color, outline="")
-            self.particles.append({'id': particle_id, 'x': x, 'y': y, 'dx': dx, 'dy': dy, 'size': size, 'color': color})
+            particle_id = self.particle_canvas.create_oval(0, 0, size, size, fill=color, outline="") # Temp position
+            self.particles.append({'id': particle_id, 'x': 0, 'y': 0, 'dx': dx, 'dy': dy, 'size': size, 'color': color})
         
-        self._animate_particles()
+        # Schedule the first call to _animate_particles to allow GUI to settle
+        self.master.after(10, self._animate_particles) 
 
     def _animate_particles(self):
         if not self.master.winfo_exists(): # Stop animation if window is destroyed
             return
 
-        # Update canvas dimensions in case of resize (simple approach)
-        # A more robust way involves binding to <Configure> event on the canvas or master
-        current_width = self.master.winfo_width()
-        current_height = self.master.winfo_height()
-        if self.canvas_width != current_width or self.canvas_height != current_height:
-            self.canvas_width = current_width
-            self.canvas_height = current_height
-            # Could optionally re-initialize particles or adjust their positions here
+        # --- Animate Background Particles (on self.particle_canvas) ---
+        current_bg_canvas_width = self.particle_canvas.winfo_width()
+        current_bg_canvas_height = self.particle_canvas.winfo_height()
 
-        for p in self.particles:
-            current_coords = self.particle_canvas.coords(p['id'])
-            if not current_coords: # Particle might have been deleted or canvas cleared
-                continue
-
-            # Update internal position based on dx, dy
-            p['x'] += p['dx']
-            p['y'] += p['dy']
-
-            # Boundary checks (bounce)
-            if p['x'] < 0 or (p['x'] + p['size']) > self.canvas_width:
-                p['dx'] *= -1
-                p['x'] = max(0, min(p['x'], self.canvas_width - p['size'])) # Clamp position
-            if p['y'] < 0 or (p['y'] + p['size']) > self.canvas_height:
-                p['dy'] *= -1
-                p['y'] = max(0, min(p['y'], self.canvas_height - p['size'])) # Clamp position
-            
-            # Move the particle on canvas
-            self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+        if current_bg_canvas_width <= 1 or current_bg_canvas_height <= 1: # Background canvas not ready
+            # We don't want to reschedule the entire animation loop if only the background is not ready
+            # but the click effect might be. However, this early return is for the main particle init.
+            # If background particles are not initialized, it's okay to wait.
+            self.master.after(50, self._animate_particles) 
+            return
         
-        self.master.after(30, self._animate_particles) # Approx 33 FPS
+        if not self.particles_initialized or \
+           self.canvas_width != current_bg_canvas_width or \
+           self.canvas_height != current_bg_canvas_height:
+            
+            self.canvas_width = current_bg_canvas_width
+            self.canvas_height = current_bg_canvas_height
+            
+            for p in self.particles: # Background particles
+                p['x'] = random.uniform(0, self.canvas_width - p['size'])
+                p['y'] = random.uniform(0, self.canvas_height - p['size'])
+                self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+            self.particles_initialized = True
+        
+        if self.particles_initialized: # Only animate background particles if initialized
+            for p in self.particles:
+                current_coords = self.particle_canvas.coords(p['id'])
+                if not current_coords: 
+                    continue
+                p['x'] += p['dx']
+                p['y'] += p['dy']
+                if p['x'] < 0 or (p['x'] + p['size']) > self.canvas_width:
+                    p['dx'] *= -1
+                    p['x'] = max(0, min(p['x'], self.canvas_width - p['size'])) 
+                if p['y'] < 0 or (p['y'] + p['size']) > self.canvas_height:
+                    p['dy'] *= -1
+                    p['y'] = max(0, min(p['y'], self.canvas_height - p['size'])) 
+                self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+        
+        # --- Animate Click Effect Particles (on self.click_effect_drawing_canvas) ---
+        if self.click_effect_drawing_canvas.winfo_ismapped() and self.click_effect_particles:
+            # Use a copy for iteration if modifying the list (e.g., removing particles)
+            particles_to_remove = []
+            click_canvas_width = self.click_effect_drawing_canvas.winfo_width()
+            click_canvas_height = self.click_effect_drawing_canvas.winfo_height()
+
+            for p_click in self.click_effect_particles:
+                p_click['lifetime'] -= 1
+                if p_click['lifetime'] <= 0:
+                    particles_to_remove.append(p_click)
+                    if self.click_effect_drawing_canvas.winfo_exists():
+                        try:
+                            self.click_effect_drawing_canvas.delete(p_click['id'])
+                        except tk.TclError:
+                            pass # Item might already be gone
+                    continue
+
+                p_click['x'] += p_click['dx']
+                p_click['y'] += p_click['dy']
+
+                # Boundary collision for click particles (within the full click_effect_canvas)
+                if p_click['x'] < 0 or (p_click['x'] + p_click['size']) > click_canvas_width:
+                    p_click['dx'] *= -1
+                    p_click['x'] = max(0, min(p_click['x'], click_canvas_width - p_click['size']))
+                if p_click['y'] < 0 or (p_click['y'] + p_click['size']) > click_canvas_height:
+                    p_click['dy'] *= -1
+                    p_click['y'] = max(0, min(p_click['y'], click_canvas_height - p_click['size']))
+                
+                if self.click_effect_drawing_canvas.winfo_exists():
+                    try:
+                        self.click_effect_drawing_canvas.coords(p_click['id'], p_click['x'], p_click['y'], p_click['x'] + p_click['size'], p_click['y'] + p_click['size'])
+                    except tk.TclError:
+                        pass # Item might have been deleted by hide_canvas
+            
+            for p_remove in particles_to_remove:
+                if p_remove in self.click_effect_particles:
+                    self.click_effect_particles.remove(p_remove)
+
+        self.master.after(50, self._animate_particles) # Reschedule the main animation loop
 
     def _update_sidebar_buttons(self, view_id_to_show):
         """Updates the visual state of sidebar buttons to reflect the active view."""
@@ -721,16 +779,14 @@ class ServerControlGUI:
             print(f"Advertencia: Tipo de widget desconocido '{widget_type}' para la propiedad '{key_name}'. No se creó control.")
 
     def _create_resources_view_widgets(self, parent_frame):
-        card = ttk.Frame(parent_frame, style='Card.TFrame', padding=20) # Reduced padding from 30 to 20
+        card = ttk.Frame(parent_frame, style='Card.TFrame', padding=20) 
         card.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        title = ttk.Label(card, text="Server Resource Usage", style='Header.TLabel') # Using Header.TLabel for consistency
-        title.pack(anchor='w', pady=(0, 15)) # Adjusted pady
+        title = ttk.Label(card, text="Server Resource Usage", style='Header.TLabel') 
+        title.pack(anchor='w', pady=(0, 15))
 
-        # Info de depuración
         self.debug_label = ttk.Label(card, text="", style='TLabel', font=("Consolas", 9))
         self.debug_label.pack(anchor='w', pady=(0, 10))
 
-        # CPU
         cpu_frame = ttk.Frame(card, style='CardInner.TFrame')
         cpu_frame.pack(fill=tk.X, pady=10)
         cpu_icon = ttk.Label(cpu_frame, text='🖥️', font=('Segoe UI Emoji', 24), background=SECONDARY_BG)
@@ -742,7 +798,6 @@ class ServerControlGUI:
         self.cpu_bar = ttk.Progressbar(cpu_frame, orient='horizontal', length=300, mode='determinate', maximum=100)
         self.cpu_bar.pack(side=tk.LEFT, padx=20, fill=tk.X, expand=True)
 
-        # RAM
         ram_frame = ttk.Frame(card, style='CardInner.TFrame')
         ram_frame.pack(fill=tk.X, pady=10)
         ram_icon = ttk.Label(ram_frame, text='💾', font=('Segoe UI Emoji', 24), background=SECONDARY_BG)
@@ -754,45 +809,44 @@ class ServerControlGUI:
         self.ram_bar = ttk.Progressbar(ram_frame, orient='horizontal', length=300, mode='determinate', maximum=100)
         self.ram_bar.pack(side=tk.LEFT, padx=20, fill=tk.X, expand=True)
 
-        # --- Gráficos en tiempo real ---
         self.cpu_history = [0]*60
         self.ram_history = [0]*60
         self.time_history = list(range(-59, 1))
-        graph_frame = ttk.Frame(card, style='TFrame') # Usar TFrame base oscuro
-        graph_frame.pack(fill=tk.BOTH, expand=True, pady=(15,0)) # Reduced top pady from 30 to 15
-        fig = Figure(figsize=(7,2.5), dpi=100, facecolor=PRIMARY_BG)
+        graph_frame = ttk.Frame(card, style='TFrame') 
+        graph_frame.pack(fill=tk.BOTH, expand=True, pady=(15,0))
+        fig = Figure(figsize=(7,2.5), dpi=100, facecolor=SECONDARY_BG)
         self.ax_cpu = fig.add_subplot(211)
         self.ax_ram = fig.add_subplot(212)
-        # --- Estética moderna ---
-        for ax, color, title in [
+
+        for ax, color, title_text in [
             (self.ax_cpu, ACCENT_COLOR, 'CPU (%)'),
             (self.ax_ram, ACCENT_COLOR, 'RAM (%)')]:
-            ax.set_facecolor(PRIMARY_BG)
-            ax.set_title(title, color=color, fontsize=12, fontweight='bold', pad=10)
-            ax.tick_params(axis='x', colors='#888888', labelsize=8)
-            ax.tick_params(axis='y', colors=color, labelsize=10)
+            ax.set_facecolor(SECONDARY_BG)
+            ax.set_title(title_text, color=TEXT_PRIMARY, fontsize=FONT_UI_HEADER[1], fontweight='bold', pad=10)
+            ax.tick_params(axis='x', colors=TEXT_SECONDARY, labelsize=FONT_UI_NORMAL[1]-2)
+            ax.tick_params(axis='y', colors=TEXT_PRIMARY, labelsize=FONT_UI_NORMAL[1]-1)
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_color('#444444')
-            ax.spines['left'].set_color(color)
-            ax.grid(True, color='#222222', linestyle='--', linewidth=0.7, alpha=0.7)
+            ax.spines['bottom'].set_color(TERTIARY_BG)
+            ax.spines['left'].set_color(TEXT_SECONDARY)
+            ax.grid(True, color=TERTIARY_BG, linestyle='--', linewidth=0.7, alpha=0.7)
+        
         self.line_cpu, = self.ax_cpu.plot(self.time_history, self.cpu_history, color=ACCENT_COLOR, linewidth=2.5, alpha=0.9)
         self.line_ram, = self.ax_ram.plot(self.time_history, self.ram_history, color=ACCENT_COLOR, linewidth=2.5, alpha=0.9)
         self.ax_cpu.set_ylim(0, 100)
         self.ax_ram.set_ylim(0, 100)
         self.ax_cpu.set_xlim(-59, 0)
         self.ax_ram.set_xlim(-59, 0)
-        self.ax_cpu.set_ylabel('%', color=ACCENT_COLOR, fontsize=10, fontweight='bold')
-        self.ax_ram.set_ylabel('%', color=ACCENT_COLOR, fontsize=10, fontweight='bold')
+        self.ax_cpu.set_ylabel('%', color=TEXT_PRIMARY, fontsize=FONT_UI_NORMAL[1], fontweight='bold')
+        self.ax_ram.set_ylabel('%', color=TEXT_PRIMARY, fontsize=FONT_UI_NORMAL[1], fontweight='bold')
         self.ax_cpu.set_xticks([])
         self.ax_ram.set_xticks([])
         fig.tight_layout(pad=2.0)
         self.canvas = FigureCanvasTkAgg(fig, master=graph_frame)
-        self.canvas.get_tk_widget().configure(bg=PRIMARY_BG) # Fondo del widget canvas
+        self.canvas.get_tk_widget().configure(bg=SECONDARY_BG)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(10,0))
         self.fig = fig
 
-        # Inicia actualización periódica
         self._update_resource_usage()
 
     def _update_resource_usage(self):
@@ -866,7 +920,7 @@ class ServerControlGUI:
         self.line_cpu.set_ydata(self.cpu_history)
         self.line_ram.set_ydata(self.ram_history)
         self.canvas.draw()
-        self.master.after(1000, self._update_resource_usage)
+        self.master.after(1500, self._update_resource_usage)
 
     def load_server_properties(self):
         # Limpiar widgets de propiedades anteriores y datos almacenados
@@ -1133,27 +1187,33 @@ class ServerControlGUI:
         self.stop_button.config(state=tk.NORMAL)
         self.command_entry.config(state='normal')
         self.send_btn.config(state='normal')
-        self.server_running = True
-        self.log_to_console("Starting server...\n", "info")
+        self.server_running = True # Set to true, _update_server_status_display will show "Starting..."
+        self._update_server_status_display() # Show "Starting..." immediately
+        self.log_to_console("Starting server with nogui option...\n", "info")
         thread = threading.Thread(target=self.execute_server_command)
         thread.daemon = True
         thread.start()
-        self._update_server_status_display() # Update status
+        # self._update_server_status_display() # Moved to execute_server_command
 
     def execute_server_command(self):
         try:
+            # Add 'nogui' argument. shell=False is generally safer with a list of args.
+            command_to_run = [self.run_bat_path, "nogui"]
             self.server_process = subprocess.Popen(
-                self.run_bat_path,
+                command_to_run,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=subprocess.CREATE_NO_WINDOW, # This flag might be Windows-specific for hiding console
                 cwd=self.script_dir,
-                shell=True
+                shell=False # Set to False when command_to_run is a list
             )
+            if self.master.winfo_exists(): # Ensure GUI is still there
+                self._update_server_status_display() # Update status to Online/Starting after Popen
+
             for line in iter(self.server_process.stdout.readline, ''):
                 self.log_to_console(line)
             self.server_process.stdout.close()
@@ -1161,8 +1221,12 @@ class ServerControlGUI:
             self.log_to_console(f"Server process exited with code {return_code}.\n")
         except FileNotFoundError:
             self.log_to_console(f"Error: The batch file '{self.run_bat_path}' was not found.\n", "error")
+            self.server_running = False # Ensure this is set if Popen fails
+            if self.master.winfo_exists(): self._update_server_status_display()
         except Exception as e:
             self.log_to_console(f"An error occurred while trying to start the server: {e}\n", "error")
+            self.server_running = False # Ensure this is set on other exceptions
+            if self.master.winfo_exists(): self._update_server_status_display()
         finally:
             self.server_running = False
             self.server_process = None
@@ -1171,7 +1235,7 @@ class ServerControlGUI:
                 self.stop_button.config(state=tk.DISABLED)
                 self.command_entry.config(state='disabled')
                 self.send_btn.config(state='disabled')
-                self._update_server_status_display() # Update status
+                self._update_server_status_display() # Final status update to Offline
 
     def send_command_from_entry(self, event=None):
         cmd = self.command_entry.get().strip()
@@ -1197,13 +1261,42 @@ class ServerControlGUI:
 
     def stop_server(self):
         if not self.server_running or not self.server_process:
-            messagebox.showinfo("Info", "Server is not running.")
-            return
-        self.log_to_console("Stopping server (sending 'stop')...\n", "info")
+            # If server_running is true but no process, it might be in a weird state. Allow trying to stop.
+            if not self.server_running:
+                 messagebox.showinfo("Info", "Server is not running.")
+                 return
+            else: # server_running true, but no process (e.g. failed to start but flag not reset)
+                 self.log_to_console("Server process not found, attempting to reset state...\n", "warning")
+                 # Reset state as if it stopped, as there's no process to send 'stop' to
+                 self.server_running = False
+                 self.server_process = None # Ensure it's None
+                 if self.master.winfo_exists():
+                    self.start_button.config(state=tk.NORMAL)
+                    self.stop_button.config(state=tk.DISABLED)
+                    self.command_entry.config(state='disabled')
+                    self.send_btn.config(state='disabled')
+                    self._update_server_status_display()
+                 return
+
+        self.log_to_console("Stopping server (sending 'stop')...\n", "info") # Log before changing status text
+        # Update status to 'Stopping...' before sending command
+        # Keep server_running True for now, execute_server_command's finally block will set it to False
+        if self.master.winfo_exists():
+            # Temporarily set a 'Stopping' status. 
+            # The actual 'Offline' status will be set when the process truly exits.
+            original_text = self.server_status_label.cget("text")
+            self.server_status_label.config(text="Status: Stopping...", style='StatusStarting.TLabel') # Reuse 'Starting' style for 'Stopping'
+            self.master.update_idletasks() # Force GUI update
+
         self.send_command_to_server('stop')
-        self.stop_button.config(state=tk.DISABLED)
-        self.command_entry.config(state='disabled')
-        self.send_btn.config(state='disabled')
+        self.stop_button.config(state=tk.DISABLED) # Disable stop button as stop is in progress
+        # Command entry and send button are disabled here, which is fine.
+        # self.command_entry.config(state='disabled')
+        # self.send_btn.config(state='disabled')
+        
+        # Note: The server_running flag and final status update to 'Offline' 
+        # will happen in the 'finally' block of execute_server_command 
+        # once the server process actually terminates.
         # Status will be updated when server process actually exits in execute_server_command's finally block
         # Or we can optimistically set it here, but the finally block is more robust.
         # For now, let the finally block handle the definitive "Offline" state.
@@ -1285,7 +1378,12 @@ class ServerControlGUI:
                 player_row_frame = ttk.Frame(self.scrollable_players_list_frame, style='CardInner.TFrame', padding=(10,8))
                 player_row_frame.pack(fill=tk.X, expand=True, pady=(4,0), padx=5)
 
-                ttk.Label(player_row_frame, text=f"👤 {player_name}", style='TLabel', anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,10))
+                avatar_label_player = ttk.Label(player_row_frame, image=self.placeholder_avatar, style='TLabel')
+                avatar_label_player.image = self.placeholder_avatar # Keep reference
+                avatar_label_player.pack(side=tk.LEFT, padx=(0,8))
+                self._fetch_player_avatar(player_name, avatar_label_player) # Fetch by name for connected players
+
+                ttk.Label(player_row_frame, text=player_name, style='TLabel', anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,10)) # Removed emoji
 
                 actions_frame_player = ttk.Frame(player_row_frame, style='CardInner.TFrame')
                 actions_frame_player.pack(side=tk.RIGHT, fill=tk.NONE)
@@ -1411,7 +1509,15 @@ class ServerControlGUI:
                 op_row_frame = ttk.Frame(self.scrollable_ops_list_frame, style='CardInner.TFrame', padding=(10,8))
                 op_row_frame.pack(fill=tk.X, expand=True, pady=(4,0), padx=5)
 
-                info_text = f"⭐ Name: {name} (Level: {level})\n     UUID: {uuid}"
+                avatar_label_op = ttk.Label(op_row_frame, image=self.placeholder_avatar, style='TLabel')
+                avatar_label_op.image = self.placeholder_avatar
+                avatar_label_op.pack(side=tk.LEFT, padx=(0,8))
+                
+                # Use UUID if available for avatar, otherwise name
+                identifier_for_avatar = name # Always use name
+                self._fetch_player_avatar(identifier_for_avatar, avatar_label_op)
+
+                info_text = f"Name: {name} (Level: {level})" # Removed UUID
                 ttk.Label(op_row_frame, text=info_text, style='TLabel', anchor='w', justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,10))
 
                 actions_frame_op = ttk.Frame(op_row_frame, style='CardInner.TFrame')
@@ -1769,33 +1875,29 @@ class ServerControlGUI:
         for widget in self.stats_rows_frame.winfo_children():
             widget.destroy()
         for i, row in enumerate(stats_data):
-            name, uuid, played, deaths, mined, walked_km, jumps, dmg_dealt, mobs_killed = row # Unpack new stats
-            # Determinar el color de fondo para la fila basado en el tema actual
-            # Esto es un poco más complejo, necesitaríamos saber si el tema es claro u oscuro.
-            # Por ahora, mantenemos la alternancia simple, pero el PRIMARY_BG y SECONDARY_BG deben estar bien definidos.
-            bg_color = SECONDARY_BG if i % 2 == 0 else PRIMARY_BG 
-            fila = tk.Frame(self.stats_rows_frame, bg=bg_color) # Aplicar color de fondo directamente
-            # Avatar/emoji
-            avatar = name[0].upper() if name and name != uuid else '👤'
-            tk.Label(fila, text=avatar, font=("Segoe UI Emoji", 16), bg=bg_color, fg=ACCENT_COLOR, width=2, anchor='w').pack(side=tk.LEFT, padx=(5,0))
-            # Nombre con tooltip UUID
-            name_lbl = tk.Label(fila, text=name, font=("Segoe UI", 12, "bold"), bg=bg_color, fg=ACCENT_COLOR, width=18, anchor='w', cursor='hand2') # Header width (22) - avatar width (2)
+            name, uuid_val, played, deaths, mined, walked_km, jumps, dmg_dealt, mobs_killed = row
+            bg_color = SECONDARY_BG # All rows on SECONDARY_BG for consistency within the card
+            fila = tk.Frame(self.stats_rows_frame, bg=bg_color)
+
+            avatar_label_stats = ttk.Label(fila, image=self.placeholder_avatar, background=bg_color, style='TLabel') # Ensure TLabel style is applied if needed for bg
+            avatar_label_stats.image = self.placeholder_avatar 
+            avatar_label_stats.pack(side=tk.LEFT, padx=(5,5), pady=2) 
+
+            identifier_for_avatar_stats = name 
+            self._fetch_player_avatar(identifier_for_avatar_stats, avatar_label_stats)
+
+            name_lbl = tk.Label(fila, text=name, font=FONT_UI_BOLD, bg=bg_color, fg=TEXT_PRIMARY, width=18, anchor='w', cursor='hand2')
             name_lbl.pack(side=tk.LEFT, padx=5)
-            self._add_tooltip(name_lbl, uuid)
-            # UUID
-            tk.Label(fila, text=uuid, font=("Consolas", 10), bg=bg_color, fg=ACCENT_COLOR, width=36, anchor='w').pack(side=tk.LEFT, padx=5)
-            # Tiempo jugado
-            tk.Label(fila, text=played, font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
-            # Muertes
-            tk.Label(fila, text=f'💀 {deaths}', font=("Segoe UI", 12), bg=bg_color, fg=ERROR_FG_CUSTOM, width=10, anchor='center').pack(side=tk.LEFT, padx=5)
-            # Minados
-            tk.Label(fila, text=f'⛏️ {mined}', font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            self._add_tooltip(name_lbl, uuid_val)
             
-            # Display New Stats (matching header widths)
-            tk.Label(fila, text=f'🚶 {walked_km}', font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
-            tk.Label(fila, text=f'🤸 {jumps}', font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
-            tk.Label(fila, text=f'⚔️ {dmg_dealt}', font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=10, anchor='center').pack(side=tk.LEFT, padx=5)
-            tk.Label(fila, text=f'🎯 {mobs_killed}', font=("Segoe UI", 12), bg=bg_color, fg=ACCENT_COLOR, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=uuid_val, font=FONT_CONSOLE_CUSTOM, bg=bg_color, fg=TEXT_SECONDARY, width=36, anchor='w').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=played, font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{deaths}', font=FONT_UI_NORMAL, bg=bg_color, fg=ERROR_FG_CUSTOM, width=10, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{mined}', font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{walked_km}', font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{jumps}', font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{dmg_dealt}', font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=10, anchor='center').pack(side=tk.LEFT, padx=5)
+            tk.Label(fila, text=f'{mobs_killed}', font=FONT_UI_NORMAL, bg=bg_color, fg=TEXT_PRIMARY, width=12, anchor='center').pack(side=tk.LEFT, padx=5)
 
             fila.pack(fill=tk.X, pady=2)
 
@@ -2421,9 +2523,9 @@ class ServerControlGUI:
         ttk.Label(changelog_card, text="Application Changelog", style='Header.TLabel').pack(anchor='w', pady=(0,10))
 
         self.changelog_text_area = scrolledtext.ScrolledText(changelog_card, wrap=tk.WORD, height=10,
-                                                             bg=PRIMARY_BG, fg=TEXT_SECONDARY, # Adjusted fg for read-only text
+                                                             bg=PRIMARY_BG, fg=TEXT_SECONDARY, 
                                                              insertbackground=ACCENT_COLOR, font=FONT_CONSOLE_CUSTOM,
-                                                             relief='flat', borderwidth=1, highlightthickness=0, bd=1, padx=5, pady=5) # Changed to flat, bd=1
+                                                             relief='flat', borderwidth=1, highlightthickness=0, bd=1, padx=5, pady=5)
         self.changelog_text_area.pack(fill=tk.BOTH, expand=True, pady=(0,0))
         # No Save Changelog button - it's read-only now
 
@@ -2526,9 +2628,267 @@ class ServerControlGUI:
             
         return str(uuid.UUID(bytes=bytes(b)))
 
+    def _create_placeholder_avatar(self, size=(24, 24)):
+        try:
+            img = Image.new('RGB', size, color = (120, 120, 120)) # Medium grey
+            # Optionally, draw a character if you want more than a colored square
+            # from PIL import ImageDraw
+            # draw = ImageDraw.Draw(img)
+            # try:
+            #     font = ImageFont.truetype("arial", int(size[1]*0.7))
+            # except IOError:
+            #     font = ImageFont.load_default()
+            # text = "?"
+            # text_bbox = draw.textbbox((0,0), text, font=font)
+            # text_width = text_bbox[2] - text_bbox[0]
+            # text_height = text_bbox[3] - text_bbox[1]
+            # position = ((size[0] - text_width) / 2, (size[1] - text_height) / 2 - int(size[1]*0.1)) # Adjust for better centering
+            # draw.text(position, text, fill=(200,200,200), font=font)
+            return ImageTk.PhotoImage(img)
+        except Exception as e:
+            self.log_to_console(f"Error creating placeholder avatar: {e}", "error")
+            return None
+
+    def _update_avatar_label(self, label, photo_image):
+        try:
+            if label.winfo_exists():
+                label.configure(image=photo_image)
+                label.image = photo_image  # Keep a reference!
+        except tk.TclError: # Widget might be destroyed
+            pass
+        except Exception as e:
+            self.log_to_console(f"Error updating avatar label: {e}", "error")
+
+
+    def _fetch_player_avatar_thread(self, player_identifier, avatar_label, size=(24, 24)):
+        try:
+            # Use a small, fixed size for the avatar request, e.g., 24px or 32px
+            # The API endpoint is https://mineskin.eu/avatar/IDENTIFIER/SIZE
+            api_size = size[0] # Assuming square avatars, use width for API size parameter
+            url = f"https://mineskin.eu/avatar/{player_identifier}/{api_size}"
+            # self.log_to_console(f"Fetching avatar for '{player_identifier}' from {url}", "info") # Commented out for cleaner console
+            
+            response = requests.get(url, timeout=10) # Increased timeout slightly
+            response.raise_for_status()  # Raise HTTPError for bad responses (4XX or 5XX)
+
+            image_data = response.content
+            if not image_data:
+                self.log_to_console(f"Avatar fetch for '{player_identifier}': No image data received.", "warning")
+                return
+
+            img = Image.open(io.BytesIO(image_data))
+            img = img.convert("RGBA") # Ensure consistent format, handling transparency
+            img = img.resize(size, Image.Resampling.LANCZOS) # Resize to desired display size
+            photo_img = ImageTk.PhotoImage(img)
+
+            self.avatar_cache[player_identifier] = photo_img # Store in cache
+            self.master.after(0, self._update_avatar_label, avatar_label, photo_img)
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                # self.log_to_console(f"Avatar not found for '{player_identifier}' (404).", "info") # Commented out for cleaner console
+                pass # Still handle the 404 gracefully, just don't log to console by default
+            else:
+                self.log_to_console(f"Avatar fetch HTTP error for '{player_identifier}': {e}", "warning")
+        except requests.exceptions.RequestException as e:
+            self.log_to_console(f"Avatar fetch network error for '{player_identifier}': {e}", "warning")
+        except UnidentifiedImageError:
+            self.log_to_console(f"Avatar fetch for '{player_identifier}': Content is not a valid image.", "warning")
+        except Exception as e:
+            self.log_to_console(f"Generic avatar fetch error for '{player_identifier}': {e}", "error")
+
+
+    def _fetch_player_avatar(self, player_identifier, avatar_label, size=(24, 24)):
+        if not player_identifier or player_identifier == 'N/A':
+            # Don't attempt to fetch for invalid identifiers
+            if self.placeholder_avatar and avatar_label.winfo_exists():
+                 self.master.after(0, self._update_avatar_label, avatar_label, self.placeholder_avatar)
+            return
+
+        # Check cache first
+        if player_identifier in self.avatar_cache:
+            cached_avatar = self.avatar_cache[player_identifier]
+            if avatar_label.winfo_exists():
+                self.master.after(0, self._update_avatar_label, avatar_label, cached_avatar)
+            return
+
+        # Set placeholder initially
+        if self.placeholder_avatar and avatar_label.winfo_exists():
+            # Configure might fail if label is already destroyed, guard it
+            try:
+                avatar_label.configure(image=self.placeholder_avatar)
+                avatar_label.image = self.placeholder_avatar
+            except tk.TclError:
+                 pass
+
+
+        thread = threading.Thread(target=self._fetch_player_avatar_thread, args=(player_identifier, avatar_label, size))
+        thread.daemon = True
+        thread.start()
+
+    def _handle_global_click(self, event):
+        # This will call _spawn_click_effect
+        # Check if the click is on the click_effect_canvas itself to prevent re-triggering
+        if event.widget == self.click_effect_drawing_canvas:
+            return
+        
+        # Add more sophisticated checks here if needed to prevent effects on certain UI areas.
+        # For example, you might want to check if event.widget is a child of self.sidebar_frame
+        # or other specific frames where you don't want the click effect.
+        # For now, we proceed if it's not the click_effect_canvas itself.
+
+        self._spawn_click_effect(event.x, event.y)
+
+    def _spawn_click_effect(self, x, y):
+        # Cancel any pending hide operation for the click canvas
+        if self.click_effect_toplevel_after_id:
+            self.master.after_cancel(self.click_effect_toplevel_after_id)
+            self.click_effect_toplevel_after_id = None
+
+        # Clear any previous click particles from the canvas and our list
+        for p_old in self.click_effect_particles:
+            if p_old.get('id') and self.click_effect_drawing_canvas.winfo_exists():
+                try:
+                    self.click_effect_drawing_canvas.delete(p_old['id'])
+                except tk.TclError: # Item might already be gone
+                    pass
+        self.click_effect_particles.clear()
+
+        # Make the click effect canvas visible and on top
+        self.click_effect_drawing_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        # self.click_effect_canvas.lift() # Incorrect for lifting the widget
+        tk.Misc.lift(self.click_effect_drawing_canvas) # Correct way to lift the canvas widget
+
+        num_burst_particles = 30  # Number of particles in a burst
+        particle_lifetime = 25    # Animation frames (approx 0.5 - 0.8s at ~30-50fps)
+
+        for _ in range(num_burst_particles):
+            size = random.uniform(2, 6) # Slightly larger and more variable for effect
+            # Faster, more outward velocity
+            dx = random.uniform(-2.0, 2.0) 
+            dy = random.uniform(-2.0, 2.0)
+            while abs(dx) < 0.2 and abs(dy) < 0.2: # Ensure noticeable movement
+                dx = random.uniform(-2.0, 2.0)
+                dy = random.uniform(-2.0, 2.0)
+
+            color = ACCENT_COLOR # Use accent color for visibility
+            # Create particle on the click_effect_canvas
+            particle_id = self.click_effect_drawing_canvas.create_oval(x, y, x + size, y + size, fill=color, outline="")
+            
+            self.click_effect_particles.append({
+                'id': particle_id,
+                'x': x,
+                'y': y,
+                'dx': dx,
+                'dy': dy,
+                'size': size,
+                'color': color,
+                'lifetime': particle_lifetime
+            })
+        
+        # Schedule the canvas to hide after a short duration
+        self.click_effect_toplevel_after_id = self.master.after(700, self._hide_click_effect_canvas) # Hide after 700ms
+
+    def _hide_click_effect_canvas(self):
+        if self.click_effect_drawing_canvas.winfo_exists():
+            self.click_effect_drawing_canvas.place_forget()
+        
+        # Also clear any remaining particle items from the canvas if any (should be handled by animation, but good practice)
+        for p_old in self.click_effect_particles:
+            if p_old.get('id') and self.click_effect_drawing_canvas.winfo_exists():
+                try:
+                    self.click_effect_drawing_canvas.delete(p_old['id'])
+                except tk.TclError:
+                    pass # Item might already be gone or canvas destroyed
+        self.click_effect_particles.clear()
+        self.click_effect_toplevel_after_id = None
+
+    def _animate_particles(self):
+        if not self.master.winfo_exists(): # Stop animation if window is destroyed
+            return
+
+        # --- Animate Background Particles (on self.particle_canvas) ---
+        current_bg_canvas_width = self.particle_canvas.winfo_width()
+        current_bg_canvas_height = self.particle_canvas.winfo_height()
+
+        if current_bg_canvas_width <= 1 or current_bg_canvas_height <= 1: # Background canvas not ready
+            # We don't want to reschedule the entire animation loop if only the background is not ready
+            # but the click effect might be. However, this early return is for the main particle init.
+            # If background particles are not initialized, it's okay to wait.
+            self.master.after(50, self._animate_particles) 
+            return
+        
+        if not self.particles_initialized or \
+           self.canvas_width != current_bg_canvas_width or \
+           self.canvas_height != current_bg_canvas_height:
+            
+            self.canvas_width = current_bg_canvas_width
+            self.canvas_height = current_bg_canvas_height
+            
+            for p in self.particles: # Background particles
+                p['x'] = random.uniform(0, self.canvas_width - p['size'])
+                p['y'] = random.uniform(0, self.canvas_height - p['size'])
+                self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+            self.particles_initialized = True
+        
+        if self.particles_initialized: # Only animate background particles if initialized
+            for p in self.particles:
+                current_coords = self.particle_canvas.coords(p['id'])
+                if not current_coords: 
+                    continue
+                p['x'] += p['dx']
+                p['y'] += p['dy']
+                if p['x'] < 0 or (p['x'] + p['size']) > self.canvas_width:
+                    p['dx'] *= -1
+                    p['x'] = max(0, min(p['x'], self.canvas_width - p['size'])) 
+                if p['y'] < 0 or (p['y'] + p['size']) > self.canvas_height:
+                    p['dy'] *= -1
+                    p['y'] = max(0, min(p['y'], self.canvas_height - p['size'])) 
+                self.particle_canvas.coords(p['id'], p['x'], p['y'], p['x'] + p['size'], p['y'] + p['size'])
+        
+        # --- Animate Click Effect Particles (on self.click_effect_drawing_canvas) ---
+        if self.click_effect_drawing_canvas.winfo_ismapped() and self.click_effect_particles:
+            # Use a copy for iteration if modifying the list (e.g., removing particles)
+            particles_to_remove = []
+            click_canvas_width = self.click_effect_drawing_canvas.winfo_width()
+            click_canvas_height = self.click_effect_drawing_canvas.winfo_height()
+
+            for p_click in self.click_effect_particles:
+                p_click['lifetime'] -= 1
+                if p_click['lifetime'] <= 0:
+                    particles_to_remove.append(p_click)
+                    if self.click_effect_drawing_canvas.winfo_exists():
+                        try:
+                            self.click_effect_drawing_canvas.delete(p_click['id'])
+                        except tk.TclError:
+                            pass # Item might already be gone
+                    continue
+
+                p_click['x'] += p_click['dx']
+                p_click['y'] += p_click['dy']
+
+                # Boundary collision for click particles (within the full click_effect_canvas)
+                if p_click['x'] < 0 or (p_click['x'] + p_click['size']) > click_canvas_width:
+                    p_click['dx'] *= -1
+                    p_click['x'] = max(0, min(p_click['x'], click_canvas_width - p_click['size']))
+                if p_click['y'] < 0 or (p_click['y'] + p_click['size']) > click_canvas_height:
+                    p_click['dy'] *= -1
+                    p_click['y'] = max(0, min(p_click['y'], click_canvas_height - p_click['size']))
+                
+                if self.click_effect_drawing_canvas.winfo_exists():
+                    try:
+                        self.click_effect_drawing_canvas.coords(p_click['id'], p_click['x'], p_click['y'], p_click['x'] + p_click['size'], p_click['y'] + p_click['size'])
+                    except tk.TclError:
+                        pass # Item might have been deleted by hide_canvas
+            
+            for p_remove in particles_to_remove:
+                if p_remove in self.click_effect_particles:
+                    self.click_effect_particles.remove(p_remove)
+
+        self.master.after(50, self._animate_particles) # Reschedule the main animation loop
+
 
 if __name__ == "__main__":
     root = tk.Tk() # Ya no es ThemedTk
     # Los estilos globales se definen dentro de ServerControlGUI
     gui = ServerControlGUI(root)
-    root.mainloop() 
+    root.mainloop()
