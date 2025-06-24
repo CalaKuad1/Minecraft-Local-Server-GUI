@@ -1,49 +1,53 @@
-# Minecraft Server Control GUI
+# Minecraft Local Server GUI
 
-A Python-based graphical user interface for managing a Minecraft server.
+A user-friendly desktop application for installing, managing, and running local Minecraft servers on your PC. Built with Python and Tkinter.
+
+## Features
+
+- **Easy Setup Wizard**:
+  - Install a new server with just a few clicks. Supports **Vanilla, Paper, Spigot, Forge, and Fabric**.
+  - Or, use a pre-existing server folder.
+- **Complete Server Control**:
+  - One-click **Start, Stop, and Restart** buttons.
+  - **Live server console** integrated into the GUI to see logs in real-time.
+  - Send commands directly to the server through the interface.
+- **User-Friendly Management Panels**:
+  - **Properties Editor**: A graphical editor for `server.properties` with categorized, collapsible sections and helpful descriptions for each option.
+  - **Player Management**: View connected players, op/deop, kick, or ban them with a right-click. Player avatars are displayed next to their names.
+  - **Operators**: Manage the server's operator list, with support for offline adding/removing.
+  - **Worlds**: View and create backups of your world folders.
+  - **Resource Monitoring**: Live graphs showing the server's CPU and RAM usage.
+- **Forge & Mod Support**:
+  - **Mod Management**: View installed mods, enable/disable them, view their config files, and delete them.
+  - **Smart Startup**: Automatically uses the correct startup script (`run.bat`) for Forge servers.
+  - **Automatic EULA Handling**: Automatically detects and accepts the EULA when a new server is started for the first time.
+- **Customization & Settings**:
+  - **Custom RAM Allocation**: Easily set the minimum and maximum RAM for your server.
+  - Remembers your server path and settings between sessions.
 
 ## Prerequisites
 
-*   Python 3.x installed (if running from script).
-*   A pre-existing Minecraft server setup, including a `run.bat` (or equivalent for other OS) script to start the server. **The GUI application (script or executable) expects this file to be in the same directory as itself (the server's root directory).**
-*   The Minecraft server's `server.properties`, `ops.json`, `usernamecache.json` (or `usercache.json`), and world data should be in the standard locations relative to the server's root directory.
+- **Java**: You must have Java installed on your system and available in your system's PATH for the application to be able to run the Minecraft server.
 
-## Installation (Running from Python Script)
+## How to Use
 
-1.  **Download the files:**
-    Download `minecraft_server_gui.py` and `requirements.txt`.
-2.  **Place files in server directory:**
-    **Crucially, place both `minecraft_server_gui.py` and `requirements.txt` directly into your Minecraft server's root directory.** This is the same directory that contains your `run.bat` (or equivalent) and server data folders like `world`.
-
-3.  **Install dependencies:**
-    Open a terminal or command prompt **in the server's root directory** and run:
-    ```bash
+1.  **Clone or Download**: Get the source code from this repository.
+    ```sh
+    git clone <repository_url>
+    ```
+2.  **Install Dependencies**: Navigate to the project folder and install the required Python packages.
+    ```sh
     pip install -r requirements.txt
     ```
-
-## Usage (Running from Python Script)
-
-1.  Navigate to the server's root directory in your terminal or command prompt.
-2.  Run the GUI application:
-    ```bash
+3.  **Run the Application**:
+    ```sh
     python minecraft_server_gui.py
     ```
+4.  **First-Time Setup**:
+    - The first time you run the app, a setup wizard will appear.
+    - Choose to **install a new server** (the app will download all necessary files) or **use an existing server folder**.
+    - Once configured, the main GUI will launch, and your settings will be saved for the next session.
 
+## License
 
-## Application Features
-
-The application will open, allowing you to:
-*   Start and stop your Minecraft server.
-*   View the server console and send commands.
-*   Manage server properties (`server.properties`).
-*   Monitor server resource usage (CPU, RAM).
-*   View connected players.
-*   Manage server operators (`ops.json`).
-*   View and backup server worlds.
-*   View basic player statistics.
-
-## Notes
-*   This project was made for fun, vibe coding, I don't have good programming skills. Open for feedback. Ty
-*   The application identifies the server process by looking for Java processes associated with "forge" or "minecraft" in their command line, or by proximity to the script's/executable's directory. Resource monitoring accuracy depends on correctly identifying the server process.
-*   **The `run.bat` (or equivalent) file must be in the same directory as `minecraft_server_gui.py` or `MinecraftServerGUI.exe` (i.e., the server's root directory).**
-*   The server properties, ops list, and world information are loaded from files expected to be in the server directory (e.g., `server.properties`, `ops.json`, `world/` folder). 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
