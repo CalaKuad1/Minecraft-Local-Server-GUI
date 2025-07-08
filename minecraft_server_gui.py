@@ -58,6 +58,13 @@ class ServerControlGUI:
         self.java_path_var = tk.StringVar(value=self.config_manager.get("java_path", "java"))
 
         master.title("Minecraft Server Control")
+        try:
+            logo_path = os.path.join(self.script_dir, "assets", "logo.png")
+            self.logo_image = tk.PhotoImage(file=logo_path)
+            master.iconphoto(True, self.logo_image)
+        except tk.TclError:
+            # Fallback for environments where PhotoImage might fail (e.g., no display)
+            pass
         master.configure(bg=PRIMARY_BG)
         
         self.style = ttk.Style()
@@ -136,14 +143,24 @@ class ServerControlGUI:
         self.top_bar_frame = ttk.Frame(parent_frame, height=70, style='Header.TFrame')
         self.top_bar_frame.pack(side=tk.TOP, fill=tk.X, padx=(5,10), pady=(10,5))
         self.top_bar_frame.pack_propagate(False)
-        self.top_bar_frame.columnconfigure(0, weight=1)
-        self.top_bar_frame.columnconfigure(1, weight=0)
+        self.top_bar_frame.columnconfigure(0, weight=0) 
+        self.top_bar_frame.columnconfigure(1, weight=1)
+        self.top_bar_frame.columnconfigure(2, weight=0)
+
+        try:
+            logo_path = os.path.join(self.script_dir, "assets", "logo.png")
+            logo_img = Image.open(logo_path).resize((48, 48), Image.Resampling.LANCZOS)
+            self.dashboard_logo = ImageTk.PhotoImage(logo_img)
+            logo_label = ttk.Label(self.top_bar_frame, image=self.dashboard_logo, style='Title.TLabel')
+            logo_label.grid(row=0, column=0, sticky='w', padx=(15, 10), pady=5)
+        except (FileNotFoundError, tk.TclError):
+            pass # Logo not found or image processing failed, continue without it.
         
         self.server_title_label = ttk.Label(self.top_bar_frame, text="Minecraft Server Dashboard", font=FONT_UI_TITLE, style='Title.TLabel')
-        self.server_title_label.grid(row=0, column=0, sticky='ew', padx=(15, 5), pady=5)
+        self.server_title_label.grid(row=0, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         top_bar_actions_frame = ttk.Frame(self.top_bar_frame, style='Header.TFrame')
-        top_bar_actions_frame.grid(row=0, column=1, sticky='e', padx=(0, 15), pady=5)
+        top_bar_actions_frame.grid(row=0, column=2, sticky='e', padx=(0, 15), pady=5)
 
         self.server_status_label = ttk.Label(top_bar_actions_frame, text="Status: Offline", style='StatusOffline.TLabel')
         self.server_status_label.pack(side=tk.LEFT, padx=(0,15))
@@ -230,6 +247,24 @@ class ServerControlGUI:
         self.server_name_entry = ttk.Entry(self.install_frame, textvariable=self.server_name_var)
         self.server_name_entry.pack(fill=tk.X, padx=20, pady=5)
         
+        # --- EULA Agreement ---
+        self.eula_accepted_var = tk.BooleanVar(value=False)
+        eula_frame = ttk.Frame(self.install_frame, style='TFrame')
+        eula_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Checkbutton(eula_frame, variable=self.eula_accepted_var, style='Switch.TCheckbutton').pack(side=tk.LEFT)
+        eula_label_frame = ttk.Frame(eula_frame, style='TFrame')
+        eula_label_frame.pack(side=tk.LEFT, padx=5)
+        
+        def open_eula_link(event):
+            import webbrowser
+            webbrowser.open("https://www.minecraft.net/en-us/eula")
+
+        eula_text_label = ttk.Label(eula_label_frame, text="I agree to the Minecraft EULA.", style='TLabel', background=PRIMARY_BG)
+        eula_text_label.pack(side=tk.LEFT)
+        eula_link_label = ttk.Label(eula_label_frame, text="(View)", style='TLabel', foreground=ACCENT_COLOR, cursor="hand2", background=PRIMARY_BG)
+        eula_link_label.pack(side=tk.LEFT)
+        eula_link_label.bind("<Button-1>", open_eula_link)
+        
         self.server_version_var.trace_add('write', self._update_default_folder_name)
         self.server_type_var.trace_add('write', self._update_server_versions)
         
@@ -313,6 +348,10 @@ class ServerControlGUI:
         if mode == "install":
             if not self.install_location_var.get() or not self.server_name_var.get():
                 messagebox.showerror("Error", "Please select a parent directory and provide a folder name.")
+                self.action_button.config(state=tk.NORMAL)
+                return
+            if not self.eula_accepted_var.get():
+                messagebox.showerror("EULA Required", "You must agree to the Minecraft EULA to install a new server.")
                 self.action_button.config(state=tk.NORMAL)
                 return
             threading.Thread(target=self._perform_server_installation, daemon=True).start()
