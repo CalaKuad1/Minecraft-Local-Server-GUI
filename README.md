@@ -42,7 +42,7 @@ A user-friendly desktop application for installing, managing, and running local 
 
 1.  **Clone the Repository**:
     ```sh
-    git clone https://github.com/your-username/Minecraft-Local-Server-GUI.git
+    git clone https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git
     cd Minecraft-Local-Server-GUI
     ```
 2.  **Install Dependencies**:
