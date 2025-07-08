@@ -13,11 +13,19 @@ class ServerHandler:
         self.ram_unit = ram_unit
         self.output_callback = output_callback
         self.server_process = None
+        self.server_fully_started = False
+        self.server_stopping = False
         self.server_running = False
 
+    def is_starting(self):
+        return self.server_process is not None and self.server_process.poll() is None and not self.server_fully_started
+
+    def is_running(self):
+        return self.server_process is not None and self.server_process.poll() is None and self.server_fully_started
+
     def start(self):
-        if self.server_running:
-            self.output_callback("Server is already running.\n", "warning")
+        if self.is_running() or self.is_starting():
+            self.output_callback("Server is already running or starting.\n", "warning")
             return
 
         if not self.server_path:
@@ -28,34 +36,28 @@ class ServerHandler:
         if not command:
             return
 
+        self.server_fully_started = False
+        self.server_stopping = False
         self.server_running = True
         self.output_callback(f"Starting server with command: {' '.join(command)}\n", "info")
         threading.Thread(target=self._run_server, args=(command, env), daemon=True).start()
 
     def _get_start_command(self):
-        java_path = "java"  # Using a simple default
+        java_path = "java"
 
-        # --- Modern Forge Startup Logic (using @user_jvm_args.txt and @libraries/net/minecraftforge/.../win_args.txt) ---
         if self.server_type == 'forge':
-            # Path to the user-configurable JVM arguments
             user_args_file = os.path.join(self.server_path, 'user_jvm_args.txt')
-            # Find the main Forge arguments file, which is version-specific
             win_args_path_pattern = os.path.join(self.server_path, 'libraries', 'net', 'minecraftforge', 'forge', '*', 'win_args.txt')
             win_args_files = glob.glob(win_args_path_pattern)
 
             if os.path.exists(user_args_file) and win_args_files:
                 self.output_callback("Detected modern Forge server. Using run.bat for startup.\n", "info")
-                # For modern Forge on Windows, the run.bat is the most reliable way to handle the complex classpath and arguments.
-                # We will call it directly but add --nogui to prevent it from opening its own window.
                 run_script = os.path.join(self.server_path, 'run.bat')
                 if os.path.exists(run_script):
-                    # The batch script handles memory arguments via environment variables.
-                    # We set them temporarily for the subprocess.
                     env = os.environ.copy()
                     env["JVM_ARGS"] = f"-Xms{self.ram_min}{self.ram_unit} -Xmx{self.ram_max}{self.ram_unit}"
                     return [run_script, '--nogui'], env
 
-        # --- Generic startup for non-Forge or older Forge servers (fallback) ---
         self.output_callback("Using generic JAR startup method.\n", "info")
         all_jars = glob.glob(os.path.join(self.server_path, '*.jar'))
         server_jar_path = None
@@ -101,45 +103,48 @@ class ServerHandler:
         except Exception as e:
             self.output_callback(f"Server start failed: {e}\n", "error")
         finally:
-            if self.server_running:
-                self.stop(silent=True)
+            self.server_fully_started = False
+            self.server_process = None
+            self.server_running = False
+            if not self.server_stopping:
+                self.output_callback("Server stopped unexpectedly.\n", "error")
 
     def _read_output(self, pipe, level):
         try:
             for line in iter(pipe.readline, ''):
+                if 'Done' in line and 'For help, type "help"' in line:
+                    self.server_fully_started = True
                 self.output_callback(line, level)
         finally:
             pipe.close()
 
     def stop(self, silent=False):
-        if not self.server_running:
+        if not self.is_running() and not self.is_starting():
             return
 
+        self.server_stopping = True
+        self.server_running = False
         if self.server_process:
-            self.output_callback("Attempting graceful stop...\n", "info")
+            if not silent:
+                self.output_callback("Attempting graceful stop...\n", "info")
             self.send_command("stop")
         
-        self.server_running = False
-        self.server_process = None
-        if not silent:
-            self.output_callback("Server has stopped.\n", "info")
+        # The process will terminate on its own, and the _run_server finally block will clean up.
 
     def send_command(self, cmd):
-        if self.server_process and self.server_running:
+        if self.server_process and (self.is_running() or self.is_starting()):
             try:
                 if self.server_process.stdin:
                     self.server_process.stdin.write(cmd + '\n')
                     self.server_process.stdin.flush()
-                    self.output_callback(f"> {cmd}\n", "info")
+                    if cmd != "stop": # Avoid logging the stop command twice
+                        self.output_callback(f"> {cmd}\n", "info")
                 else:
                     self.output_callback("Cannot send command: server stdin is not available.\n", "error")
             except (IOError, ValueError) as e:
                 self.output_callback(f"Failed to send command: {e}\n", "error")
         else:
             self.output_callback("Cannot send command: server is not running.\n", "warning")
-
-    def is_running(self):
-        return self.server_running and self.server_process and self.server_process.poll() is None
 
     def get_pid(self):
         if self.server_process:

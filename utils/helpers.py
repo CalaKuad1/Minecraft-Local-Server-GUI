@@ -1,6 +1,14 @@
 import math
 import os
 import socket
+from PIL import Image, ImageDraw, ImageTk
+
+def create_rounded_rectangle(width, height, radius, color):
+    """Create a rounded rectangle image."""
+    img = Image.new('RGBA', (width, height), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle((0, 0, width, height), radius, fill=color)
+    return img
 
 def format_size(size_bytes):
     if size_bytes == 0: return "0B"

@@ -18,14 +18,14 @@ def get_server_versions(server_type):
         return []
 
 def fetch_player_avatar_image(player_identifier, size=(24, 24)):
-    """Fetches a player's avatar from Mineskin API and returns a PhotoImage object."""
+    """Fetches a player's avatar from Mineskin API and returns a PIL Image object."""
     try:
         url = f"https://mineskin.eu/avatar/{player_identifier}/{size[0]}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, timeout=10, headers=headers)
         response.raise_for_status()
         img = Image.open(io.BytesIO(response.content)).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
-        return ImageTk.PhotoImage(img)
+        return img
     except (requests.RequestException, UnidentifiedImageError) as e:
         logging.debug(f"Could not fetch avatar for '{player_identifier}'. Reason: {e}")
         return None
