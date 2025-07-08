@@ -1,7 +1,5 @@
 import tkinter as tk
 from tkinter import scrolledtext, messagebox, ttk, filedialog
-import subprocess
-import threading
 import os
 import psutil
 import json
@@ -10,11 +8,18 @@ import glob
 import sys
 import re
 import uuid
-from PIL import Image, ImageTk, UnidentifiedImageError
-import requests
-import io
 import time
 import math
+import threading
+import subprocess
+from PIL import Image, ImageTk
+
+from gui.widgets import CollapsiblePane, ToolTip, CustomDropdownMenu
+from utils.constants import *
+from utils.helpers import format_size, get_folder_size, get_local_ip
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions
+from server.server_handler import ServerHandler
+from server.config_manager import ConfigManager
 
 # Attempt to hide the Python interpreter console window on Windows
 if sys.platform == "win32":
@@ -34,28 +39,6 @@ try:
 except ImportError:
     matplotlib_available = False
 
-
-# --- Constants ---
-# Color Palette
-PRIMARY_BG = '#1E1F22'
-SECONDARY_BG = '#2B2D30'
-TERTIARY_BG = '#202124'
-ACCENT_COLOR = '#00BFFF'
-ACCENT_HOVER = '#009ACD'
-SUCCESS_COLOR = '#32CD32'
-TEXT_PRIMARY = '#F0F0F0'
-TEXT_SECONDARY = '#A0A0A0'
-ERROR_FG_CUSTOM = '#FF6347'
-WARNING_FG_CUSTOM = '#FFD700'
-
-# Typography
-FONT_UI_NORMAL = ('Segoe UI', 12)
-FONT_UI_BOLD = ('Segoe UI Semibold', 13)
-FONT_UI_HEADER = ('Segoe UI Semibold', 14)
-FONT_UI_TITLE = ('Segoe UI Bold', 26)
-FONT_CONSOLE_CUSTOM = ('Consolas', 12)
-
-
 class ServerControlGUI:
     def __init__(self, master):
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -64,16 +47,15 @@ class ServerControlGUI:
             self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.script_dir = os.path.abspath(self.script_dir)
 
-        self.server_path = None
-        self.server_type = 'vanilla' # Default
-        self.config_path = os.path.join(self.script_dir, "gui_config.json")
+        self.config_manager = ConfigManager(os.path.join(self.script_dir, "gui_config.json"))
         self.changelog_path = os.path.join(self.script_dir, "changelog.txt")
 
         # --- TK Variables ---
         self.master = master
-        self.ram_min_val_var = tk.StringVar(value="1")
-        self.ram_max_val_var = tk.StringVar(value="2")
-        self.ram_unit_var = tk.StringVar(value="G")
+        self.ram_min_val_var = tk.StringVar(value=self.config_manager.get("ram_min", "1"))
+        self.ram_max_val_var = tk.StringVar(value=self.config_manager.get("ram_max", "2"))
+        self.ram_unit_var = tk.StringVar(value=self.config_manager.get("ram_unit", "G"))
+        self.java_path_var = tk.StringVar(value=self.config_manager.get("java_path", "java"))
 
         master.title("Minecraft Server Control")
         master.configure(bg=PRIMARY_BG)
@@ -84,23 +66,13 @@ class ServerControlGUI:
         self._load_config_or_run_setup()
 
     def _load_config_or_run_setup(self):
-        try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
-                    config = json.load(f)
-                    server_path = config.get("server_path")
-                    self.server_type = config.get("server_type", "vanilla") # Load server type
-                    self.ram_min_val_var.set(config.get("ram_min", "1"))
-                    self.ram_max_val_var.set(config.get("ram_max", "2"))
-                    self.ram_unit_var.set(config.get("ram_unit", "G"))
-                    if server_path and os.path.isdir(server_path):
-                        self.server_path = server_path
-                        self._initialize_main_gui()
-                        return
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Error reading config file: {e}. Starting setup wizard.")
-        
-        self._create_setup_wizard()
+        server_path = self.config_manager.get("server_path")
+        if server_path and os.path.isdir(server_path):
+            self.server_path = server_path
+            self.server_type = self.config_manager.get("server_type", "vanilla")
+            self._initialize_main_gui()
+        else:
+            self._create_setup_wizard()
 
     def _initialize_paths(self):
         if not self.server_path: return
@@ -114,9 +86,16 @@ class ServerControlGUI:
             for widget in self.master.winfo_children():
                 widget.destroy()
 
+            self.server_handler = ServerHandler(
+                self.server_path, 
+                self.server_type, 
+                self.ram_min_val_var.get(), 
+                self.ram_max_val_var.get(), 
+                self.ram_unit_var.get(), 
+                self.log_to_console
+            )
+
             # --- Initialize attributes ---
-            self.server_process = None
-            self.server_running = False
             self.players_connected = []
             self.selected_player_name = None
             self.ops_list = []
@@ -141,6 +120,7 @@ class ServerControlGUI:
 
             self._show_view('control')
             self._update_server_status_display()
+            self._update_dashboard_info()
             self.master.after(2000, self._update_resource_usage) # Start resource monitor loop
 
         except Exception as e:
@@ -230,12 +210,13 @@ class ServerControlGUI:
         ttk.Label(self.install_frame, text="1. Select Server Type", font=FONT_UI_HEADER, background=PRIMARY_BG).pack(anchor='w', pady=(10,5), padx=20)
         server_types = ["Vanilla", "Paper", "Spigot", "Forge", "Fabric"]
         self.server_type_var = tk.StringVar(value=server_types[0])
-        ttk.OptionMenu(self.install_frame, self.server_type_var, server_types[0], *server_types, style='TMenubutton').pack(fill=tk.X, padx=20, pady=5)
+        type_menu = CustomDropdownMenu(self.install_frame, self.server_type_var, server_types, style_prefix="Dropdown")
+        type_menu.pack(fill=tk.X, padx=20, pady=5)
         
         ttk.Label(self.install_frame, text="2. Select Minecraft Version", font=FONT_UI_HEADER, background=PRIMARY_BG).pack(anchor='w', pady=(10,5), padx=20)
-        server_versions = ["1.20.4", "1.20.1", "1.19.4", "1.18.2", "1.16.5"]
-        self.server_version_var = tk.StringVar(value=server_versions[0])
-        ttk.OptionMenu(self.install_frame, self.server_version_var, server_versions[0], *server_versions, style='TMenubutton').pack(fill=tk.X, padx=20, pady=5)
+        self.server_version_var = tk.StringVar()
+        self.version_menu = CustomDropdownMenu(self.install_frame, self.server_version_var, ["Loading..."], style_prefix="Dropdown")
+        self.version_menu.pack(fill=tk.X, padx=20, pady=5)
         
         ttk.Label(self.install_frame, text="3. Choose Parent Directory", font=FONT_UI_HEADER, background=PRIMARY_BG).pack(anchor='w', pady=(10,5), padx=20)
         install_location_frame = ttk.Frame(self.install_frame, style='TFrame')
@@ -246,12 +227,12 @@ class ServerControlGUI:
         
         ttk.Label(self.install_frame, text="4. Name Server Folder", font=FONT_UI_HEADER, background=PRIMARY_BG).pack(anchor='w', pady=(10,5), padx=20)
         self.server_name_var = tk.StringVar()
-        ttk.Entry(self.install_frame, textvariable=self.server_name_var).pack(fill=tk.X, padx=20, pady=5)
+        self.server_name_entry = ttk.Entry(self.install_frame, textvariable=self.server_name_var)
+        self.server_name_entry.pack(fill=tk.X, padx=20, pady=5)
+        
         self.server_version_var.trace_add('write', self._update_default_folder_name)
-        self.server_type_var.trace_add('write', self._update_default_folder_name)
-        self._update_default_folder_name()
-
-
+        self.server_type_var.trace_add('write', self._update_server_versions)
+        
         # --- Widgets for "Use Existing Server" ---
         ttk.Label(self.existing_frame, text="1. Choose Existing Server Location", font=FONT_UI_HEADER, background=PRIMARY_BG).pack(anchor='w', pady=(10,5), padx=20)
         existing_location_frame = ttk.Frame(self.existing_frame, style='TFrame')
@@ -269,6 +250,28 @@ class ServerControlGUI:
         self.status_label.pack(pady=10)
 
         self._toggle_setup_view() # Set initial view
+        self._update_server_versions() # Initial version load
+
+    def _update_server_versions(self, *args):
+        server_type = self.server_type_var.get()
+        self.server_version_var.set("Loading...")
+        self.version_menu.button.config(state=tk.DISABLED)
+        threading.Thread(target=self._fetch_and_update_versions, args=(server_type,), daemon=True).start()
+
+    def _fetch_and_update_versions(self, server_type):
+        versions_data = get_server_versions(server_type)
+        versions = [v['version'] for v in versions_data] if versions_data else []
+        
+        def update_ui():
+            if versions:
+                self.version_menu.update_options(versions)
+                self.server_version_var.set(versions[0])
+                self.version_menu.button.config(state=tk.NORMAL)
+            else:
+                self.server_version_var.set("Error fetching versions")
+        
+        if hasattr(self, 'master'):
+            self.master.after(0, update_ui)
 
     def _toggle_setup_view(self):
         mode = self.setup_mode.get()
@@ -285,11 +288,14 @@ class ServerControlGUI:
             
     def _update_default_folder_name(self, *args):
         try:
-            server_type = self.server_type_var.get()
-            version = self.server_version_var.get()
-            self.server_name_var.set(f"{server_type.lower()}-server-{version}")
+            # Check if the widget exists before trying to set its variable.
+            if hasattr(self, 'server_name_entry') and self.server_name_entry.winfo_exists():
+                server_type = self.server_type_var.get()
+                version = self.server_version_var.get()
+                self.server_name_var.set(f"{server_type.lower()}-server-{version}")
         except tk.TclError:
-            pass # Occurs during widget destruction
+            # This can still happen if the window is being destroyed.
+            pass
 
     def _browse_install_location(self):
         directory = filedialog.askdirectory(initialdir=os.path.expanduser("~/Documents"), title="Select a parent folder for the new server")
@@ -373,20 +379,7 @@ class ServerControlGUI:
             os.makedirs(install_path, exist_ok=True)
             
             self.master.after(0, self.status_label.config, {'text': f"Downloading {server_type} {server_version}..."})
-            download_url = f"https://mcutils.com/api/server-jars/{server_type}/{server_version}/download"
-            
-            response = requests.get(download_url, stream=True, timeout=30)
-            response.raise_for_status()
-            total_size = int(response.headers.get('content-length', 0))
-            
-            with open(jar_path, 'wb') as f:
-                bytes_downloaded = 0
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    bytes_downloaded += len(chunk)
-                    if total_size > 0:
-                        progress = (bytes_downloaded / total_size) * 100
-                        self.master.after(0, self.progress_bar.config, {'value': progress})
+            download_server_jar(server_type, server_version, jar_path, lambda p: self.master.after(0, self.progress_bar.config, {'value': p}))
             
             self.master.after(0, self.status_label.config, {'text': "Generating server files..."})
             self.master.after(0, self.progress_bar.config, {'value': 0})
@@ -452,15 +445,13 @@ class ServerControlGUI:
             self.master.after(0, self.action_button.config, {'state': tk.NORMAL})
             
     def _save_config(self):
-        config = {
-            "server_path": self.server_path, 
-            "server_type": self.server_type,
-            "ram_min": self.ram_min_val_var.get(),
-            "ram_max": self.ram_max_val_var.get(),
-            "ram_unit": self.ram_unit_var.get()
-        }
-        with open(self.config_path, 'w') as f:
-            json.dump(config, f, indent=4)
+        self.config_manager.set("server_path", self.server_path)
+        self.config_manager.set("server_type", self.server_type)
+        self.config_manager.set("ram_min", self.ram_min_val_var.get())
+        self.config_manager.set("ram_max", self.ram_max_val_var.get())
+        self.config_manager.set("ram_unit", self.ram_unit_var.get())
+        self.config_manager.set("java_path", self.java_path_var.get())
+        self.config_manager.save()
 
     def _configure_styles(self):
         self.style.configure('.', background=PRIMARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, borderwidth=0, focusthickness=0, highlightthickness=0)
@@ -497,11 +488,19 @@ class ServerControlGUI:
         self.style.configure('TEntry', fieldbackground=TERTIARY_BG, foreground=TEXT_PRIMARY, insertcolor=TEXT_PRIMARY, borderwidth=1, relief='solid', padding=8)
         self.style.map('TEntry', bordercolor=[('focus', ACCENT_COLOR), ('!focus', TERTIARY_BG)])
         
+        self.style.map('TCombobox', fieldbackground=[('readonly', TERTIARY_BG)], foreground=[('readonly', TEXT_PRIMARY)], selectbackground=[('readonly', TERTIARY_BG)], selectforeground=[('readonly', TEXT_PRIMARY)])
         self.master.option_add("*TCombobox*Listbox*Background", SECONDARY_BG)
         self.master.option_add("*TCombobox*Listbox*Foreground", TEXT_PRIMARY)
         self.master.option_add("*TCombobox*Listbox*selectBackground", ACCENT_COLOR)
+        self.master.option_add("*TCombobox*Listbox*selectForeground", TEXT_PRIMARY)
         self.style.configure('TMenubutton', background=SECONDARY_BG, foreground=TEXT_PRIMARY, padding=8, relief='flat', borderwidth=0)
         self.style.map('TMenubutton', background=[('active', TERTIARY_BG)])
+
+        self.style.configure("Dropdown.TButton", font=FONT_UI_NORMAL, padding=8, relief='flat', borderwidth=0)
+        self.style.map("Dropdown.TButton", background=[('active', TERTIARY_BG)])
+        self.style.configure("Dropdown.TFrame", background=SECONDARY_BG)
+        self.style.configure("Dropdown.Item.TButton", font=FONT_UI_NORMAL, padding=8, relief='flat', borderwidth=0)
+        self.style.map("Dropdown.Item.TButton", background=[('active', ACCENT_HOVER)], foreground=[('active', TEXT_PRIMARY)])
         
         self.style.configure('Switch.TCheckbutton', font=FONT_UI_NORMAL, padding=5)
         self.style.map('Switch.TCheckbutton',
@@ -551,18 +550,51 @@ class ServerControlGUI:
     def _create_control_view_widgets(self, parent_frame):
         control_main_frame = ttk.Frame(parent_frame, style='Card.TFrame', padding=15)
         control_main_frame.pack(fill=tk.BOTH, expand=True)
-        control_main_frame.rowconfigure(0, weight=0)
         control_main_frame.rowconfigure(1, weight=1)
         control_main_frame.columnconfigure(0, weight=1)
 
-        left_panel = ttk.Frame(control_main_frame, style='Card.TFrame', padding=(20, 15))
-        left_panel.grid(row=0, column=0, sticky='nsew', padx=(0, 0), pady=(0, 5))
-        
+        # Top panels for actions and info
+        top_frame = ttk.Frame(control_main_frame, style='Card.TFrame')
+        top_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 5))
+        top_frame.columnconfigure(0, weight=1)
+        top_frame.columnconfigure(1, weight=1)
+
+        left_panel = ttk.Frame(top_frame, style='CardInner.TFrame', padding=(20, 15))
+        left_panel.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
         ttk.Label(left_panel, text="Server Actions", font=FONT_UI_HEADER, style='Header.TLabel').pack(anchor='w', pady=(0, 15))
         self.start_button = ttk.Button(left_panel, text="Start Server", command=self.start_server_thread, style="Accent.TButton")
         self.start_button.pack(fill=tk.X, pady=5, ipady=8)
         self.stop_button = ttk.Button(left_panel, text="Stop Server", command=self.stop_server, style="Accent.TButton", state=tk.DISABLED)
         self.stop_button.pack(fill=tk.X, pady=5, ipady=8)
+
+        right_panel = ttk.Frame(top_frame, style='CardInner.TFrame', padding=(20, 15))
+        right_panel.grid(row=0, column=1, sticky='nsew', padx=(5, 0))
+        ttk.Label(right_panel, text="Server Info", font=FONT_UI_HEADER, style='Header.TLabel').pack(anchor='w', pady=(0, 15))
+        
+        info_grid = ttk.Frame(right_panel, style='CardInner.TFrame')
+        info_grid.pack(fill=tk.X)
+        info_grid.columnconfigure(1, weight=1)
+
+        def add_info_row(label_text, var_text):
+            row_idx = info_grid.grid_size()[1]
+            ttk.Label(info_grid, text=label_text, style='TLabel', background=SECONDARY_BG, font=FONT_UI_BOLD).grid(row=row_idx, column=0, sticky='w', padx=(0,10))
+            label = ttk.Label(info_grid, text=var_text, style='TLabel', background=SECONDARY_BG, anchor='w')
+            label.grid(row=row_idx, column=1, sticky='ew')
+            return label
+
+        self.motd_label = add_info_row("MOTD:", "N/A")
+        self.version_label = add_info_row("Version:", "N/A")
+        self.players_label = add_info_row("Players:", "N/A")
+        
+        # IP Address with Copy Button
+        row_idx = info_grid.grid_size()[1]
+        ttk.Label(info_grid, text="Server IP:", style='TLabel', background=SECONDARY_BG, font=FONT_UI_BOLD).grid(row=row_idx, column=0, sticky='w', padx=(0,10), pady=(5,0))
+        ip_frame = ttk.Frame(info_grid, style='CardInner.TFrame')
+        ip_frame.grid(row=row_idx, column=1, sticky='ew', pady=(5,0))
+        self.ip_label = ttk.Label(ip_frame, text="N/A", style='TLabel', background=SECONDARY_BG)
+        self.ip_label.pack(side=tk.LEFT, anchor='w')
+        self.copy_ip_button = ttk.Button(ip_frame, text="Copy", command=self._copy_ip_to_clipboard, style="ActionRow.TButton")
+        self.copy_ip_button.pack(side=tk.LEFT, padx=5)
 
         # Dashboard Console
         console_card = ttk.Frame(control_main_frame, style='Card.TFrame', padding=(15,10))
@@ -582,6 +614,33 @@ class ServerControlGUI:
         self.console_command_entry.bind("<Return>", self.send_command_from_console_entry)
         self.console_send_btn = ttk.Button(command_frame, text="Send Command", command=self.send_command_from_console_button, style="Accent.TButton")
         self.console_send_btn.pack(side=tk.LEFT)
+
+    def _copy_ip_to_clipboard(self):
+        ip = self.ip_label.cget("text")
+        if ip and ip != "N/A":
+            self.master.clipboard_clear()
+            self.master.clipboard_append(ip)
+            self.log_to_console(f"Copied '{ip}' to clipboard.\n", "success")
+
+    def _update_dashboard_info(self):
+        if not self.server_path:
+            return
+
+        properties = {}
+        if os.path.exists(self.server_properties_path):
+            with open(self.server_properties_path, 'r') as f:
+                for line in f:
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        properties[key.strip()] = value.strip()
+
+        motd = properties.get("motd", "A Minecraft Server")
+        max_players = properties.get("max-players", "20")
+        
+        self.motd_label.config(text=motd)
+        self.version_label.config(text=self.config_manager.get('server_version', 'N/A'))
+        self.players_label.config(text=f"{len(self.players_connected)}/{max_players}")
+        self.ip_label.config(text=get_local_ip())
 
     def _create_console_view_widgets(self, parent_frame):
         console_card = ttk.Frame(parent_frame, style='Card.TFrame', padding=(15,10))
@@ -834,49 +893,57 @@ class ServerControlGUI:
         self.cpu_percent_label.pack(side=tk.LEFT, expand=True)
 
     def _update_resource_usage(self):
-        if matplotlib_available and self.server_process and self.server_process.poll() is None:
-            try:
-                proc = psutil.Process(self.server_process.pid)
-                cpu_count = psutil.cpu_count() or 1
-                cpu_percent = proc.cpu_percent(interval=None) / cpu_count
-                self.cpu_history.pop(0)
-                self.cpu_history.append(float(cpu_percent))
+        if not self.server_handler.is_running():
+            if matplotlib_available:
+                self.cpu_history = [0.0] * 50
+                self.ram_history = [0.0] * 50
+                if hasattr(self, 'line_cpu'): self.line_cpu.set_ydata(self.cpu_history)
+                if hasattr(self, 'line_ram'): self.line_ram.set_ydata(self.ram_history)
+                if hasattr(self, 'resource_canvas') and self.resource_canvas.get_tk_widget().winfo_exists():
+                    self.resource_canvas.draw()
+                if hasattr(self, 'cpu_percent_label') and self.cpu_percent_label.winfo_exists():
+                    self.cpu_percent_label.config(text="CPU: 0.0%")
+                if hasattr(self, 'ram_label') and self.ram_label.winfo_exists():
+                    self.ram_label.config(text="RAM: 0MB (0.0%)")
+            self.master.after(2000, self._update_resource_usage)
+            return
+
+        try:
+            pid = self.server_handler.get_pid()
+            if pid is None:
+                return
+            proc = psutil.Process(pid)
+            cpu_count = psutil.cpu_count() or 1
+            cpu_percent = proc.cpu_percent(interval=None) / cpu_count
+            self.cpu_history.pop(0)
+            self.cpu_history.append(float(cpu_percent))
+            
+            mem_info = proc.memory_info()
+            ram_percent = (mem_info.rss / psutil.virtual_memory().total) * 100
+            self.ram_history.pop(0)
+            self.ram_history.append(ram_percent)
+
+            if matplotlib_available and hasattr(self, 'resource_canvas') and self.resource_canvas.get_tk_widget().winfo_exists():
                 self.line_cpu.set_ydata(self.cpu_history)
-                
-                mem_info = proc.memory_info()
-                ram_percent = (mem_info.rss / psutil.virtual_memory().total) * 100
-                self.ram_history.pop(0)
-                self.ram_history.append(ram_percent)
                 self.line_ram.set_ydata(self.ram_history)
                 
-                if self.resource_canvas.get_tk_widget().winfo_exists():
-                    self.ax_cpu.draw_artist(self.ax_cpu.patch)
-                    self.ax_cpu.draw_artist(self.line_cpu)
-                    self.ax_ram.draw_artist(self.ax_ram.patch)
-                    self.ax_ram.draw_artist(self.line_ram)
-                    self.resource_canvas.blit(self.ax_cpu.bbox)
-                    self.resource_canvas.blit(self.ax_ram.bbox)
+                self.ax_cpu.draw_artist(self.ax_cpu.patch)
+                self.ax_cpu.draw_artist(self.line_cpu)
+                self.ax_ram.draw_artist(self.ax_ram.patch)
+                self.ax_ram.draw_artist(self.line_ram)
+                self.resource_canvas.blit(self.ax_cpu.bbox)
+                self.resource_canvas.blit(self.ax_ram.bbox)
 
-                if self.cpu_percent_label.winfo_exists():
-                    self.cpu_percent_label.config(text=f"CPU: {cpu_percent:.1f}%")
-                if self.ram_label.winfo_exists():
-                    used_mem_mb = mem_info.rss / (1024**2)
-                    self.ram_label.config(text=f"RAM: {used_mem_mb:.0f}MB ({ram_percent:.1f}%)")
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-        elif matplotlib_available:
-            self.cpu_history = [0.0] * 50
-            self.ram_history = [0.0] * 50
-            if hasattr(self, 'line_cpu'): self.line_cpu.set_ydata(self.cpu_history)
-            if hasattr(self, 'line_ram'): self.line_ram.set_ydata(self.ram_history)
-            if hasattr(self, 'resource_canvas') and self.resource_canvas.get_tk_widget().winfo_exists():
-                self.resource_canvas.draw()
-            if hasattr(self, 'cpu_percent_label') and self.cpu_percent_label.winfo_exists():
-                self.cpu_percent_label.config(text="CPU: 0.0%")
-            if hasattr(self, 'ram_label') and self.ram_label.winfo_exists():
-                self.ram_label.config(text="RAM: 0MB (0.0%)")
+                self.cpu_percent_label.config(text=f"CPU: {cpu_percent:.1f}%")
+                used_mem_mb = mem_info.rss / (1024**2)
+                self.ram_label.config(text=f"RAM: {used_mem_mb:.0f}MB ({ram_percent:.1f}%)")
 
-        self.master.after(2000, self._update_resource_usage)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        except Exception as e:
+            self.log_to_console(f"Resource monitor error: {e}\n", "error")
+        finally:
+            self.master.after(2000, self._update_resource_usage)
 
     def log_to_console(self, msg, level="info"):
         if hasattr(self, 'full_console_output_area') and self.full_console_output_area.winfo_exists():
@@ -890,97 +957,17 @@ class ServerControlGUI:
         self.process_server_output(msg, level)
         
     def start_server_thread(self):
-        threading.Thread(target=self.start_server, daemon=True).start()
-
-    def start_server(self):
-        if self.server_running:
-            self.log_to_console("Server is already running.\n", "warning")
-            return
-
-        if not self.server_path:
-            self.log_to_console("Server path is not set up.\n", "error")
-            return
-
-        command = []
-        # --- Forge-specific startup logic ---
-        if self.server_type == 'forge':
-            if sys.platform == "win32":
-                run_script = os.path.join(self.server_path, 'run.bat')
-                if os.path.exists(run_script):
-                    command = [run_script, '--nogui']
-                    self.log_to_console("Detected Forge 'run.bat', starting with script and --nogui flag...\n", "info")
-            # Can add elif for 'run.sh' on other platforms later
-
-        # --- Generic startup for non-Forge or if script isn't found ---
-        if not command:
-            # Find the main server jar, trying to avoid installers.
-            all_jars = glob.glob(os.path.join(self.server_path, '*.jar'))
-            server_jar_path = None
-            
-            non_installer_jars = [j for j in all_jars if 'installer' not in os.path.basename(j).lower()]
-            
-            if non_installer_jars:
-                # Prefer jars with standard or common names
-                preferred_names = ['server.jar', 'minecraft_server.jar']
-                for name in preferred_names:
-                    for jar in non_installer_jars:
-                        if os.path.basename(jar) == name:
-                            server_jar_path = jar
-                            break
-                    if server_jar_path:
-                        break
-
-                # If no preferred name found, take the first non-installer jar
-                if not server_jar_path:
-                    server_jar_path = non_installer_jars[0]
-            
-            elif all_jars: # Fallback if all jars have 'installer' in name
-                server_jar_path = all_jars[0]
-
-            if not server_jar_path:
-                self.log_to_console("No server .jar file found in the directory.\n", "error")
-                return
-
-            min_ram_str = f"-Xms{self.ram_min_val_var.get()}{self.ram_unit_var.get()}"
-            max_ram_str = f"-Xmx{self.ram_max_val_var.get()}{self.ram_unit_var.get()}"
-            command = ['java', max_ram_str, min_ram_str, '-jar', os.path.basename(server_jar_path), '--nogui']
-
-        self.server_running = True
-        self.master.after(0, self._update_server_status_display)
-        self.log_to_console(f"Starting server with command: {' '.join(command)}\n", "info")
-        self._server_runner(command)
-
-    def _server_runner(self, command):
-        try:
-            self.server_process = subprocess.Popen(command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-            
-            stdout_thread = threading.Thread(target=self.read_output, args=(self.server_process.stdout, "normal"), daemon=True)
-            stderr_thread = threading.Thread(target=self.read_output, args=(self.server_process.stderr, "error"), daemon=True)
-            stdout_thread.start()
-            stderr_thread.start()
-
-            self.server_process.wait()
-        except FileNotFoundError:
-            self.log_to_console("Error: 'java' command not found. Is Java installed and in your PATH?\n", "error")
-        except Exception as e:
-            self.log_to_console(f"Server start failed: {e}\n", "error")
-        finally:
-            if self.server_running: self.master.after(0, self.on_server_stop)
-            
-    def read_output(self, pipe, level):
-        try:
-            for line in iter(pipe.readline, ''):
-                self.master.after(0, self.log_to_console, line, level)
-        finally:
-            pipe.close()
-            
-    def on_server_stop(self, silent=False):
-        if not self.server_running: return
-        
-        self.server_running = False
-        self.server_process = None
+        self.server_handler.start()
         self._update_server_status_display()
-        
+
+    def stop_server(self):
+        self.server_handler.stop()
+        self.stop_button.config(state=tk.DISABLED)
+        self.server_status_label.config(text="Status: Stopping...", style='StatusStarting.TLabel')
+        self._update_server_status_display()
+
+    def on_server_stop(self, silent=False):
+        self._update_server_status_display()
         if not silent:
             self.log_to_console("Server has stopped.\n", "info")
 
@@ -1031,7 +1018,7 @@ class ServerControlGUI:
         self._accept_eula_file()
         # Now, forcefully update the GUI state to reflect that the server has stopped.
         # We call with silent=True because we've already logged a more specific message.
-        if self.server_running:
+        if self.server_handler.server_running:
             self.on_server_stop(silent=True)
 
     def _accept_eula_file(self):
@@ -1058,7 +1045,7 @@ class ServerControlGUI:
     def send_command_from_button(self):
         cmd = self.command_entry.get().strip()
         if cmd:
-            self.send_command_to_server(cmd)
+            self.server_handler.send_command(cmd)
             self.command_entry.delete(0, tk.END)
 
     def send_command_from_console_entry(self, event=None):
@@ -1067,41 +1054,18 @@ class ServerControlGUI:
     def send_command_from_console_button(self):
         cmd = self.console_command_entry.get().strip()
         if cmd:
-            self.send_command_to_server(cmd)
+            self.server_handler.send_command(cmd)
             self.console_command_entry.delete(0, tk.END)
 
-    def send_command_to_server(self, cmd):
-        if self.server_process and self.server_running:
-            try:
-                if self.server_process.stdin:
-                    self.server_process.stdin.write(cmd + '\n')
-                    self.server_process.stdin.flush()
-                    self.log_to_console(f"> {cmd}\n", "info")
-                else:
-                    self.log_to_console("Cannot send command: server stdin is not available.\n", "error")
-            except (IOError, ValueError) as e:
-                self.log_to_console(f"Failed to send command: {e}\n", "error")
-        else:
-            self.log_to_console("Cannot send command: server is not running.\n", "warning")
-
-    def stop_server(self):
-        if self.server_process and self.server_running:
-            self.log_to_console("Attempting graceful stop...\n", "info")
-            self.send_command_to_server("stop")
-            self.stop_button.config(state=tk.DISABLED)
-            self.server_status_label.config(text="Status: Stopping...", style='StatusStarting.TLabel')
-        else:
-            self.log_to_console("Server is not running.\n", "warning")
-            
     def restart_server(self):
-        if self.server_running:
+        if self.server_handler.server_running:
             self.stop_server()
             self.master.after(2000, self._check_if_stopped_then_start)
             self.server_status_label.config(text="Status: Restarting...", style='StatusStarting.TLabel')
             self.restart_button.config(state=tk.DISABLED)
 
     def _check_if_stopped_then_start(self):
-        if not self.server_running:
+        if not self.server_handler.server_running:
             self.log_to_console("Server stopped, restarting...\n", "info")
             self.start_server_thread()
         else:
@@ -1109,10 +1073,10 @@ class ServerControlGUI:
             self.master.after(2000, self._check_if_stopped_then_start)
 
     def _update_server_status_display(self):
-        is_online = self.server_running and self.server_process and self.server_process.poll() is None
+        is_online = self.server_handler.server_running and self.server_handler.server_process and self.server_handler.server_process.poll() is None
         
         status_text, status_style = ("Status: Online", 'StatusOnline.TLabel') if is_online else ("Status: Offline", 'StatusOffline.TLabel')
-        if self.server_running and not is_online:
+        if self.server_handler.server_running and not is_online:
              status_text, status_style = ("Status: Starting...", 'StatusStarting.TLabel')
 
         start_state, stop_state, restart_state = (tk.DISABLED, tk.NORMAL, tk.NORMAL) if is_online else (tk.NORMAL, tk.DISABLED, tk.DISABLED)
@@ -1142,19 +1106,10 @@ class ServerControlGUI:
         threading.Thread(target=self._fetch_player_avatar_thread, args=(player_identifier, avatar_label, size), daemon=True).start()
 
     def _fetch_player_avatar_thread(self, player_identifier, avatar_label, size):
-        try:
-            url = f"https://mineskin.eu/avatar/{player_identifier}/{size[0]}"
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-            response = requests.get(url, timeout=10, headers=headers)
-            response.raise_for_status()
-            img = Image.open(io.BytesIO(response.content)).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
-            photo_img = ImageTk.PhotoImage(img)
+        photo_img = fetch_player_avatar_image(player_identifier, size)
+        if photo_img:
             self.avatar_cache[player_identifier] = photo_img
             self.master.after(0, self._update_avatar_label, avatar_label, photo_img)
-        except (requests.RequestException, UnidentifiedImageError) as e:
-            # Silently fail for a better user experience, but log for debugging
-            print(f"DEBUG: Could not fetch avatar for '{player_identifier}'. Reason: {e}")
-            pass
             
     def _create_scrollable_list(self, parent_frame):
         outer_frame = ttk.Frame(parent_frame, style='CardInner.TFrame')
@@ -1186,7 +1141,7 @@ class ServerControlGUI:
         self.player_context_menu.add_command(label="🚫 Ban", command=self._context_ban_player)
 
     def update_players_list(self):
-        if self.server_running: self.send_command_to_server("list")
+        if self.server_handler.server_running: self.server_handler.send_command("list")
         else:
             self.players_connected = []
             self._refresh_players_display()
@@ -1207,6 +1162,7 @@ class ServerControlGUI:
                 name_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
                 for widget in [row, avatar_label, name_label]:
                     widget.bind("<Button-3>", lambda e, p=player_name: self._show_player_context_menu(e, p))
+        self._update_dashboard_info()
 
     def _show_player_context_menu(self, event, player_name):
         self.selected_player_name = player_name
@@ -1218,17 +1174,17 @@ class ServerControlGUI:
     def _context_op_player(self, make_op: bool):
         if self.selected_player_name:
             cmd = "op" if make_op else "deop"
-            self.send_command_to_server(f"{cmd} {self.selected_player_name}")
+            self.server_handler.send_command(f"{cmd} {self.selected_player_name}")
             self.master.after(500, self.update_ops_list)
     
     def _context_kick_player(self):
         if self.selected_player_name:
-            self.send_command_to_server(f"kick {self.selected_player_name}")
+            self.server_handler.send_command(f"kick {self.selected_player_name}")
             self.master.after(200, self.update_players_list)
 
     def _context_ban_player(self):
         if self.selected_player_name:
-            self.send_command_to_server(f"ban {self.selected_player_name}")
+            self.server_handler.send_command(f"ban {self.selected_player_name}")
             self.master.after(200, self.update_players_list)
 
     def _create_ops_view_widgets(self, parent_frame):
@@ -1250,8 +1206,8 @@ class ServerControlGUI:
         self.add_op_button.pack(side=tk.LEFT)
 
     def update_ops_list(self):
-        if self.server_running:
-            self.send_command_to_server("op list")
+        if self.server_handler.server_running:
+            self.server_handler.send_command("op list")
         else: # Read from file if offline
             if not self.server_path:
                 self.ops_list = []
@@ -1289,8 +1245,8 @@ class ServerControlGUI:
         if not player_name:
             return
 
-        if self.server_running:
-            self.send_command_to_server(f"op {player_name}")
+        if self.server_handler.server_running:
+            self.server_handler.send_command(f"op {player_name}")
             self.op_entry.delete(0, tk.END)
         else:
             if not self.server_path:
@@ -1309,14 +1265,12 @@ class ServerControlGUI:
 
         try:
             self.master.after(0, self.log_to_console, f"Fetching UUID for {player_name}...\n", "info")
-            response = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{player_name}", timeout=10)
-            if response.status_code == 204:
+            player_data = fetch_player_uuid(player_name)
+            if not player_data:
                 self.master.after(0, self.log_to_console, f"Error: Player '{player_name}' not found.\n", "error")
                 messagebox.showerror("Error", f"Could not find player '{player_name}'. Please check the name.")
                 return
 
-            response.raise_for_status()
-            player_data = response.json()
             player_uuid_str = player_data['id']
             formatted_uuid = str(uuid.UUID(player_uuid_str))
 
@@ -1358,8 +1312,8 @@ class ServerControlGUI:
         if not player_name:
             return
 
-        if self.server_running:
-            self.send_command_to_server(f"deop {player_name}")
+        if self.server_handler.server_running:
+            self.server_handler.send_command(f"deop {player_name}")
         else:
             if not self.server_path:
                 messagebox.showerror("Error", "Server path is not configured.")
@@ -1434,9 +1388,9 @@ class ServerControlGUI:
             
     def _update_world_size_label(self, world_path, size_label):
         try:
-            size_bytes = self._get_folder_size(world_path)
+            size_bytes = get_folder_size(world_path)
             if size_label.winfo_exists():
-                self.master.after(0, size_label.config, {'text': f"Size: {self._format_size(size_bytes)}"})
+                self.master.after(0, size_label.config, {'text': f"Size: {format_size(size_bytes)}"})
         except Exception:
             if size_label.winfo_exists():
                 self.master.after(0, size_label.config, {'text': "Size: Error"})
@@ -1458,21 +1412,6 @@ class ServerControlGUI:
         except Exception as e:
             self.log_to_console(f"Backup failed for '{world_name}': {e}\n", "error")
             messagebox.showerror("Backup Failed", f"Could not back up world '{world_name}'.\nError: {e}")
-
-    def _get_folder_size(self, path):
-        total = 0
-        for entry in os.scandir(path):
-            if entry.is_file(): total += entry.stat().st_size
-            elif entry.is_dir(): total += self._get_folder_size(entry.path)
-        return total
-
-    def _format_size(self, size_bytes):
-        if size_bytes == 0: return "0B"
-        size_name = ("B", "KB", "MB", "GB", "TB")
-        i = int(math.floor(math.log(size_bytes, 1024))) if size_bytes > 0 else 0
-        p = math.pow(1024, i)
-        s = round(size_bytes / p, 2)
-        return f"{s} {size_name[i]}"
 
     def _format_stat_value(self, stat_key, value):
         # Time in ticks (20 ticks/sec) -> HH:MM:SS
@@ -1702,12 +1641,68 @@ class ServerControlGUI:
              ttk.Label(self.banned_ips_list_frame, text=f"Error reading IP bans:\n{e}", wraplength=300).pack()
 
     def _pardon_player(self, player_name):
-        self.send_command_to_server(f"pardon {player_name}")
+        self.server_handler.send_command(f"pardon {player_name}")
         self.master.after(500, self._load_bans)
 
     def _pardon_ip(self, ip_address):
-        self.send_command_to_server(f"pardon-ip {ip_address}")
+        self.server_handler.send_command(f"pardon-ip {ip_address}")
         self.master.after(500, self._load_bans)
+
+    def _create_whitelist_view_widgets(self, parent_frame):
+        card = ttk.Frame(parent_frame, style='Card.TFrame', padding=15)
+        card.pack(fill=tk.BOTH, expand=True)
+        
+        title_frame = ttk.Frame(card, style='CardInner.TFrame')
+        title_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(title_frame, text="Whitelist Management", style='Header.TLabel').pack(side=tk.LEFT)
+        ttk.Button(title_frame, text='Refresh List', command=self._load_whitelist, style='Accent.TButton').pack(side=tk.RIGHT)
+        
+        self.scrollable_whitelist_frame = self._create_scrollable_list(card)
+        
+        add_frame = ttk.Frame(card, style='CardInner.TFrame', padding=(0,10,0,0))
+        add_frame.pack(fill=tk.X)
+        self.whitelist_entry = ttk.Entry(add_frame, font=FONT_UI_NORMAL)
+        self.whitelist_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.add_whitelist_button = ttk.Button(add_frame, text="Add", command=self._add_to_whitelist, style="Accent.TButton")
+        self.add_whitelist_button.pack(side=tk.LEFT)
+
+    def _load_whitelist(self):
+        if not hasattr(self, 'scrollable_whitelist_frame'): return
+        for w in self.scrollable_whitelist_frame.winfo_children(): w.destroy()
+        
+        if not self.server_path:
+            return
+        file_path = os.path.join(self.server_path, 'whitelist.json')
+        if not os.path.exists(file_path): return
+
+        try:
+            with open(file_path, 'r') as f:
+                whitelist = json.load(f)
+            if not whitelist:
+                ttk.Label(self.scrollable_whitelist_frame, text="The whitelist is empty.").pack()
+                return
+            for player in whitelist:
+                player_name = player.get('name', 'N/A')
+                row = ttk.Frame(self.scrollable_whitelist_frame, style='CardInner.TFrame', padding=5)
+                row.pack(fill=tk.X, pady=2, padx=2)
+                avatar_label = ttk.Label(row)
+                avatar_label.pack(side=tk.LEFT, padx=(0,5))
+                self._fetch_player_avatar(player.get('uuid', player_name), avatar_label)
+                ttk.Label(row, text=player_name, justify=tk.LEFT).pack(side=tk.LEFT, expand=True, anchor='w')
+                ttk.Button(row, text="Remove", command=lambda p=player_name: self._remove_from_whitelist(p), style="ActionRow.TButton").pack(side=tk.RIGHT)
+        except Exception as e:
+            ttk.Label(self.scrollable_whitelist_frame, text=f"Error reading whitelist:\n{e}", wraplength=300).pack()
+
+    def _add_to_whitelist(self):
+        player_name = self.whitelist_entry.get().strip()
+        if player_name:
+            self.server_handler.send_command(f"whitelist add {player_name}")
+            self.whitelist_entry.delete(0, tk.END)
+            self.master.after(500, self._load_whitelist)
+
+    def _remove_from_whitelist(self, player_name):
+        self.server_handler.send_command(f"whitelist remove {player_name}")
+        self.master.after(500, self._load_whitelist)
 
     def _create_mods_view_widgets(self, parent_frame):
         main_card = ttk.Frame(parent_frame, style='Card.TFrame', padding=15)
@@ -1918,59 +1913,14 @@ class ServerControlGUI:
         except ValueError:
             messagebox.showerror("Invalid Input", "Memory values must be whole numbers.")
 
-class CollapsiblePane(ttk.Frame):
-    """A collapsible pane widget that can hide or show its content."""
-    def __init__(self, parent, text="", body_background=SECONDARY_BG):
-        super().__init__(parent, style='CardInner.TFrame')
-
-        self.columnconfigure(0, weight=1)
-        self.body_background = body_background
-        
-        # Header
-        self.header_frame = ttk.Frame(self, style='CardInner.TFrame')
-        self.header_frame.grid(row=0, column=0, sticky='ew')
-        self.header_frame.columnconfigure(1, weight=1)
-
-        self.toggle_button = ttk.Label(self.header_frame, text="▼", font=('Segoe UI', 10), style='TLabel')
-        self.toggle_button.grid(row=0, column=0, padx=5, sticky='w')
-        
-        self.title_label = ttk.Label(self.header_frame, text=text, font=FONT_UI_HEADER, style='Header.TLabel')
-        self.title_label.grid(row=0, column=1, sticky='w')
-
-        # Body
-        self.body = ttk.Frame(self, style='CardInner.TFrame', padding=(15, 10))
-
-        self.toggle_button.bind("<Button-1>", self._toggle)
-        self.title_label.bind("<Button-1>", self._toggle)
-        self._is_collapsed = False
-        self.body.grid(row=1, column=0, sticky='nsew', padx=5, pady=5) # Start expanded
-
-    def _toggle(self, event):
-        if self._is_collapsed:
-            self.body.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
-            self.toggle_button.configure(text="▼")
-        else:
-            self.body.grid_remove()
-            self.toggle_button.configure(text="▶")
-        self._is_collapsed = not self._is_collapsed
-
-class ToolTip:
-    def __init__(self, widget, text):
-        self.widget, self.text, self.tooltip_window = widget, text, None
-        self.widget.bind("<Enter>", self.show)
-        self.widget.bind("<Leave>", self.hide)
-    def show(self, event=None):
-        if self.tooltip_window or not self.text: return
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
-        self.tooltip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry(f"+{x}+{y}")
-        ttk.Label(tw, text=self.text, background=TERTIARY_BG, foreground=TEXT_PRIMARY, font=FONT_UI_NORMAL, relief='solid', borderwidth=1, padding=5).pack()
-    def hide(self, event=None):
-        if self.tooltip_window: self.tooltip_window.destroy()
-        self.tooltip_window = None
+    def _browse_java_path(self):
+        filepath = filedialog.askopenfilename(
+            title="Select Java Executable",
+            filetypes=(("Executable files", "*.exe"), ("All files", "*.*"))
+        )
+        if filepath:
+            self.java_path_var.set(filepath)
+            self._save_config()
 
 if __name__ == '__main__':
     root = tk.Tk()
