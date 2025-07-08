@@ -102,12 +102,18 @@ class CustomDropdownMenu(ttk.Frame):
         self.window.wm_geometry(f"+{x}+{y}")
         self.window.deiconify()
         self.window.lift()
-        self.window.bind("<FocusOut>", self.hide)
         self.window.focus_set()
+        self.master.bind_all("<Button-1>", self._on_click_elsewhere, add=True)
 
     def hide(self, event=None):
         self.is_open = False
         self.window.withdraw()
+        self.master.unbind_all("<Button-1>")
+
+    def _on_click_elsewhere(self, event):
+        if self.window.winfo_containing(event.x_root, event.y_root) is None:
+            if self.button.winfo_containing(event.x_root, event.y_root) is None:
+                self.hide()
 
     def update_options(self, options):
         for widget in self.scrollable_frame.winfo_children():
