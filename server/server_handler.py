@@ -44,28 +44,35 @@ class ServerHandler:
 
     def _get_start_command(self):
         java_path = "java"
+        run_script = None
+        
+        # Universal check for startup scripts
+        if sys.platform == "win32":
+            script_path = os.path.join(self.server_path, 'run.bat')
+            if os.path.exists(script_path):
+                run_script = script_path
+        else: # For macOS and Linux
+            script_path = os.path.join(self.server_path, 'run.sh')
+            if os.path.exists(script_path):
+                run_script = script_path
 
-        if self.server_type == 'forge':
-            user_args_file = os.path.join(self.server_path, 'user_jvm_args.txt')
-            win_args_path_pattern = os.path.join(self.server_path, 'libraries', 'net', 'minecraftforge', 'forge', '*', 'win_args.txt')
-            win_args_files = glob.glob(win_args_path_pattern)
+        # If a run script is found, prioritize it
+        if run_script:
+            self.output_callback(f"Detected startup script: {os.path.basename(run_script)}. Using it to launch.\n", "info")
+            # For Forge, we might need to set JVM_ARGS, but for now, a direct run is more universal.
+            # A more advanced implementation could parse the script to inject RAM settings.
+            return [run_script, '--nogui'], None
 
-            if os.path.exists(user_args_file) and win_args_files:
-                self.output_callback("Detected modern Forge server. Using run.bat for startup.\n", "info")
-                run_script = os.path.join(self.server_path, 'run.bat')
-                if os.path.exists(run_script):
-                    env = os.environ.copy()
-                    env["JVM_ARGS"] = f"-Xms{self.ram_min}{self.ram_unit} -Xmx{self.ram_max}{self.ram_unit}"
-                    return [run_script, '--nogui'], env
-
-        self.output_callback("Using generic JAR startup method.\n", "info")
+        # Fallback to JAR-based startup if no script is found
+        self.output_callback("No startup script found. Using generic JAR startup method.\n", "info")
         all_jars = glob.glob(os.path.join(self.server_path, '*.jar'))
         server_jar_path = None
         
         non_installer_jars = [j for j in all_jars if 'installer' not in os.path.basename(j).lower()]
         
         if non_installer_jars:
-            preferred_names = ['server.jar', 'minecraft_server.jar', 'paper.jar']
+            # Look for common server jar names first
+            preferred_names = ['server.jar', 'minecraft_server.jar', 'paper.jar', 'spigot.jar', 'fabric-server-launch.jar']
             for name in preferred_names:
                 for jar in non_installer_jars:
                     if os.path.basename(jar).lower() == name:
@@ -74,19 +81,31 @@ class ServerHandler:
                 if server_jar_path:
                     break
             
+            # If no preferred name is found, take the first non-installer jar
             if not server_jar_path:
                 server_jar_path = non_installer_jars[0]
         
-        elif all_jars:
+        elif all_jars: # Fallback if only installer jars are present for some reason
             server_jar_path = all_jars[0]
 
         if not server_jar_path:
-            self.output_callback("No server .jar file found in the directory.\n", "error")
+            self.output_callback("Error: No server .jar file or run script found in the directory.\n", "error")
             return None, None
 
         min_ram_str = f"-Xms{self.ram_min}{self.ram_unit}"
         max_ram_str = f"-Xmx{self.ram_max}{self.ram_unit}"
-        return [java_path, max_ram_str, min_ram_str, '-jar', os.path.basename(server_jar_path), '--nogui'], None
+        
+        # Base command
+        command = [java_path, max_ram_str, min_ram_str]
+        
+        # Add any server-type specific arguments before the -jar flag
+        # Example for future use:
+        # if self.server_type == 'some_type':
+        #     command.extend(['-Dsome.flag=true'])
+
+        command.extend(['-jar', os.path.basename(server_jar_path), '--nogui'])
+        
+        return command, None
 
     def _run_server(self, command, env):
         try:
@@ -131,20 +150,22 @@ class ServerHandler:
         
         # The process will terminate on its own, and the _run_server finally block will clean up.
 
-    def send_command(self, cmd):
-        if self.server_process and (self.is_running() or self.is_starting()):
+    def send_command(self, command):
+        if self.is_running() and self.server_process and self.server_process.stdin:
             try:
-                if self.server_process.stdin:
-                    self.server_process.stdin.write(cmd + '\n')
-                    self.server_process.stdin.flush()
-                    if cmd != "stop": # Avoid logging the stop command twice
-                        self.output_callback(f"> {cmd}\n", "info")
-                else:
-                    self.output_callback("Cannot send command: server stdin is not available.\n", "error")
+                self.server_process.stdin.write(f"{command}\n")
+                self.server_process.stdin.flush()
+                self.output_callback(f"> {command}\n", "info")
             except (IOError, ValueError) as e:
-                self.output_callback(f"Failed to send command: {e}\n", "error")
+                self.output_callback(f"Error sending command: {e}\n", "error")
         else:
-            self.output_callback("Cannot send command: server is not running.\n", "warning")
+            self.output_callback("Cannot send command: server is not running or stdin is not available.\n", "warning")
+
+    def update_ram(self, ram_max, ram_min, ram_unit):
+        self.ram_max = ram_max
+        self.ram_min = ram_min
+        self.ram_unit = ram_unit
+        self.output_callback(f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n", "info")
 
     def get_pid(self):
         if self.server_process:

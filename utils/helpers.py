@@ -19,10 +19,22 @@ def format_size(size_bytes):
     return f"{s} {size_name[i]}"
 
 def get_folder_size(path):
+    """Iteratively calculates the size of a folder."""
     total = 0
-    for entry in os.scandir(path):
-        if entry.is_file(): total += entry.stat().st_size
-        elif entry.is_dir(): total += get_folder_size(entry.path)
+    try:
+        for dirpath, dirnames, filenames in os.walk(path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                # skip if it is symbolic link
+                if not os.path.islink(fp):
+                    try:
+                        total += os.path.getsize(fp)
+                    except OSError:
+                        # Skip files that can't be accessed
+                        pass
+    except OSError:
+        # Return 0 if the root path is inaccessible
+        return 0
     return total
 
 def get_local_ip():

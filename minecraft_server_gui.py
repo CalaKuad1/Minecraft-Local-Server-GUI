@@ -18,9 +18,10 @@ from PIL import Image, ImageTk
 from gui.widgets import CollapsiblePane
 from utils.constants import *
 from utils.helpers import format_size, get_folder_size, get_local_ip
-from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
+
 
 # Attempt to hide the Python interpreter console window on Windows
 if sys.platform == "win32":
@@ -137,6 +138,8 @@ class ServerControlGUI:
             self.stats_player_widgets = {}
             self.current_player_stats = None
             self.stats_widgets_cache = {}
+            self.uuid_to_name_cache = {}
+            self._update_uuid_cache()
 
             # --- Build UI ---
             self._create_main_layout(self.master)
@@ -149,6 +152,49 @@ class ServerControlGUI:
             import traceback
             error_info = traceback.format_exc()
             messagebox.showerror("Fatal GUI Error", f"A critical error occurred while building the main interface:\n\n{e}\n\nDetails:\n{error_info}")
+
+    def _update_uuid_cache(self):
+        """Builds and updates a cache mapping UUIDs to usernames from all available local files."""
+        
+        # 1. usercache.json (Primary source)
+        cache_file = os.path.join(self.server_path, 'usercache.json')
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    user_cache_data = json.load(f)
+                    for entry in user_cache_data:
+                        if 'uuid' in entry and 'name' in entry:
+                            self.uuid_to_name_cache[entry['uuid'].replace('-', '').lower()] = entry['name']
+            except (json.JSONDecodeError, KeyError, TypeError):
+                self.log_to_console("Warning: Could not parse usercache.json.\n", "warning")
+
+        # 2. ops.json
+        ops_file = os.path.join(self.server_path, 'ops.json')
+        if os.path.exists(ops_file):
+            try:
+                with open(ops_file, 'r') as f:
+                    ops_data = json.load(f)
+                    for entry in ops_data:
+                        if 'uuid' in entry and 'name' in entry:
+                            uuid_clean = entry['uuid'].replace('-', '').lower()
+                            if uuid_clean not in self.uuid_to_name_cache:
+                                self.uuid_to_name_cache[uuid_clean] = entry['name']
+            except (json.JSONDecodeError, KeyError, TypeError):
+                self.log_to_console("Warning: Could not parse ops.json.\n", "warning")
+
+        # 3. banned-players.json
+        banned_file = os.path.join(self.server_path, 'banned-players.json')
+        if os.path.exists(banned_file):
+            try:
+                with open(banned_file, 'r') as f:
+                    banned_data = json.load(f)
+                    for entry in banned_data:
+                        if 'uuid' in entry and 'name' in entry:
+                            uuid_clean = entry['uuid'].replace('-', '').lower()
+                            if uuid_clean not in self.uuid_to_name_cache:
+                                self.uuid_to_name_cache[uuid_clean] = entry['name']
+            except (json.JSONDecodeError, KeyError, TypeError):
+                self.log_to_console("Warning: Could not parse banned-players.json.\n", "warning")
 
     def _create_main_layout(self, parent_frame):
         parent_frame.grid_columnconfigure(1, weight=1)
@@ -376,6 +422,11 @@ class ServerControlGUI:
             self.master.after(0, self.status_label.configure, {'text': "Configuration saved! Launching..."})
             self.server_path = server_path
             self.server_type = self._detect_server_type(server_path)
+            
+            # Detect and store the server version
+            detected_version = self._detect_server_version(server_path)
+            self.server_version_var = tk.StringVar(value=detected_version)
+            
             self._save_config()
             time.sleep(1)
             self.master.after(0, self._initialize_main_gui)
@@ -398,6 +449,25 @@ class ServerControlGUI:
         except FileNotFoundError:
             return "vanilla"
         return "vanilla"
+
+    def _detect_server_version(self, server_path):
+        try:
+            jars = glob.glob(os.path.join(server_path, '*.jar'))
+            if not jars:
+                return "Unknown"
+            
+            # Prioritize server.jar if it exists, otherwise take the first jar found.
+            server_jar = next((j for j in jars if os.path.basename(j).lower() == 'server.jar'), jars[0])
+            jar_name = os.path.basename(server_jar)
+            
+            # Regex to find version numbers like 1.19.2, 1.18, etc.
+            match = re.search(r'(\d+\.\d+(\.\d+)?)', jar_name)
+            if match:
+                return match.group(1)
+            
+            return "Unknown"
+        except Exception:
+            return "Unknown"
 
     def _perform_server_installation(self):
         try:
@@ -479,6 +549,9 @@ class ServerControlGUI:
     def _save_config(self):
         self.config_manager.set("server_path", self.server_path)
         self.config_manager.set("server_type", self.server_type)
+        # Ensure server_version_var exists and has a value to save
+        if hasattr(self, 'server_version_var') and self.server_version_var.get():
+            self.config_manager.set("server_version", self.server_version_var.get())
         self.config_manager.set("ram_min", self.ram_min_val_var.get())
         self.config_manager.set("ram_max", self.ram_max_val_var.get())
         self.config_manager.set("ram_unit", self.ram_unit_var.get())
@@ -522,20 +595,40 @@ class ServerControlGUI:
         top_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 10))
         top_frame.grid_columnconfigure((0, 1), weight=1)
 
+        # --- Left Panel for Server Actions & Memory ---
         left_panel = ctk.CTkFrame(top_frame)
         left_panel.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
-        ctk.CTkLabel(left_panel, text="Server Actions", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=10, padx=15)
-        self.start_button = ctk.CTkButton(left_panel, text="Start Server", command=self.start_server_thread)
-        self.start_button.pack(fill=tk.X, pady=5, padx=15, ipady=8)
-        self.stop_button = ctk.CTkButton(left_panel, text="Stop Server", command=self.stop_server, state=tk.DISABLED)
-        self.stop_button.pack(fill=tk.X, pady=(5,15), padx=15, ipady=8)
+        left_panel.grid_columnconfigure(0, weight=1)
 
+        actions_frame = ctk.CTkFrame(left_panel)
+        actions_frame.grid(row=0, column=0, sticky='ew', padx=15, pady=(0, 10))
+        ctk.CTkLabel(actions_frame, text="Server Actions", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        self.start_button = ctk.CTkButton(actions_frame, text="Start Server", command=self.start_server_thread)
+        self.start_button.pack(fill=tk.X, pady=5, ipady=8)
+        self.stop_button = ctk.CTkButton(actions_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED)
+        self.stop_button.pack(fill=tk.X, pady=5, ipady=8)
+
+        memory_frame = ctk.CTkFrame(left_panel)
+        memory_frame.grid(row=1, column=0, sticky='ew', padx=15, pady=10)
+        memory_frame.grid_columnconfigure(0, weight=1)
+        
+        mem_title_frame = ctk.CTkFrame(memory_frame, fg_color="transparent")
+        mem_title_frame.grid(row=0, column=0, sticky='ew', pady=(0,5))
+        ctk.CTkLabel(mem_title_frame, text="Memory Allocation", font=ctk.CTkFont(weight="bold")).pack(side=tk.LEFT)
+        self.ram_slider_label = ctk.CTkLabel(mem_title_frame, text=f"{self.ram_max_val_var.get()} GB")
+        self.ram_slider_label.pack(side=tk.RIGHT)
+
+        self.ram_slider = ctk.CTkSlider(memory_frame, from_=1, to=16, number_of_steps=15, command=self._on_ram_slider_change)
+        self.ram_slider.set(float(self.ram_max_val_var.get()))
+        self.ram_slider.grid(row=1, column=0, sticky='ew')
+
+        # --- Right Panel for Server Info ---
         right_panel = ctk.CTkFrame(top_frame)
         right_panel.grid(row=0, column=1, sticky='nsew', padx=(5, 0))
         ctk.CTkLabel(right_panel, text="Server Info", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=10, padx=15)
         
         info_grid = ctk.CTkFrame(right_panel, fg_color="transparent")
-        info_grid.pack(fill=tk.X, padx=15, pady=(0,15))
+        info_grid.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0,15))
         info_grid.grid_columnconfigure(1, weight=1)
 
         def add_info_row(label_text, var_text):
@@ -558,6 +651,7 @@ class ServerControlGUI:
         self.copy_ip_button = ctk.CTkButton(ip_frame, text="Copy", width=60, command=self._copy_ip_to_clipboard)
         self.copy_ip_button.pack(side=tk.LEFT, padx=5)
 
+        # --- Bottom Panel for Console ---
         console_card = ctk.CTkFrame(parent_frame)
         console_card.grid(row=1, column=0, sticky='nsew')
         console_card.grid_rowconfigure(1, weight=1)
@@ -580,6 +674,22 @@ class ServerControlGUI:
         self.console_send_btn = ctk.CTkButton(command_frame, text="Send", width=70, command=self.send_command_from_console_button)
         self.console_send_btn.grid(row=0, column=1)
 
+    def _on_ram_slider_change(self, value):
+        # Update the label as the slider moves
+        max_ram = int(value)
+        self.ram_slider_label.configure(text=f"{max_ram} GB")
+        
+        # Set the tk variables
+        self.ram_max_val_var.set(str(max_ram))
+        self.ram_min_val_var.set("1") # Keep min RAM at 1GB for simplicity
+        self.ram_unit_var.set("G")
+        
+        # Save the configuration automatically
+        self._save_config()
+        # Also update the server handler instance if it exists
+        if hasattr(self, 'server_handler'):
+            self.server_handler.update_ram(str(max_ram), "1", "G")
+
     def _copy_ip_to_clipboard(self):
         ip = self.ip_label.cget("text")
         if ip and ip != "N/A":
@@ -600,8 +710,11 @@ class ServerControlGUI:
         motd = properties.get("motd", "A Minecraft Server")
         max_players = properties.get("max-players", "20")
         
+        server_type_str = self.config_manager.get('server_type', 'N/A').capitalize()
+        server_version_str = self.config_manager.get('server_version', 'N/A')
+        
         self.motd_label.configure(text=motd)
-        self.version_label.configure(text=self.config_manager.get('server_version', 'N/A'))
+        self.version_label.configure(text=f"{server_type_str} {server_version_str}")
         self.players_label.configure(text=f"{len(self.players_connected)}/{max_players}")
         self.ip_label.configure(text=get_local_ip())
 
@@ -932,6 +1045,60 @@ class ServerControlGUI:
         if 'Done' in clean_line and 'For help, type "help"' in clean_line:
             self.master.after(0, self._update_server_status_display)
 
+        self._detect_version_from_log(clean_line)
+        self._detect_type_from_log(clean_line)
+
+    def _detect_version_from_log(self, line):
+        # Don't try to detect if a version is already properly set
+        current_version = self.config_manager.get('server_version', 'N/A')
+        if current_version != 'N/A' and current_version != 'Unknown':
+            return
+
+        # Regex patterns for different server types
+        patterns = [
+            r"Starting minecraft server version\s+([0-9\.]+)",  # Vanilla, Spigot, Paper
+            r"mcVersion,?\s+([0-9\.]+)",                         # Forge (from user feedback)
+            r"Loading Minecraft\s+([0-9\.]+)\s+with Fabric",     # Fabric
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, line)
+            if match:
+                version = match.group(1)
+                # Update if the new version is different from what's stored
+                if version != self.config_manager.get('server_version'):
+                    self.log_to_console(f"Detected server version: {version}\n", "success")
+                    
+                    # Update variable, config, and UI
+                    if not hasattr(self, 'server_version_var'):
+                        self.server_version_var = tk.StringVar()
+                    self.server_version_var.set(version)
+                    self._save_config()
+                    self._update_dashboard_info()
+                return # Stop after first match
+
+    def _detect_type_from_log(self, line):
+        # Don't re-detect if the type is already something other than vanilla/unknown
+        current_type = self.config_manager.get('server_type', 'vanilla').lower()
+        if current_type not in ['vanilla', 'unknown']:
+            return
+
+        type_patterns = {
+            'forge': r'ModLauncher running|forgeserver|fml.forgeVersion',
+            'fabric': r'FabricLoader|Loading Minecraft .* with Fabric',
+            'paper': r'This server is running Paper',
+            'spigot': r'This server is running Spigot',
+        }
+
+        for server_type, pattern in type_patterns.items():
+            if re.search(pattern, line, re.IGNORECASE):
+                if server_type != current_type:
+                    self.log_to_console(f"Detected server type: {server_type.capitalize()}\n", "success")
+                    self.server_type = server_type
+                    self._save_config()
+                    self._update_dashboard_info()
+                return
+
     def _handle_eula_shutdown(self):
         self._accept_eula_file()
         if self.server_handler.is_starting():
@@ -1229,39 +1396,96 @@ class ServerControlGUI:
         if not hasattr(self, 'scrollable_worlds_frame'): return
         for widget in self.scrollable_worlds_frame.winfo_children(): widget.destroy()
 
-        if not self.server_path:
-            ctk.CTkLabel(self.scrollable_worlds_frame, text="Server path is not configured.").pack(pady=20)
+        if not self.server_path or not os.path.isdir(self.server_path):
+            ctk.CTkLabel(self.scrollable_worlds_frame, text="Server path is not configured or not found.").pack(pady=20)
             return
 
+        world_folders = set()
         try:
-            world_folders = [i for i in os.listdir(self.server_path) if os.path.isdir(os.path.join(self.server_path, i)) and os.path.exists(os.path.join(self.server_path, i, 'level.dat'))]
-            if not world_folders:
-                ctk.CTkLabel(self.scrollable_worlds_frame, text="No worlds found.").pack(pady=20)
-                return
+            with open(self.server_properties_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith('level-name='):
+                        world_name = line.split('=', 1)[1].strip()
+                        if os.path.isdir(os.path.join(self.server_path, world_name)):
+                            world_folders.add(world_name)
+                        break
+        except (IOError, IndexError): pass
 
-            for world_name in sorted(world_folders):
-                row = ctk.CTkFrame(self.scrollable_worlds_frame, fg_color="gray20")
-                row.pack(fill=tk.X, expand=True, pady=2)
-                
-                info_frame = ctk.CTkFrame(row, fg_color="transparent")
-                info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=5)
-                ctk.CTkLabel(info_frame, text=f"🌍 {world_name}", font=ctk.CTkFont(weight="bold")).pack(anchor='w')
-                size_label = ctk.CTkLabel(info_frame, text="Calculating size...", text_color="gray")
-                size_label.pack(anchor='w')
-                threading.Thread(target=self._update_world_size_label, args=(os.path.join(self.server_path, world_name), size_label), daemon=True).start()
-                
-                ctk.CTkButton(row, text="Backup", width=80, command=lambda w=world_name: self.backup_world(w)).pack(side=tk.RIGHT, padx=10)
-        except Exception as e:
-            ctk.CTkLabel(self.scrollable_worlds_frame, text=f"An error occurred: {e}").pack()
+        try:
+            for item in os.listdir(self.server_path):
+                item_path = os.path.join(self.server_path, item)
+                if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, 'level.dat')):
+                    world_folders.add(item)
+        except OSError as e:
+            ctk.CTkLabel(self.scrollable_worlds_frame, text=f"Error scanning for worlds:\n{e}", wraplength=300).pack(pady=20)
+            return
+
+        if not world_folders:
+            ctk.CTkLabel(self.scrollable_worlds_frame, text="No worlds found. Check 'level-name' in server.properties.").pack(pady=20)
+            return
+
+        for world_name in sorted(list(world_folders)):
+            world_path = os.path.join(self.server_path, world_name)
             
-    def _update_world_size_label(self, world_path, size_label):
+            pane = CollapsiblePane(self.scrollable_worlds_frame, text=f"🌍 {world_name}")
+            pane.pack(fill=tk.X, expand=True, pady=4, padx=2)
+
+            # --- Add size label and backup button to the header ---
+            pane.header_frame.columnconfigure(2, weight=0) # Column for size
+            pane.header_frame.columnconfigure(3, weight=0) # Column for button
+
+            total_size_label = ctk.CTkLabel(pane.header_frame, text="Calculating size...", text_color="gray")
+            total_size_label.grid(row=0, column=2, sticky='e', padx=10)
+            threading.Thread(target=self._update_world_size_label, args=(world_path, total_size_label, "Total Size: "), daemon=True).start()
+            
+            ctk.CTkButton(pane.header_frame, text="Backup", width=80, command=lambda w=world_name: self.backup_world(w)).grid(row=0, column=3, sticky='e', padx=(0, 10))
+
+            # --- Populate dimensions inside the collapsible body ---
+            self._populate_world_dimensions(pane.body, world_path)
+
+    def _populate_world_dimensions(self, parent_frame, world_path):
+        dim_map = {
+            ".": "Overworld",
+            "DIM-1": "The Nether",
+            "DIM1": "The End"
+        }
+        
+        dimensions_found = []
+        # The Overworld is the root world folder itself
+        if os.path.exists(os.path.join(world_path, 'region')):
+            dimensions_found.append(".")
+
+        # Find other dimension folders
+        for item in os.listdir(world_path):
+            item_path = os.path.join(world_path, item)
+            if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, 'region')):
+                dimensions_found.append(item)
+        
+        if not dimensions_found:
+            ctk.CTkLabel(parent_frame, text="No dimensions found in this world.").pack(padx=10, pady=10)
+            return
+
+        for dim_folder in sorted(dimensions_found):
+            dim_name = dim_map.get(dim_folder, dim_folder)
+            dim_path = os.path.join(world_path, dim_folder)
+
+            row = ctk.CTkFrame(parent_frame, fg_color="transparent")
+            row.pack(fill=tk.X, expand=True, pady=1, padx=10)
+            
+            ctk.CTkLabel(row, text=f"  • {dim_name}", anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True)
+            size_label = ctk.CTkLabel(row, text="Calculating...", text_color="gray", anchor='e')
+            size_label.pack(side=tk.RIGHT)
+            
+            threading.Thread(target=self._update_world_size_label, args=(dim_path, size_label), daemon=True).start()
+
+    def _update_world_size_label(self, world_path, size_label, prefix="Size: "):
         try:
             size_bytes = get_folder_size(world_path)
             if size_label.winfo_exists():
-                self.master.after(0, size_label.configure, {'text': f"Size: {format_size(size_bytes)}"})
+                self.master.after(0, size_label.configure, {'text': f"{prefix}{format_size(size_bytes)}"})
         except Exception:
             if size_label.winfo_exists():
-                self.master.after(0, size_label.configure, {'text': "Size: Error"})
+                self.master.after(0, size_label.configure, {'text': f"{prefix}Error"})
 
     def backup_world(self, world_name):
         world_path = os.path.join(self.server_path, world_name)
@@ -1355,81 +1579,77 @@ class ServerControlGUI:
         self.stats_scrollable_frame.grid_remove() # Hide until player is selected
         
     def update_stats_list(self):
-        self.stats_files.clear()
-        self.player_uuids.clear()
+        self._update_uuid_cache()
         for widget in self.stats_player_list_frame.winfo_children():
             widget.destroy()
+        self.stats_files.clear()
 
-        if not self.server_path: return
-        
-        # Try to find the stats folder in common world directories
-        world_dirs = ['world'] + [d for d in os.listdir(self.server_path) if os.path.isdir(os.path.join(self.server_path, d, 'level.dat'))]
+        if not self.server_path:
+            ctk.CTkLabel(self.stats_player_list_frame, text="Server path not set.").pack(pady=10)
+            return
+
         stats_dir = None
+        world_dirs = ['world'] + [d for d in os.listdir(self.server_path) if os.path.isdir(os.path.join(self.server_path, d)) and os.path.exists(os.path.join(self.server_path, d, 'level.dat'))]
         for world_dir in world_dirs:
             potential_stats_dir = os.path.join(self.server_path, world_dir, 'stats')
             if os.path.isdir(potential_stats_dir):
                 stats_dir = potential_stats_dir
                 break
-
+        
         if not stats_dir:
             ctk.CTkLabel(self.stats_player_list_frame, text="Stats folder not found.").pack(pady=10)
             return
 
-        for f in os.listdir(stats_dir):
-            if f.endswith('.json'): self.stats_files[f[:-5]] = os.path.join(stats_dir, f)
-        
-        cache_file = os.path.join(self.server_path, 'usercache.json')
-        if os.path.exists(cache_file):
-            try:
-                with open(cache_file, 'r') as f: 
-                    for entry in json.load(f):
-                        uuid_with_dashes = entry.get('uuid', '')
-                        uuid_without_dashes = uuid_with_dashes.replace('-', '')
-                        if uuid_without_dashes in self.stats_files:
-                             self.player_uuids[entry['name']] = uuid_without_dashes
-            except (json.JSONDecodeError, KeyError): pass
-        
-        # Add any players from stats files that are not in the usercache
-        for uuid_key in self.stats_files:
-            if uuid_key not in self.player_uuids.values():
-                self.player_uuids[f"Unknown (UUID: ...{uuid_key[-12:]})"] = uuid_key
+        # --- Processing ---
+        stat_file_uuids = [f[:-5] for f in os.listdir(stats_dir) if f.endswith('.json')]
 
-        player_names = sorted(list(self.player_uuids.keys()))
-        self.stats_player_widgets.clear()
-
-        if not player_names:
-            ctk.CTkLabel(self.stats_player_list_frame, text="No players with stats found.").pack(pady=10)
+        if not stat_file_uuids:
+            ctk.CTkLabel(self.stats_player_list_frame, text="No stats files found.").pack(pady=10)
             return
 
-        for name in player_names:
-            uuid = self.player_uuids[name]
+        for uuid_str in sorted(stat_file_uuids):
+            self.stats_files[uuid_str] = os.path.join(stats_dir, f"{uuid_str}.json")
+            
             player_frame = ctk.CTkFrame(self.stats_player_list_frame, fg_color="transparent", corner_radius=6)
             player_frame.pack(fill="x", pady=2, padx=2)
             
             avatar_label = ctk.CTkLabel(player_frame, text="")
             avatar_label.pack(side="left", padx=5, pady=5)
-            ctk.CTkLabel(player_frame, text=name).pack(side="left", expand=True, fill="x")
+            name_label = ctk.CTkLabel(player_frame, text=f"Loading {uuid_str[:8]}...", anchor="w")
+            name_label.pack(side="left", expand=True, fill="x")
             
-            # Fetch avatar using name, which is more reliable for display
-            self._fetch_player_avatar(name if not name.startswith("Unknown") else uuid, avatar_label, size=(32,32))
+            self.stats_player_widgets[uuid_str] = (player_frame, name_label, avatar_label)
             
-            self.stats_player_widgets[uuid] = player_frame
-            
-            player_frame.bind("<Button-1>", lambda e, u=uuid: self._on_stats_player_selected(u))
+            # Bind clicks
+            player_frame.bind("<Button-1>", lambda e, u=uuid_str: self._on_stats_player_selected(u))
             for child in player_frame.winfo_children():
-                child.bind("<Button-1>", lambda e, u=uuid: self._on_stats_player_selected(u))
+                child.bind("<Button-1>", lambda e, u=uuid_str: self._on_stats_player_selected(u))
 
-        if not self.selected_stats_player_uuid and player_names:
-            first_uuid = self.player_uuids[player_names[0]]
-            self._on_stats_player_selected(first_uuid)
+            # --- Fetch Name and Avatar ---
+            uuid_clean_lower = uuid_str.replace('-', '').lower()
+            if uuid_clean_lower in self.uuid_to_name_cache:
+                # Name is in local cache, use it
+                name = self.uuid_to_name_cache[uuid_clean_lower]
+                self.player_uuids[name] = uuid_str
+                name_label.configure(text=name)
+                self._fetch_player_avatar(name, avatar_label, size=(32,32))
+            else:
+                # Name not in local cache, display UUID as fallback
+                name_label.configure(text=f"UUID: ...{uuid_str[-12:]}")
+                self._fetch_player_avatar(uuid_str, avatar_label, size=(32,32))
+
+        if not self.selected_stats_player_uuid and stat_file_uuids:
+            self._on_stats_player_selected(stat_file_uuids[0])
+
+    
 
     def _on_stats_player_selected(self, uuid):
         if self.selected_stats_player_uuid and self.selected_stats_player_uuid in self.stats_player_widgets:
-            self.stats_player_widgets[self.selected_stats_player_uuid].configure(fg_color="transparent")
+            self.stats_player_widgets[self.selected_stats_player_uuid][0].configure(fg_color="transparent")
         
         self.selected_stats_player_uuid = uuid
         if uuid in self.stats_player_widgets:
-            self.stats_player_widgets[uuid].configure(fg_color="gray20")
+            self.stats_player_widgets[uuid][0].configure(fg_color="gray20")
 
         stats_file = self.stats_files.get(self.selected_stats_player_uuid)
         if not stats_file:
@@ -1559,6 +1779,140 @@ class ServerControlGUI:
         self.banned_ips_list_frame = ctk.CTkScrollableFrame(ips_frame)
         self.banned_ips_list_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0,10))
 
+        # --- Add Ban Frame ---
+        add_ban_frame = ctk.CTkFrame(parent_frame)
+        add_ban_frame.grid(row=2, column=0, sticky="ew", pady=(10,0))
+        add_ban_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(add_ban_frame, text="Add New Ban", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=2, padx=10, pady=(5,0), sticky="w")
+        
+        self.ban_target_entry = ctk.CTkEntry(add_ban_frame, placeholder_text="Player Name or IP Address")
+        self.ban_target_entry.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        
+        self.ban_reason_entry = ctk.CTkEntry(add_ban_frame, placeholder_text="Reason (optional)")
+        self.ban_reason_entry.grid(row=1, column=1, sticky="ew", padx=(0,10), pady=5)
+
+        ban_buttons_frame = ctk.CTkFrame(add_ban_frame, fg_color="transparent")
+        ban_buttons_frame.grid(row=1, column=2, padx=(0,10), pady=5)
+        ctk.CTkButton(ban_buttons_frame, text="Ban Player", command=self._ban_player_from_input).pack(side=tk.LEFT)
+        ctk.CTkButton(ban_buttons_frame, text="Ban IP", command=self._ban_ip_from_input).pack(side=tk.LEFT, padx=5)
+
+    def _ban_player_from_input(self):
+        target = self.ban_target_entry.get().strip()
+        reason = self.ban_reason_entry.get().strip()
+        if not target:
+            messagebox.showwarning("Input Required", "Please enter a player name to ban.")
+            return
+
+        if self.server_handler.is_running():
+            command = f"ban {target} {reason}"
+            self.server_handler.send_command(command.strip())
+            self.log_to_console(f"Attempted to ban player: {target}\n", "info")
+        else:
+            self.log_to_console(f"Server is offline. Attempting to ban {target} by editing files...\n", "info")
+            threading.Thread(target=self._ban_player_offline, args=(target, reason), daemon=True).start()
+
+        self.ban_target_entry.delete(0, tk.END)
+        self.ban_reason_entry.delete(0, tk.END)
+        self.master.after(1000, self._load_bans)
+
+    def _ban_player_offline(self, player_name, reason):
+        try:
+            self.master.after(0, self.log_to_console, f"Fetching UUID for {player_name}...\n", "info")
+            player_data = fetch_player_uuid(player_name)
+            if not player_data:
+                self.master.after(0, messagebox.showerror, "Error", f"Could not find player '{player_name}'. Please check the name.")
+                return
+
+            uuid_str = player_data['id']
+            
+            ban_entry = {
+                "uuid": str(uuid.UUID(uuid_str)), # Format with dashes
+                "name": player_name,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S %z"),
+                "source": "ServerControlGUI",
+                "expires": "forever",
+                "reason": reason or "Banned by an operator."
+            }
+
+            file_path = os.path.join(self.server_path, 'banned-players.json')
+            ban_list = []
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r') as f:
+                        ban_list = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass # Overwrite if file is corrupt
+
+            # Avoid duplicate bans
+            if any(entry.get('name', '').lower() == player_name.lower() for entry in ban_list):
+                self.master.after(0, messagebox.showwarning, "Already Banned", f"'{player_name}' is already on the ban list.")
+                return
+
+            ban_list.append(ban_entry)
+            with open(file_path, 'w') as f:
+                json.dump(ban_list, f, indent=4)
+            
+            self.master.after(0, self.log_to_console, f"Successfully banned '{player_name}' (offline).\n", "success")
+            self.master.after(100, self._load_bans)
+
+        except Exception as e:
+            self.master.after(0, messagebox.showerror, "Error", f"An unexpected error occurred while banning offline:\n{e}")
+
+    def _ban_ip_from_input(self):
+        target = self.ban_target_entry.get().strip()
+        reason = self.ban_reason_entry.get().strip()
+        if not target:
+            messagebox.showwarning("Input Required", "Please enter an IP address to ban.")
+            return
+
+        if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
+             messagebox.showwarning("Invalid Format", "Please enter a valid IP address (e.g., 127.0.0.1).")
+             return
+
+        if self.server_handler.is_running():
+            command = f"ban-ip {target} {reason}"
+            self.server_handler.send_command(command.strip())
+            self.log_to_console(f"Attempted to ban IP: {target}\n", "info")
+        else:
+            self.log_to_console(f"Server is offline. Attempting to ban IP {target} by editing files...\n", "info")
+            self._ban_ip_offline(target, reason)
+
+        self.ban_target_entry.delete(0, tk.END)
+        self.ban_reason_entry.delete(0, tk.END)
+        self.master.after(500, self._load_bans)
+
+    def _ban_ip_offline(self, ip_address, reason):
+        try:
+            ban_entry = {
+                "ip": ip_address,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S %z"),
+                "source": "ServerControlGUI",
+                "expires": "forever",
+                "reason": reason or "Banned by an operator."
+            }
+            file_path = os.path.join(self.server_path, 'banned-ips.json')
+            ban_list = []
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r') as f:
+                        ban_list = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass
+            
+            if any(entry.get('ip') == ip_address for entry in ban_list):
+                self.master.after(0, messagebox.showwarning, "Already Banned", f"The IP '{ip_address}' is already on the ban list.")
+                return
+
+            ban_list.append(ban_entry)
+            with open(file_path, 'w') as f:
+                json.dump(ban_list, f, indent=4)
+
+            self.master.after(0, self.log_to_console, f"Successfully banned IP '{ip_address}' (offline).\n", "success")
+            self.master.after(100, self._load_bans)
+        except Exception as e:
+            self.master.after(0, messagebox.showerror, "Error", f"An unexpected error occurred while banning IP offline:\n{e}")
+
     def _load_bans(self):
         self._load_banned_players()
         self._load_banned_ips()
@@ -1611,12 +1965,68 @@ class ServerControlGUI:
              ctk.CTkLabel(self.banned_ips_list_frame, text=f"Error reading IP bans:\n{e}", wraplength=300).pack()
 
     def _pardon_player(self, player_name):
-        self.server_handler.send_command(f"pardon {player_name}")
+        if self.server_handler.is_running():
+            self.server_handler.send_command(f"pardon {player_name}")
+            self.log_to_console(f"Attempted to pardon player: {player_name}\n", "info")
+        else:
+            self.log_to_console(f"Server is offline. Attempting to pardon {player_name} by editing files...\n", "info")
+            self._pardon_player_offline(player_name)
         self.master.after(500, self._load_bans)
 
+    def _pardon_player_offline(self, player_name):
+        file_path = os.path.join(self.server_path, 'banned-players.json')
+        if not os.path.exists(file_path):
+            self.log_to_console("banned-players.json not found.\n", "warning")
+            return
+        
+        try:
+            with open(file_path, 'r') as f:
+                ban_list = json.load(f)
+            
+            original_count = len(ban_list)
+            ban_list = [entry for entry in ban_list if entry.get('name', '').lower() != player_name.lower()]
+
+            if len(ban_list) < original_count:
+                with open(file_path, 'w') as f:
+                    json.dump(ban_list, f, indent=4)
+                self.log_to_console(f"Successfully pardoned '{player_name}' (offline).\n", "success")
+            else:
+                self.log_to_console(f"Player '{player_name}' not found in the offline ban list.\n", "info")
+
+        except (json.JSONDecodeError, IOError) as e:
+            messagebox.showerror("Error", f"Failed to process banned-players.json: {e}")
+
     def _pardon_ip(self, ip_address):
-        self.server_handler.send_command(f"pardon-ip {ip_address}")
+        if self.server_handler.is_running():
+            self.server_handler.send_command(f"pardon-ip {ip_address}")
+            self.log_to_console(f"Attempted to pardon IP: {ip_address}\n", "info")
+        else:
+            self.log_to_console(f"Server is offline. Attempting to pardon IP {ip_address} by editing files...\n", "info")
+            self._pardon_ip_offline(ip_address)
         self.master.after(500, self._load_bans)
+
+    def _pardon_ip_offline(self, ip_address):
+        file_path = os.path.join(self.server_path, 'banned-ips.json')
+        if not os.path.exists(file_path):
+            self.log_to_console("banned-ips.json not found.\n", "warning")
+            return
+
+        try:
+            with open(file_path, 'r') as f:
+                ban_list = json.load(f)
+
+            original_count = len(ban_list)
+            ban_list = [entry for entry in ban_list if entry.get('ip') != ip_address]
+
+            if len(ban_list) < original_count:
+                with open(file_path, 'w') as f:
+                    json.dump(ban_list, f, indent=4)
+                self.log_to_console(f"Successfully pardoned IP '{ip_address}' (offline).\n", "success")
+            else:
+                self.log_to_console(f"IP '{ip_address}' not found in the offline ban list.\n", "info")
+
+        except (json.JSONDecodeError, IOError) as e:
+            messagebox.showerror("Error", f"Failed to process banned-ips.json: {e}")
 
     def _create_mods_view_widgets(self, parent_frame):
         parent_frame.grid_columnconfigure(0, weight=1)
@@ -1763,27 +2173,6 @@ class ServerControlGUI:
         ctk.CTkLabel(server_path_frame, text="Server Path:", font=ctk.CTkFont(weight="bold")).pack(side=tk.LEFT)
         ctk.CTkLabel(server_path_frame, text=self.server_path or "Not Set", wraplength=500).pack(side=tk.LEFT, padx=5)
         
-        mem_frame = ctk.CTkFrame(settings_frame)
-        mem_frame.pack(fill=tk.X, pady=10, padx=15)
-        ctk.CTkLabel(mem_frame, text="Java Memory Allocation", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=10, padx=15)
-        
-        max_mem_frame = ctk.CTkFrame(mem_frame, fg_color="transparent")
-        max_mem_frame.pack(fill=tk.X, pady=5, padx=15)
-        ctk.CTkLabel(max_mem_frame, text="Maximum (Xmx):", width=120).pack(side=tk.LEFT)
-        ctk.CTkEntry(max_mem_frame, textvariable=self.ram_max_val_var, width=80).pack(side=tk.LEFT, padx=5)
-
-        min_mem_frame = ctk.CTkFrame(mem_frame, fg_color="transparent")
-        min_mem_frame.pack(fill=tk.X, pady=5, padx=15)
-        ctk.CTkLabel(min_mem_frame, text="Minimum (Xms):", width=120).pack(side=tk.LEFT)
-        ctk.CTkEntry(min_mem_frame, textvariable=self.ram_min_val_var, width=80).pack(side=tk.LEFT, padx=5)
-
-        unit_frame = ctk.CTkFrame(mem_frame, fg_color="transparent")
-        unit_frame.pack(fill=tk.X, pady=5, padx=15)
-        ctk.CTkLabel(unit_frame, text="Unit:", width=120).pack(side=tk.LEFT)
-        ctk.CTkComboBox(unit_frame, variable=self.ram_unit_var, values=["G", "M"], width=80).pack(side=tk.LEFT, padx=5)
-        
-        ctk.CTkButton(mem_frame, text="Save Memory Settings", command=self._save_and_confirm_ram).pack(anchor='e', pady=15, padx=15)
-
         # --- About Section ---
         ctk.CTkLabel(settings_frame, text="About", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor='w', pady=(20, 5), padx=15)
         about_frame = ctk.CTkFrame(settings_frame)
