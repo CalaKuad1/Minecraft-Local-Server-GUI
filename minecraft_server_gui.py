@@ -18,7 +18,7 @@ from PIL import Image, ImageTk
 from gui.widgets import CollapsiblePane
 from utils.constants import *
 from utils.helpers import format_size, get_folder_size, get_local_ip
-from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
 
@@ -52,12 +52,23 @@ class ServerControlGUI:
         self.config_manager = ConfigManager(os.path.join(self.script_dir, "gui_config.json"))
         self.changelog_path = os.path.join(self.script_dir, "changelog.txt")
 
+        # --- Initialize attributes that might be accessed early ---
+        self.main_gui_initialized = False
+        self.players_connected = []
+        self.ops_list = []
+        self.expecting_player_list_next_line = False
+        self.player_count_line_prefix = "There are "
+        self.player_count_line_suffix = " players online:"
+
         # --- TK Variables ---
         self.master = master
         self.ram_min_val_var = tk.StringVar(value=self.config_manager.get("ram_min", "1"))
         self.ram_max_val_var = tk.StringVar(value=self.config_manager.get("ram_max", "2"))
         self.ram_unit_var = tk.StringVar(value=self.config_manager.get("ram_unit", "G"))
         self.java_path_var = tk.StringVar(value=self.config_manager.get("java_path", "java"))
+        self.expecting_player_list_next_line = False
+        self.player_count_line_prefix = "There are "
+        self.player_count_line_suffix = " players online:"
 
         master.title("Minecraft Server Control")
         try:
@@ -110,6 +121,8 @@ class ServerControlGUI:
             for widget in self.master.winfo_children():
                 widget.destroy()
 
+            self.main_gui_initialized = True
+
             self.server_handler = ServerHandler(
                 self.server_path, 
                 self.server_type, 
@@ -120,13 +133,21 @@ class ServerControlGUI:
             )
 
             # --- Initialize attributes ---
-            self.players_connected = []
             self.selected_player_name = None
-            self.ops_list = []
-            self.expecting_player_list_next_line = False
-            self.player_count_line_prefix = "There are "
-            self.player_count_line_suffix = " players online:"
             self.property_widgets = {}
+            self.active_view_id = None
+            self.placeholder_avatar = self._create_placeholder_avatar(size=(24,24))
+            self.avatar_cache = {}
+            self.mod_data = []
+            self.player_uuids = {}
+            self.stats_files = {}
+            self.current_mod_config_path = None
+            self.selected_stats_player_uuid = None
+            self.stats_player_widgets = {}
+            self.current_player_stats = None
+            self.stats_widgets_cache = {}
+            self.uuid_to_name_cache = {}
+            self._update_uuid_cache()
             self.active_view_id = None
             self.placeholder_avatar = self._create_placeholder_avatar(size=(24,24))
             self.avatar_cache = {}
@@ -286,33 +307,54 @@ class ServerControlGUI:
         self.install_frame.pack(fill=tk.X, expand=True, pady=5)
         self.existing_frame = ctk.CTkFrame(setup_frame, fg_color="transparent")
 
-        # --- Widgets for "Install New Server" ---
+        # --- Create all widgets for the "Install" page ---
+
+        # Step 1: Server Type
         ctk.CTkLabel(self.install_frame, text="1. Select Server Type", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
         server_types = ["Vanilla", "Paper", "Spigot", "Forge", "Fabric"]
         self.server_type_var = tk.StringVar(value=server_types[0])
-        ctk.CTkComboBox(self.install_frame, variable=self.server_type_var, values=server_types, command=self._update_server_versions).pack(fill=tk.X, pady=5)
+        type_combo = ctk.CTkComboBox(self.install_frame, variable=self.server_type_var, values=server_types, command=self._on_server_type_change)
+        type_combo.pack(fill=tk.X, pady=5)
         
-        ctk.CTkLabel(self.install_frame, text="2. Select Minecraft Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        # Container for version selection widgets
+        self.version_options_container = ctk.CTkFrame(self.install_frame, fg_color="transparent")
+        self.version_options_container.pack(fill=tk.X, pady=0, padx=0)
+
+        # Step 2 (Vanilla, Paper, etc.): Standard server version widgets
+        self.vanilla_version_frame = ctk.CTkFrame(self.version_options_container, fg_color="transparent")
+        ctk.CTkLabel(self.vanilla_version_frame, text="2. Select Minecraft Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
         self.server_version_var = tk.StringVar()
-        self.version_menu = ctk.CTkComboBox(self.install_frame, variable=self.server_version_var, values=["Loading..."], state="disabled")
+        self.version_menu = ctk.CTkComboBox(self.vanilla_version_frame, variable=self.server_version_var, values=["Loading..."], state="disabled")
         self.version_menu.pack(fill=tk.X, pady=5)
         
-        ctk.CTkLabel(self.install_frame, text="3. Choose Parent Directory", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        # Steps 2 & 3 (Forge): Forge-specific widgets
+        self.forge_widgets_frame = ctk.CTkFrame(self.version_options_container, fg_color="transparent")
+        ctk.CTkLabel(self.forge_widgets_frame, text="2. Select Minecraft Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        self.forge_mc_version_var = tk.StringVar(value="Loading...")
+        self.forge_mc_version_menu = ctk.CTkComboBox(self.forge_widgets_frame, variable=self.forge_mc_version_var, state="disabled", command=self._on_forge_mc_version_selected)
+        self.forge_mc_version_menu.pack(fill=tk.X, pady=5)
+        ctk.CTkLabel(self.forge_widgets_frame, text="3. Select Forge Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        self.forge_version_var = tk.StringVar(value="Loading...")
+        self.forge_version_menu = ctk.CTkComboBox(self.forge_widgets_frame, variable=self.forge_version_var, state="disabled")
+        self.forge_version_menu.pack(fill=tk.X, pady=5)
+        
+        # Common install widgets (Steps 3/4 and 4/5)
+        self.location_step_label = ctk.CTkLabel(self.install_frame, text="3. Choose Parent Directory", font=ctk.CTkFont(weight="bold"))
+        self.location_step_label.pack(anchor='w', pady=(10,5))
         install_location_frame = ctk.CTkFrame(self.install_frame, fg_color="transparent")
         install_location_frame.pack(fill=tk.X, pady=5)
         self.install_location_var = tk.StringVar()
         ctk.CTkEntry(install_location_frame, textvariable=self.install_location_var, state='readonly').pack(side=tk.LEFT, fill=tk.X, expand=True)
         ctk.CTkButton(install_location_frame, text="Browse...", command=self._browse_install_location, width=80).pack(side=tk.LEFT, padx=(5,0))
         
-        ctk.CTkLabel(self.install_frame, text="4. Name Server Folder", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
+        self.name_step_label = ctk.CTkLabel(self.install_frame, text="4. Name Server Folder", font=ctk.CTkFont(weight="bold"))
+        self.name_step_label.pack(anchor='w', pady=(10,5))
         self.server_name_var = tk.StringVar()
         self.server_name_entry = ctk.CTkEntry(self.install_frame, textvariable=self.server_name_var)
         self.server_name_entry.pack(fill=tk.X, pady=5)
         
         self.eula_accepted_var = tk.BooleanVar(value=False)
         ctk.CTkCheckBox(self.install_frame, text="I agree to the Minecraft EULA (minecraft.net/eula)", variable=self.eula_accepted_var).pack(fill=tk.X, pady=10)
-        
-        self.server_version_var.trace_add('write', self._update_default_folder_name)
         
         # --- Widgets for "Use Existing Server" ---
         ctk.CTkLabel(self.existing_frame, text="1. Choose Existing Server Location", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
@@ -331,11 +373,70 @@ class ServerControlGUI:
         self.status_label = ctk.CTkLabel(setup_frame, text="Ready to begin.")
         self.status_label.pack(pady=10)
 
+        # --- Final setup ---
+        self.server_version_var.trace_add('write', self._update_default_folder_name)
+        self.forge_mc_version_var.trace_add('write', self._update_default_folder_name)
         self._toggle_setup_view()
-        self._update_server_versions()
+        self._on_server_type_change()
+
+    def _on_server_type_change(self, *args):
+        server_type = self.server_type_var.get().lower()
+
+        # Hide both frames first
+        self.vanilla_version_frame.pack_forget()
+        self.forge_widgets_frame.pack_forget()
+
+        if server_type == "forge":
+            self.forge_widgets_frame.pack(fill=tk.X, pady=5, expand=True)
+            self.location_step_label.configure(text="4. Choose Parent Directory")
+            self.name_step_label.configure(text="5. Name Server Folder")
+            self._update_forge_versions()
+        else:
+            self.vanilla_version_frame.pack(fill=tk.X, pady=5, expand=True)
+            self.location_step_label.configure(text="3. Choose Parent Directory")
+            self.name_step_label.configure(text="4. Name Server Folder")
+            self._update_server_versions()
+
+    def _update_forge_versions(self):
+        self.forge_mc_version_var.set("Loading...")
+        self.forge_version_var.set("Loading...")
+        self.forge_mc_version_menu.configure(state="disabled")
+        self.forge_version_menu.configure(state="disabled")
+        threading.Thread(target=self._fetch_and_update_forge_versions, daemon=True).start()
+
+    def _fetch_and_update_forge_versions(self):
+        self.forge_versions_data = get_forge_versions()
+        
+        def update_ui():
+            if self.forge_versions_data:
+                mc_versions = list(self.forge_versions_data.keys())
+                self.forge_mc_version_menu.configure(values=mc_versions, state="normal")
+                self.forge_mc_version_var.set(mc_versions[0])
+                self._on_forge_mc_version_selected(mc_versions[0])
+            else:
+                self.forge_mc_version_var.set("Error")
+                self.forge_version_var.set("Error")
+
+        if hasattr(self, 'master'):
+            self.master.after(0, update_ui)
+
+    def _on_forge_mc_version_selected(self, mc_version):
+        if not hasattr(self, 'forge_versions_data') or not self.forge_versions_data:
+            return
+        
+        forge_versions = self.forge_versions_data.get(mc_version, [])
+        if forge_versions:
+            self.forge_version_menu.configure(values=forge_versions, state="normal")
+            self.forge_version_var.set(forge_versions[0])
+        else:
+            self.forge_version_menu.configure(values=[], state="disabled")
+            self.forge_version_var.set("N/A")
 
     def _update_server_versions(self, *args):
         server_type = self.server_type_var.get()
+        if server_type.lower() == "forge":
+            return # No need to fetch versions for Forge this way
+
         self.server_version_var.set("Loading...")
         self.version_menu.configure(state=tk.DISABLED)
         threading.Thread(target=self._fetch_and_update_versions, args=(server_type,), daemon=True).start()
@@ -371,8 +472,12 @@ class ServerControlGUI:
         try:
             if hasattr(self, 'server_name_entry') and self.server_name_entry.winfo_exists():
                 server_type = self.server_type_var.get()
-                version = self.server_version_var.get()
-                if version != "Loading...":
+                if server_type.lower() == 'forge':
+                    version = self.forge_mc_version_var.get()
+                else:
+                    version = self.server_version_var.get()
+                
+                if version and version != "Loading...":
                     self.server_name_var.set(f"{server_type.lower()}-server-{version}")
         except tk.TclError:
             pass
@@ -472,13 +577,10 @@ class ServerControlGUI:
     def _perform_server_installation(self):
         try:
             server_type = self.server_type_var.get().lower()
-            server_version = self.server_version_var.get()
             parent_dir = self.install_location_var.get()
             server_folder_name = self.server_name_var.get()
             
             install_path = os.path.join(parent_dir, server_folder_name)
-            jar_name = "server.jar"
-            jar_path = os.path.join(install_path, jar_name)
 
             if os.path.exists(install_path) and os.listdir(install_path):
                 dialog = ctk.CTkInputDialog(text="Destination folder is not empty. Overwrite?", title="Warning")
@@ -487,53 +589,68 @@ class ServerControlGUI:
 
             self.master.after(0, self.status_label.configure, {'text': f"Creating directory: {os.path.basename(install_path)}"})
             os.makedirs(install_path, exist_ok=True)
-            
-            self.master.after(0, self.status_label.configure, {'text': f"Downloading {server_type} {server_version}..."})
-            download_server_jar(server_type, server_version, jar_path, lambda p: self.master.after(0, self.progress_bar.set, p / 100))
-            
-            self.master.after(0, self.status_label.configure, {'text': "Generating server files..."})
-            self.master.after(0, self.progress_bar.set, 0)
-            
-            initial_run_command = ['java', '-jar', jar_name]
-            if server_type == 'forge':
-                initial_run_command.append('--installServer')
-            else:
-                initial_run_command.append('--nogui')
 
-            process = subprocess.Popen(initial_run_command, cwd=install_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-            try:
-                stdout, stderr = process.communicate(timeout=600)
-                if server_type == 'forge':
-                    run_script_path = os.path.join(install_path, 'run.bat') if sys.platform == "win32" else os.path.join(install_path, 'run.sh')
-                    if not os.path.exists(run_script_path):
-                         if process.returncode != 0:
-                             raise RuntimeError(f"Forge installer failed with exit code {process.returncode}.\n\nLOG:\n{stdout}\n{stderr}")
-                         else:
-                             raise RuntimeError(f"Forge installer finished but the run script was not created.\n\nLOG:\n{stdout}\n{stderr}")
-                else:
+            # Initialize ServerHandler here to use its methods
+            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level))
+
+            if server_type == 'forge':
+                forge_version = self.forge_version_var.get()
+                mc_version = self.forge_mc_version_var.get()
+                self.master.after(0, self.status_label.configure, {'text': f"Downloading Forge {forge_version} installer..."})
+                
+                def install_logic():
+                    temp_server_handler.install_forge_server(
+                        forge_version, 
+                        mc_version, 
+                        lambda p: self.master.after(0, self.progress_bar.set, p / 100)
+                    )
+
+                install_thread = threading.Thread(target=install_logic, daemon=True)
+                install_thread.start()
+                
+                while install_thread.is_alive():
+                    self.master.update()
+                    time.sleep(0.1)
+
+            else: # Standard installation for other server types
+                server_version = self.server_version_var.get()
+                jar_name = "server.jar"
+                jar_path = os.path.join(install_path, jar_name)
+
+                self.master.after(0, self.status_label.configure, {'text': f"Downloading {server_type} {server_version}..."})
+                download_server_jar(server_type, server_version, jar_path, lambda p: self.master.after(0, self.progress_bar.set, p / 100))
+                
+                self.master.after(0, self.status_label.configure, {'text': "First-time server run to generate files..."})
+                self.master.after(0, self.progress_bar.set, 0)
+                
+                initial_run_command = ['java', '-jar', jar_name, '--nogui']
+                process = subprocess.Popen(initial_run_command, cwd=install_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+                try:
+                    stdout, stderr = process.communicate(timeout=600)
                     if process.returncode != 0 and 'eula' not in (stdout + stderr).lower():
                         raise RuntimeError(f"Server process failed. Log:\n{stderr or stdout}")
-
-            except subprocess.TimeoutExpired:
-                process.kill()
-                run_script_path = os.path.join(install_path, 'run.bat') if sys.platform == "win32" else os.path.join(install_path, 'run.sh')
-                if server_type == 'forge' and os.path.exists(run_script_path):
-                    self.log_to_console("Forge installer timed out but seems to have succeeded. Continuing...\n", "warning")
-                else:
+                except subprocess.TimeoutExpired:
+                    process.kill()
                     raise RuntimeError("Server setup timed out (10+ min).")
 
-            if server_type != 'forge':
-                eula_path = os.path.join(install_path, "eula.txt")
-                self.master.after(0, self.status_label.configure, {'text': "Accepting EULA..."})
-                time.sleep(1)
-                if not os.path.exists(eula_path):
+            # EULA Acceptance (common for all types)
+            eula_path = os.path.join(install_path, "eula.txt")
+            self.master.after(0, self.status_label.configure, {'text': "Accepting EULA..."})
+            time.sleep(2) 
+            if not os.path.exists(eula_path):
+                if server_type != 'forge':
                     self.log_to_console("eula.txt was not created. It will need to be accepted on the first server launch.\n", "warning")
-                else:
-                    with open(eula_path, 'r+') as f:
-                        content = f.read().replace("eula=false", "eula=true")
-                        f.seek(0); f.write(content); f.truncate()
+            else:
+                with open(eula_path, 'r+') as f:
+                    content = f.read().replace("eula=false", "eula=true")
+                    f.seek(0); f.write(content); f.truncate()
             
             self.master.after(0, self.status_label.configure, {'text': "Setup complete! Launching..."})
+            
+            # BUG FIX: Ensure the correct version is set before saving
+            if server_type == 'forge':
+                self.server_version_var.set(self.forge_mc_version_var.get())
+
             self.server_path = install_path
             self.server_type = server_type
             self._save_config()
@@ -544,7 +661,8 @@ class ServerControlGUI:
             messagebox.showerror("Installation Failed", str(e))
             self.master.after(0, self.status_label.configure, {'text': "Error during installation."})
         finally:
-            self.master.after(0, self.action_button.configure, {'state': tk.NORMAL})
+            if hasattr(self, 'action_button') and self.action_button.winfo_exists():
+                self.master.after(0, self.action_button.configure, {'state': tk.NORMAL})
             
     def _save_config(self):
         self.config_manager.set("server_path", self.server_path)
@@ -1010,6 +1128,15 @@ class ServerControlGUI:
         clean_line = line.strip()
         if not clean_line: return
 
+        # During setup, the main GUI doesn't exist, so we can't update UI elements.
+        if not self.main_gui_initialized:
+            if "You need to agree to the EULA" in clean_line:
+                self.log_to_console("EULA needs to be accepted. Attempting to accept automatically...\n", "warning")
+                self.master.after(500, self._handle_eula_shutdown)
+            self._detect_version_from_log(clean_line)
+            self._detect_type_from_log(clean_line)
+            return
+
         if self.expecting_player_list_next_line:
             self.players_connected = [p.strip() for p in clean_line.split(',') if p.strip()]
             self._refresh_players_display()
@@ -1101,8 +1228,13 @@ class ServerControlGUI:
 
     def _handle_eula_shutdown(self):
         self._accept_eula_file()
-        if self.server_handler.is_starting():
-            self.on_server_stop(silent=True)
+        # The server process has stopped because of the EULA.
+        # We need to manually reset our handler's state and update the GUI.
+        if hasattr(self, 'server_handler'):
+            self.server_handler.force_stop_state()
+        
+        # Schedule the UI update to happen in the main loop
+        self.master.after(100, self._update_server_status_display)
 
     def _accept_eula_file(self):
         if not self.server_path: return

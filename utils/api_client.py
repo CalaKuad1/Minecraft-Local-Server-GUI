@@ -1,9 +1,12 @@
 import requests
-from PIL import Image, ImageTk, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 import io
 import logging
 import json
 import os
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,6 +21,54 @@ def get_server_versions(server_type):
     except requests.RequestException as e:
         logging.error(f"API Error: Could not fetch server versions for '{server_type}'. Reason: {e}")
         return []
+
+def get_forge_versions():
+    """Fetches and parses Forge versions from the official Maven repository."""
+    url = "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml"
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        
+        root = ET.fromstring(response.content)
+        versions_node = root.find('versioning/versions')
+        if versions_node is None:
+            return {}
+
+        structured_versions = defaultdict(list)
+        version_pattern = re.compile(r'^(\d+\.\d+(\.\d+)?)-(.+)$') # Corrected line
+
+        for version_tag in versions_node.findall('version'):
+            version_str = version_tag.text
+            if not version_str: continue
+            match = version_pattern.match(version_str)
+            if match:
+                mc_version = match.group(1)
+                forge_version = match.group(3)
+                structured_versions[mc_version].append(forge_version)
+        
+        def version_key(v_str):
+            """Robustly splits a version string for sorting."""
+            parts = re.split(r'[.-]', v_str)
+            key = []
+            for part in parts:
+                try:
+                    key.append(int(part))
+                except ValueError:
+                    key.append(part.lower())
+            return key
+
+        sorted_mc_versions = sorted(structured_versions.keys(), key=version_key, reverse=True)
+        
+        sorted_structured_versions = {}
+        for mc in sorted_mc_versions:
+            sorted_forge_versions = sorted(structured_versions[mc], key=version_key, reverse=True)
+            sorted_structured_versions[mc] = sorted_forge_versions
+
+        return sorted_structured_versions
+
+    except (requests.RequestException, ET.ParseError) as e:
+        logging.error(f"Failed to fetch or parse Forge versions: {e}")
+        return {}
 
 def fetch_player_avatar_image(player_identifier, size=(24, 24)):
     """Fetches a player's avatar from Mineskin API and returns a PIL Image object."""
@@ -48,37 +99,32 @@ def fetch_username_from_uuid(uuid_str):
     """Fetches a player's username from their UUID using Mojang's API."""
     if not uuid_str:
         return None
-    # Ensure UUID has no dashes for the API call
     uuid_clean = uuid_str.replace('-', '')
     url = f"https://sessionserver.mojang.com/session/minecraft/profile/{uuid_clean}"
     try:
         response = requests.get(url, timeout=10)
-        if response.status_code == 204 or response.status_code == 404:
+        if response.status_code in [204, 404]:
             logging.debug(f"No profile found for UUID '{uuid_clean}'.")
             return None
         response.raise_for_status()
-        data = response.json()
-        return data.get('name')
-    except requests.RequestException as e:
-        logging.error(f"API Error: Could not fetch username for UUID '{uuid_clean}'. Reason: {e}")
-        return None
-    except json.JSONDecodeError:
-        logging.error(f"API Error: Could not parse username response for UUID '{uuid_clean}'.")
+        return response.json().get('name')
+    except (requests.RequestException, json.JSONDecodeError) as e:
+        logging.error(f"API Error for UUID '{uuid_clean}': {e}")
         return None
 
 def download_server_jar(server_type, server_version, save_path, progress_callback):
     """Downloads the server.jar file for a given type and version with progress."""
-    # Ensure the directory exists
+    download_url = f"https://mcutils.com/api/server-jars/{server_type}/{server_version}/download"
+    return download_file_from_url(download_url, save_path, progress_callback)
+
+def download_file_from_url(download_url, save_path, progress_callback):
+    """Downloads a file from a specific URL with progress."""
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    
     try:
-        download_url = f"https://mcutils.com/api/server-jars/{server_type}/{server_version}/download"
-        
-        with requests.get(download_url, stream=True) as r:
+        with requests.get(download_url, stream=True, timeout=30) as r:
             r.raise_for_status()
             total_size = int(r.headers.get('content-length', 0))
             bytes_downloaded = 0
-            
             with open(save_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
@@ -86,33 +132,18 @@ def download_server_jar(server_type, server_version, save_path, progress_callbac
                     if total_size > 0:
                         progress = (bytes_downloaded / total_size) * 100
                         progress_callback(progress)
-        
-        progress_callback(100) # Ensure it finishes at 100%
+        progress_callback(100)
         return True
-
     except requests.RequestException as e:
-        logging.error(f"Failed to download server jar: {e}")
+        logging.error(f"Failed to download file: {e}")
         return False
 
 if __name__ == '__main__':
-    # Example usage (optional, for testing)
-    print("Fetching server versions for 'paper'...")
-    versions = get_server_versions('paper')
-    if versions:
-        print(f"Available versions: {versions[:5]}")
-
-    print("\nFetching UUID for player 'Notch'...")
-    uuid_info = fetch_player_uuid('Notch')
-    if uuid_info:
-        print(f"UUID info: {uuid_info}")
-
-    # The following function requires a Tkinter root window, so it cannot be tested from the command line.
-    # print("\nFetching avatar for player 'Notch'...")
-    # avatar = fetch_player_avatar_image('Notch')
-    # if avatar:
-    #     print("Avatar fetched successfully.")
-
-    print("\nTesting download (will not save file)...")
-    def dummy_progress(p):
-        print(f"Download progress: {p:.2f}%")
-    # download_server_jar('paper', '1.17.1', 'paper-1.17.1.jar', dummy_progress)
+    print("Fetching Forge versions...")
+    forge_versions = get_forge_versions()
+    if forge_versions:
+        print("Available Minecraft versions for Forge:")
+        for mc_version in list(forge_versions.keys())[:5]:
+            print(f"- {mc_version}: {forge_versions[mc_version][:3]}")
+    else:
+        print("Could not fetch Forge versions.")

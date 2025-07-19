@@ -2,3 +2,4 @@ requests
 psutil
 Pillow
 matplotlib
+customtkinter

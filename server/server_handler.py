@@ -3,6 +3,8 @@ import threading
 import os
 import glob
 import sys
+import logging
+from utils.api_client import download_file_from_url
 
 class ServerHandler:
     def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback):
@@ -16,6 +18,54 @@ class ServerHandler:
         self.server_fully_started = False
         self.server_stopping = False
         self.server_running = False
+
+    def install_forge_server(self, forge_version, minecraft_version, progress_callback):
+        """Downloads and installs a Forge server."""
+        # This is an example URL structure. You'll need to get the correct URLs.
+        # Example: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.2.0/forge-1.20.1-47.2.0-installer.jar
+        forge_full_version = f"{minecraft_version}-{forge_version}"
+        file_name = f"forge-{forge_full_version}-installer.jar"
+        download_url = f"https://maven.minecraftforge.net/net/minecraftforge/forge/{forge_full_version}/{file_name}"
+        installer_path = os.path.join(self.server_path, file_name)
+
+        self.output_callback(f"Downloading Forge installer from {download_url}\n", "info")
+        if not download_file_from_url(download_url, installer_path, progress_callback):
+            self.output_callback("Failed to download Forge installer.\n", "error")
+            return
+
+        self.output_callback("Download complete. Running installer...\n", "info")
+        
+        # Run the installer
+        try:
+            install_command = ["java", "-jar", installer_path, "--installServer"]
+            process = subprocess.Popen(install_command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+            
+            # Log stdout and stderr from the installer
+            stdout, stderr = process.communicate()
+            for line in stdout.splitlines():
+                self.output_callback(f"[Installer] {line}\n", "normal")
+            for line in stderr.splitlines():
+                self.output_callback(f"[Installer] {line}\n", "error")
+
+            if process.returncode != 0:
+                self.output_callback("Forge installer failed with a non-zero exit code.\n", "error")
+            else:
+                self.output_callback("Forge installation successful.\n", "info")
+                # On Windows, a run.bat is created. On Linux/macOS, a run.sh.
+                # The server can now be started with the standard start() method.
+
+        except Exception as e:
+            self.output_callback(f"An error occurred during Forge installation: {e}\n", "error")
+        finally:
+            # Clean up the installer and its log
+            self.output_callback("Cleaning up installer files...\n", "info")
+            try:
+                os.remove(installer_path)
+                installer_log = f"{installer_path}.log"
+                if os.path.exists(installer_log):
+                    os.remove(installer_log)
+            except OSError as e:
+                self.output_callback(f"Error during cleanup: {e}\n", "warning")
 
     def is_starting(self):
         return self.server_process is not None and self.server_process.poll() is None and not self.server_fully_started
@@ -171,3 +221,10 @@ class ServerHandler:
         if self.server_process:
             return self.server_process.pid
         return None
+
+    def force_stop_state(self):
+        """Forcefully resets the server's state variables, e.g., after a crash or EULA stop."""
+        self.server_fully_started = False
+        self.server_process = None
+        self.server_running = False
+        self.server_stopping = False
