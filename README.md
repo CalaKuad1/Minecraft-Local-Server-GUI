@@ -31,7 +31,13 @@ A user-friendly desktop application for installing, managing, and running local 
 
 ## Screenshots
 
-
+<div align="center">
+  <img src="assets/ServerSetup.png" alt="Server Setup Wizard" width="400">
+  <p><em>Setup Wizard</em></p>
+  <br>
+  <img src="assets/ControlPanel.png" alt="Main Control Panel" width="700">
+  <p><em>Main Control Panel</em></p>
+</div>
 
 ## Requirements
 
