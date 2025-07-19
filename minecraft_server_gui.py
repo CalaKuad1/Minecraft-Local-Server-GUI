@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 from gui.widgets import CollapsiblePane
 from utils.constants import *
-from utils.helpers import format_size, get_folder_size, get_local_ip
+from utils.helpers import format_size, get_folder_size, get_local_ip, get_server_port
 from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
@@ -89,9 +89,13 @@ class ServerControlGUI:
             
             if response is not None:
                 self.log_to_console("Stopping server before exiting...\n", "info")
+                if self.server_handler.is_tunnel_running():
+                    self.server_handler.stop_tunnel()
                 self.server_handler.stop()
                 self._wait_for_server_to_stop_and_destroy()
         else:
+            if hasattr(self, 'server_handler') and self.server_handler.is_tunnel_running():
+                self.server_handler.stop_tunnel()
             self.master.destroy()
 
     def _wait_for_server_to_stop_and_destroy(self):
@@ -769,6 +773,18 @@ class ServerControlGUI:
         self.copy_ip_button = ctk.CTkButton(ip_frame, text="Copy", width=60, command=self._copy_ip_to_clipboard)
         self.copy_ip_button.pack(side=tk.LEFT, padx=5)
 
+        # --- Public IP (Tunnel) ---
+        row_idx = info_grid.grid_size()[1]
+        ctk.CTkLabel(info_grid, text="Public IP:", font=ctk.CTkFont(weight="bold")).grid(row=row_idx, column=0, sticky='w', padx=(0,10), pady=(5,0))
+        public_ip_frame = ctk.CTkFrame(info_grid, fg_color="transparent")
+        public_ip_frame.grid(row=row_idx, column=1, sticky='ew', pady=(5,0))
+        self.public_ip_label = ctk.CTkLabel(public_ip_frame, text="Tunnel is offline")
+        self.public_ip_label.pack(side=tk.LEFT, anchor='w')
+        self.tunnel_button = ctk.CTkButton(public_ip_frame, text="Make Public", width=100, command=self._toggle_tunnel)
+        self.tunnel_button.pack(side=tk.LEFT, padx=5)
+        self.tunnel_info_button = ctk.CTkButton(public_ip_frame, text="?", width=28, command=self.show_tunnel_info)
+        self.tunnel_info_button.pack(side=tk.LEFT, padx=(0, 5))
+
         # --- Bottom Panel for Console ---
         console_card = ctk.CTkFrame(parent_frame)
         console_card.grid(row=1, column=0, sticky='nsew')
@@ -792,6 +808,45 @@ class ServerControlGUI:
         self.console_send_btn = ctk.CTkButton(command_frame, text="Send", width=70, command=self.send_command_from_console_button)
         self.console_send_btn.grid(row=0, column=1)
 
+    def show_tunnel_info(self):
+        """Displays a pop-up window with information about the tunnel feature."""
+        info_win = ctk.CTkToplevel(self.master)
+        info_win.title("About the 'Make Public' Feature")
+        info_win.transient(self.master)
+        info_win.grab_set()
+
+        info_text = """
+        About the 'Make Public' Feature
+
+        This experimental feature uses a free, public
+        tunneling service to expose your local server
+        to the internet for others to join.
+
+        Important Notes:
+         • A new random address is generated each time.
+         • Connection may experience higher latency (lag).
+
+        Acknowledgements:
+        This is powered by the open-source project 'bore'
+        created by ekzhang.
+        """
+
+        ctk.CTkLabel(info_win, text=info_text, justify=tk.LEFT, wraplength=350).pack(padx=20, pady=20)
+        ctk.CTkButton(info_win, text="OK", command=info_win.destroy).pack(pady=10, padx=20)
+
+        # Center the window
+        self.master.update_idletasks()
+        master_x = self.master.winfo_x()
+        master_y = self.master.winfo_y()
+        master_w = self.master.winfo_width()
+        master_h = self.master.winfo_height()
+        win_w = info_win.winfo_width()
+        win_h = info_win.winfo_height()
+        x = master_x + (master_w - win_w) // 2
+        y = master_y + (master_h - win_h) // 2
+        info_win.geometry(f"+{x}+{y}")
+        info_win.focus()
+
     def _on_ram_slider_change(self, value):
         # Update the label as the slider moves
         max_ram = int(value)
@@ -814,6 +869,17 @@ class ServerControlGUI:
             self.master.clipboard_clear()
             self.master.clipboard_append(ip)
             self.log_to_console(f"Copied '{ip}' to clipboard.\n", "success")
+
+    def _toggle_tunnel(self):
+        if self.server_handler.is_tunnel_running():
+            self.server_handler.stop_tunnel()
+            self.tunnel_button.configure(text="Make Public")
+            self.public_ip_label.configure(text="Tunnel is offline")
+        else:
+            port = get_server_port(self.server_properties_path)
+            self.server_handler.start_tunnel(port)
+            self.tunnel_button.configure(text="Stop Tunnel")
+            self.public_ip_label.configure(text="Starting tunnel...")
 
     def _update_dashboard_info(self):
         if not self.server_path: return
@@ -1115,6 +1181,8 @@ class ServerControlGUI:
         self._update_server_status_display()
 
     def stop_server(self):
+        if self.server_handler.is_tunnel_running():
+            self.server_handler.stop_tunnel()
         self.server_handler.stop()
         self.stop_button.configure(state=tk.DISABLED)
         self._update_server_status_display()
@@ -1135,6 +1203,17 @@ class ServerControlGUI:
                 self.master.after(500, self._handle_eula_shutdown)
             self._detect_version_from_log(clean_line)
             self._detect_type_from_log(clean_line)
+            return
+
+        if clean_line.startswith("PUBLIC_URL:"):
+            url = clean_line.replace("PUBLIC_URL:", "").strip()
+            self.public_ip_label.configure(text=url)
+            self.tunnel_button.configure(text="Stop Tunnel")
+            return
+
+        if "PUBLIC_URL_STOPPED" in clean_line:
+            self.public_ip_label.configure(text="Tunnel is offline")
+            self.tunnel_button.configure(text="Make Public")
             return
 
         if self.expecting_player_list_next_line:

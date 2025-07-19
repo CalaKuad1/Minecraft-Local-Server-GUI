@@ -4,7 +4,9 @@ import os
 import glob
 import sys
 import logging
-from utils.api_client import download_file_from_url
+import re
+
+from utils.api_client import download_file_from_url, download_and_extract_zip
 
 class ServerHandler:
     def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback):
@@ -15,9 +17,14 @@ class ServerHandler:
         self.ram_unit = ram_unit
         self.output_callback = output_callback
         self.server_process = None
+        self.tunnel_process = None
+        self.public_url = None
+        self.tunnel_thread = None
+        self.stop_tunnel_event = threading.Event()
         self.server_fully_started = False
         self.server_stopping = False
         self.server_running = False
+
 
     def install_forge_server(self, forge_version, minecraft_version, progress_callback):
         """Downloads and installs a Forge server."""
@@ -228,3 +235,143 @@ class ServerHandler:
         self.server_process = None
         self.server_running = False
         self.server_stopping = False
+
+    def get_bore_path(self):
+        """Returns the expected path to the bore executable."""
+        return os.path.join(os.getcwd(), "bore.exe")
+
+    def is_bore_downloaded(self):
+        """Checks if bore.exe exists."""
+        return os.path.exists(self.get_bore_path())
+
+    def _download_bore(self):
+        """Downloads and extracts bore.exe."""
+        # URL for bore v0.5.0 for Windows
+        bore_url = "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip"
+        extract_dir = os.getcwd()
+        
+        self.output_callback("Downloading bore executable (this will only happen once)...\n", "info")
+
+        # Simple progress display via output_callback. A real progress bar would require more GUI integration.
+        def progress_callback(p):
+            self.output_callback(f"\rDownload progress: {p}%", "info")
+
+        if download_and_extract_zip(bore_url, extract_dir, progress_callback):
+            self.output_callback("\nBore downloaded successfully.\n", "info")
+            return True
+        else:
+            self.output_callback("\nFailed to download bore.\n", "error")
+            return False
+
+    def start_tunnel(self, port):
+        """Starts the tunnel using bore."""
+        if self.is_tunnel_running():
+            self.output_callback("Tunnel is already running.\n", "warning")
+            return
+
+        if not self.is_bore_downloaded():
+            self.output_callback("Bore executable not found. Attempting to download...\n", "info")
+            if not self._download_bore():
+                self.output_callback("Could not start tunnel due to download failure.\n", "error")
+                return
+        
+        bore_path = self.get_bore_path()
+        command = [bore_path, "local", str(port), "--to", "bore.pub"]
+
+        self.output_callback("Starting tunnel...\n", "info")
+
+        self.stop_tunnel_event.clear()
+        self.tunnel_thread = threading.Thread(target=self._run_tunnel, args=(command,), daemon=True)
+        self.tunnel_thread.start()
+
+    def _run_tunnel(self, command):
+        """Runs the bore process and captures its output."""
+        try:
+            self.tunnel_process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
+
+            self.output_callback("Tunnel process started. Waiting for public URL...\n", "info")
+
+            # Read output line-by-line to find the URL
+            for line in iter(self.tunnel_process.stdout.readline, ''):
+                if self.stop_tunnel_event.is_set():
+                    break
+                
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+
+                self.output_callback(f"[Tunnel] {line_stripped}\n", "normal")
+                
+                # Clean the line of ANSI escape codes for reliable parsing
+                clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line_stripped)
+
+                if "listening at" in clean_line and not self.public_url:
+                    try:
+                        url_part = clean_line.split("listening at")[1].strip()
+                        self.public_url = url_part
+                        self.output_callback(f"PUBLIC_URL:{self.public_url}\n", "success")
+                        # URL found, break the reading loop and move to waiting
+                        break
+                    except IndexError:
+                        self.output_callback("Could not parse public URL from tunnel output.\n", "warning")
+            
+            # If we are here, we either found the URL, the process died, or we are stopping
+            if self.stop_tunnel_event.is_set():
+                # We were asked to stop while searching for URL, which is handled in stop_tunnel
+                pass
+            elif self.public_url:
+                # URL was found, now just wait for the process to end for any reason.
+                # This will block the thread until stop_tunnel() is called or the process dies.
+                self.tunnel_process.wait()
+            else:
+                # Loop finished but we have no URL, means process died before giving one
+                self.output_callback("Tunnel process exited before providing a public URL.\n", "warning")
+
+        except FileNotFoundError:
+            self.output_callback(f"Error: bore.exe not found at {command[0]}\n", "error")
+        except Exception as e:
+            self.output_callback(f"An error occurred while running the tunnel: {e}\n", "error")
+        finally:
+            # This block now runs only when the process has truly terminated
+            self.tunnel_process = None
+            self.public_url = None
+            if not self.stop_tunnel_event.is_set():
+                 self.output_callback("Tunnel stopped unexpectedly.\n", "error")
+            
+            # Always notify GUI to reset state
+            self.output_callback("PUBLIC_URL_STOPPED\n", "info")
+
+    def stop_tunnel(self):
+        """Stops the tunnel process."""
+        if not self.is_tunnel_running():
+            return
+            
+        self.output_callback("Stopping tunnel...\n", "info")
+        self.stop_tunnel_event.set()
+        if self.tunnel_process:
+            self.tunnel_process.terminate()
+            try:
+                self.tunnel_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.tunnel_process.kill()
+        
+        if self.tunnel_thread:
+            self.tunnel_thread.join(timeout=2)
+
+        self.tunnel_process = None
+        self.tunnel_thread = None
+        self.public_url = None
+        self.output_callback("Tunnel stopped.\n", "info")
+        self.output_callback("PUBLIC_URL_STOPPED\n", "info")
+
+    def is_tunnel_running(self):
+        """Checks if the tunnel process is running."""
+        return self.tunnel_thread and self.tunnel_thread.is_alive()

@@ -48,3 +48,14 @@ def get_local_ip():
     finally:
         s.close()
     return IP
+
+def get_server_port(server_properties_path):
+    """Reads the server.properties file and returns the server port."""
+    try:
+        with open(server_properties_path, 'r') as f:
+            for line in f:
+                if line.strip().startswith('server-port='):
+                    return int(line.split('=')[1].strip())
+    except (IOError, IndexError, ValueError):
+        return 25565 # Default Minecraft port
+    return 25565 # Default if not found

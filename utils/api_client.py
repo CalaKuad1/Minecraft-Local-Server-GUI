@@ -7,6 +7,7 @@ import os
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 import re
+import zipfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -137,6 +138,31 @@ def download_file_from_url(download_url, save_path, progress_callback):
     except requests.RequestException as e:
         logging.error(f"Failed to download file: {e}")
         return False
+
+def download_and_extract_zip(url, extract_to_dir, progress_callback):
+    """Downloads a zip file and extracts its contents."""
+    os.makedirs(extract_to_dir, exist_ok=True)
+    zip_path = os.path.join(extract_to_dir, 'temp.zip')
+    
+    logging.info(f"Downloading zip from {url} to {zip_path}")
+    if not download_file_from_url(url, zip_path, progress_callback):
+        logging.error("Failed to download the zip file.")
+        return False
+    
+    logging.info(f"Extracting {zip_path} to {extract_to_dir}")
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_to_dir)
+        logging.info("Extraction complete.")
+    except zipfile.BadZipFile:
+        logging.error("Failed to extract: The file is not a valid zip file.")
+        return False
+    finally:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+            
+    return True
+
 
 if __name__ == '__main__':
     print("Fetching Forge versions...")
