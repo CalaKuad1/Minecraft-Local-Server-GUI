@@ -17,8 +17,8 @@ from PIL import Image, ImageTk
 
 from gui.widgets import CollapsiblePane
 from utils.constants import *
-from utils.helpers import format_size, get_folder_size, get_local_ip
-from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions
+from utils.helpers import format_size, get_folder_size, get_local_ip, get_server_port, get_java_version, get_required_java_version
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions, download_jre
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
 
@@ -89,9 +89,13 @@ class ServerControlGUI:
             
             if response is not None:
                 self.log_to_console("Stopping server before exiting...\n", "info")
+                if self.server_handler.is_tunnel_running():
+                    self.server_handler.stop_tunnel()
                 self.server_handler.stop()
                 self._wait_for_server_to_stop_and_destroy()
         else:
+            if hasattr(self, 'server_handler') and self.server_handler.is_tunnel_running():
+                self.server_handler.stop_tunnel()
             self.master.destroy()
 
     def _wait_for_server_to_stop_and_destroy(self):
@@ -324,7 +328,7 @@ class ServerControlGUI:
         self.vanilla_version_frame = ctk.CTkFrame(self.version_options_container, fg_color="transparent")
         ctk.CTkLabel(self.vanilla_version_frame, text="2. Select Minecraft Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
         self.server_version_var = tk.StringVar()
-        self.version_menu = ctk.CTkComboBox(self.vanilla_version_frame, variable=self.server_version_var, values=["Loading..."], state="disabled")
+        self.version_menu = ctk.CTkComboBox(self.vanilla_version_frame, variable=self.server_version_var, values=["Loading..."], state="disabled", command=self._check_java_compatibility)
         self.version_menu.pack(fill=tk.X, pady=5)
         
         # Steps 2 & 3 (Forge): Forge-specific widgets
@@ -352,9 +356,20 @@ class ServerControlGUI:
         self.server_name_var = tk.StringVar()
         self.server_name_entry = ctk.CTkEntry(self.install_frame, textvariable=self.server_name_var)
         self.server_name_entry.pack(fill=tk.X, pady=5)
+
+        # --- Java Validation ---
+        self.java_status_frame = ctk.CTkFrame(self.install_frame, fg_color="gray20")
+        self.java_status_frame.pack(fill=tk.X, pady=10, ipady=5)
+        self.java_status_label = ctk.CTkLabel(self.java_status_frame, text="Java Status: Checking...", anchor="w")
+        self.java_status_label.pack(side=tk.LEFT, padx=10)
         
+        self.download_jre_var = tk.BooleanVar(value=False)
+        self.download_jre_checkbox = ctk.CTkCheckBox(self.install_frame, text="Automatically download a compatible Java runtime", variable=self.download_jre_var)
+        # Will be packed later if needed
+
         self.eula_accepted_var = tk.BooleanVar(value=False)
-        ctk.CTkCheckBox(self.install_frame, text="I agree to the Minecraft EULA (minecraft.net/eula)", variable=self.eula_accepted_var).pack(fill=tk.X, pady=10)
+        self.eula_checkbox = ctk.CTkCheckBox(self.install_frame, text="I agree to the Minecraft EULA (minecraft.net/eula)", variable=self.eula_accepted_var)
+        self.eula_checkbox.pack(fill=tk.X, pady=10)
         
         # --- Widgets for "Use Existing Server" ---
         ctk.CTkLabel(self.existing_frame, text="1. Choose Existing Server Location", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
@@ -366,7 +381,7 @@ class ServerControlGUI:
 
         # --- Action Button & Progress ---
         self.action_button = ctk.CTkButton(setup_frame, text="Download and Install Server", command=self._start_setup_action)
-        self.action_button.pack(pady=(30, 10), ipady=10, fill=tk.X)
+        self.action_button.pack(pady=(20, 10), ipady=10, fill=tk.X)
         self.progress_bar = ctk.CTkProgressBar(setup_frame)
         self.progress_bar.set(0)
         self.progress_bar.pack(fill=tk.X, pady=5)
@@ -378,6 +393,36 @@ class ServerControlGUI:
         self.forge_mc_version_var.trace_add('write', self._update_default_folder_name)
         self._toggle_setup_view()
         self._on_server_type_change()
+
+    def _check_java_compatibility(self, *args):
+        mc_version_str = self.server_version_var.get()
+        if self.server_type_var.get().lower() == 'forge':
+            mc_version_str = self.forge_mc_version_var.get()
+
+        if not mc_version_str or "Loading" in mc_version_str or "Error" in mc_version_str:
+            self.java_status_label.configure(text="Java Status: Select a Minecraft version first")
+            return
+
+        required_version = get_required_java_version(mc_version_str)
+        installed_version = get_java_version()
+
+        if installed_version is None:
+            status_text = f"❌ Java Not Found (Required: Java {required_version}+)"
+            status_color = "red"
+            self.download_jre_var.set(True)
+            self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
+        elif installed_version < required_version:
+            status_text = f"⚠️ Wrong Version: Java {installed_version} found (Required: Java {required_version}+)"
+            status_color = "orange"
+            self.download_jre_var.set(True)
+            self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
+        else:
+            status_text = f"✅ Java {installed_version} Found (Compatible)"
+            status_color = "green"
+            self.download_jre_var.set(False)
+            self.download_jre_checkbox.pack_forget()
+
+        self.java_status_label.configure(text=status_text, text_color=status_color)
 
     def _on_server_type_change(self, *args):
         server_type = self.server_type_var.get().lower()
@@ -396,6 +441,8 @@ class ServerControlGUI:
             self.location_step_label.configure(text="3. Choose Parent Directory")
             self.name_step_label.configure(text="4. Name Server Folder")
             self._update_server_versions()
+        
+        self._check_java_compatibility()
 
     def _update_forge_versions(self):
         self.forge_mc_version_var.set("Loading...")
@@ -416,6 +463,7 @@ class ServerControlGUI:
             else:
                 self.forge_mc_version_var.set("Error")
                 self.forge_version_var.set("Error")
+            self._check_java_compatibility()
 
         if hasattr(self, 'master'):
             self.master.after(0, update_ui)
@@ -431,11 +479,13 @@ class ServerControlGUI:
         else:
             self.forge_version_menu.configure(values=[], state="disabled")
             self.forge_version_var.set("N/A")
+        self._check_java_compatibility()
 
     def _update_server_versions(self, *args):
         server_type = self.server_type_var.get()
         if server_type.lower() == "forge":
-            return # No need to fetch versions for Forge this way
+            self._check_java_compatibility()
+            return
 
         self.server_version_var.set("Loading...")
         self.version_menu.configure(state=tk.DISABLED)
@@ -451,6 +501,7 @@ class ServerControlGUI:
                 self.server_version_var.set(versions[0])
             else:
                 self.server_version_var.set("Error fetching versions")
+            self._check_java_compatibility()
         
         if hasattr(self, 'master'):
             self.master.after(0, update_ui)
@@ -576,6 +627,32 @@ class ServerControlGUI:
 
     def _perform_server_installation(self):
         try:
+            # --- Java Handling ---
+            if self.download_jre_var.get():
+                mc_version_str = self.server_version_var.get()
+                if self.server_type_var.get().lower() == 'forge':
+                    mc_version_str = self.forge_mc_version_var.get()
+                
+                required_java = get_required_java_version(mc_version_str)
+                self.master.after(0, self.status_label.configure, {'text': f"Downloading compatible Java JRE (Version {required_java})..."})
+                
+                def progress_callback(p):
+                    self.master.after(0, self.progress_bar.set, p / 100)
+
+                jre_path = download_jre(java_version=required_java, progress_callback=progress_callback)
+
+                if not jre_path:
+                    raise Exception(f"Failed to download the required Java JRE. Please install Java {required_java} manually and try again.")
+                
+                # On Windows, the executable is in /bin/java.exe
+                java_exe_path = os.path.join(jre_path, 'bin', 'java.exe')
+                if not os.path.exists(java_exe_path):
+                    raise Exception(f"Could not find java.exe in the downloaded JRE folder.")
+                
+                self.java_path_var.set(java_exe_path)
+                self.master.after(0, self.status_label.configure, {'text': "Java JRE downloaded successfully."})
+                self.master.after(0, self.progress_bar.set, 0)
+
             server_type = self.server_type_var.get().lower()
             parent_dir = self.install_location_var.get()
             server_folder_name = self.server_name_var.get()
@@ -591,7 +668,7 @@ class ServerControlGUI:
             os.makedirs(install_path, exist_ok=True)
 
             # Initialize ServerHandler here to use its methods
-            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level))
+            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level), java_path=self.java_path_var.get())
 
             if server_type == 'forge':
                 forge_version = self.forge_version_var.get()
@@ -623,7 +700,7 @@ class ServerControlGUI:
                 self.master.after(0, self.status_label.configure, {'text': "First-time server run to generate files..."})
                 self.master.after(0, self.progress_bar.set, 0)
                 
-                initial_run_command = ['java', '-jar', jar_name, '--nogui']
+                initial_run_command = [self.java_path_var.get(), '-jar', jar_name, '--nogui']
                 process = subprocess.Popen(initial_run_command, cwd=install_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
                 try:
                     stdout, stderr = process.communicate(timeout=600)
@@ -769,6 +846,18 @@ class ServerControlGUI:
         self.copy_ip_button = ctk.CTkButton(ip_frame, text="Copy", width=60, command=self._copy_ip_to_clipboard)
         self.copy_ip_button.pack(side=tk.LEFT, padx=5)
 
+        # --- Public IP (Tunnel) ---
+        row_idx = info_grid.grid_size()[1]
+        ctk.CTkLabel(info_grid, text="Public IP:", font=ctk.CTkFont(weight="bold")).grid(row=row_idx, column=0, sticky='w', padx=(0,10), pady=(5,0))
+        public_ip_frame = ctk.CTkFrame(info_grid, fg_color="transparent")
+        public_ip_frame.grid(row=row_idx, column=1, sticky='ew', pady=(5,0))
+        self.public_ip_label = ctk.CTkLabel(public_ip_frame, text="Tunnel is offline")
+        self.public_ip_label.pack(side=tk.LEFT, anchor='w')
+        self.tunnel_button = ctk.CTkButton(public_ip_frame, text="Make Public", width=100, command=self._toggle_tunnel)
+        self.tunnel_button.pack(side=tk.LEFT, padx=5)
+        self.tunnel_info_button = ctk.CTkButton(public_ip_frame, text="?", width=28, command=self.show_tunnel_info)
+        self.tunnel_info_button.pack(side=tk.LEFT, padx=(0, 5))
+
         # --- Bottom Panel for Console ---
         console_card = ctk.CTkFrame(parent_frame)
         console_card.grid(row=1, column=0, sticky='nsew')
@@ -792,6 +881,45 @@ class ServerControlGUI:
         self.console_send_btn = ctk.CTkButton(command_frame, text="Send", width=70, command=self.send_command_from_console_button)
         self.console_send_btn.grid(row=0, column=1)
 
+    def show_tunnel_info(self):
+        """Displays a pop-up window with information about the tunnel feature."""
+        info_win = ctk.CTkToplevel(self.master)
+        info_win.title("About the 'Make Public' Feature")
+        info_win.transient(self.master)
+        info_win.grab_set()
+
+        info_text = """
+        About the 'Make Public' Feature
+
+        This experimental feature uses a free, public
+        tunneling service to expose your local server
+        to the internet for others to join.
+
+        Important Notes:
+         • A new random address is generated each time.
+         • Connection may experience higher latency (lag).
+
+        Acknowledgements:
+        This is powered by the open-source project 'bore'
+        created by ekzhang.
+        """
+
+        ctk.CTkLabel(info_win, text=info_text, justify=tk.LEFT, wraplength=350).pack(padx=20, pady=20)
+        ctk.CTkButton(info_win, text="OK", command=info_win.destroy).pack(pady=10, padx=20)
+
+        # Center the window
+        self.master.update_idletasks()
+        master_x = self.master.winfo_x()
+        master_y = self.master.winfo_y()
+        master_w = self.master.winfo_width()
+        master_h = self.master.winfo_height()
+        win_w = info_win.winfo_width()
+        win_h = info_win.winfo_height()
+        x = master_x + (master_w - win_w) // 2
+        y = master_y + (master_h - win_h) // 2
+        info_win.geometry(f"+{x}+{y}")
+        info_win.focus()
+
     def _on_ram_slider_change(self, value):
         # Update the label as the slider moves
         max_ram = int(value)
@@ -814,6 +942,17 @@ class ServerControlGUI:
             self.master.clipboard_clear()
             self.master.clipboard_append(ip)
             self.log_to_console(f"Copied '{ip}' to clipboard.\n", "success")
+
+    def _toggle_tunnel(self):
+        if self.server_handler.is_tunnel_running():
+            self.server_handler.stop_tunnel()
+            self.tunnel_button.configure(text="Make Public")
+            self.public_ip_label.configure(text="Tunnel is offline")
+        else:
+            port = get_server_port(self.server_properties_path)
+            self.server_handler.start_tunnel(port)
+            self.tunnel_button.configure(text="Stop Tunnel")
+            self.public_ip_label.configure(text="Starting tunnel...")
 
     def _update_dashboard_info(self):
         if not self.server_path: return
@@ -1115,6 +1254,8 @@ class ServerControlGUI:
         self._update_server_status_display()
 
     def stop_server(self):
+        if self.server_handler.is_tunnel_running():
+            self.server_handler.stop_tunnel()
         self.server_handler.stop()
         self.stop_button.configure(state=tk.DISABLED)
         self._update_server_status_display()
@@ -1135,6 +1276,17 @@ class ServerControlGUI:
                 self.master.after(500, self._handle_eula_shutdown)
             self._detect_version_from_log(clean_line)
             self._detect_type_from_log(clean_line)
+            return
+
+        if clean_line.startswith("PUBLIC_URL:"):
+            url = clean_line.replace("PUBLIC_URL:", "").strip()
+            self.public_ip_label.configure(text=url)
+            self.tunnel_button.configure(text="Stop Tunnel")
+            return
+
+        if "PUBLIC_URL_STOPPED" in clean_line:
+            self.public_ip_label.configure(text="Tunnel is offline")
+            self.tunnel_button.configure(text="Make Public")
             return
 
         if self.expecting_player_list_next_line:

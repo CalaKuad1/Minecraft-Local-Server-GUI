@@ -25,6 +25,10 @@ A user-friendly desktop application for installing, managing, and running local 
 - **Smart & Automated**:
   - **Automatic EULA Handling**: Automatically detects and accepts the EULA on the first run of a new server.
   - **Smart Startup**: Automatically uses the correct startup script (`run.bat`/`run.sh`) for Forge servers.
+- **Make Public (Experimental)**:
+  - Expose your local server to the internet with a single click, allowing friends to join from anywhere.
+  - **Disclaimer**: This feature uses a free, public tunneling service. As such, it may introduce lag and is not guaranteed to be stable. The public address will be different each time you start the tunnel.
+  - Powered by the open-source tool **[bore](https://github.com/ekzhang/bore)** by **ekzhang**.
 - **Customization & Settings**:
   - **Custom RAM Allocation**: Easily set the minimum and maximum RAM for your server.
   - **Configuration Saving**: Remembers your server path and settings between sessions.
