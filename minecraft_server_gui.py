@@ -17,8 +17,8 @@ from PIL import Image, ImageTk
 
 from gui.widgets import CollapsiblePane
 from utils.constants import *
-from utils.helpers import format_size, get_folder_size, get_local_ip, get_server_port
-from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions
+from utils.helpers import format_size, get_folder_size, get_local_ip, get_server_port, get_java_version, get_required_java_version
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions, download_jre
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
 
@@ -328,7 +328,7 @@ class ServerControlGUI:
         self.vanilla_version_frame = ctk.CTkFrame(self.version_options_container, fg_color="transparent")
         ctk.CTkLabel(self.vanilla_version_frame, text="2. Select Minecraft Version", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
         self.server_version_var = tk.StringVar()
-        self.version_menu = ctk.CTkComboBox(self.vanilla_version_frame, variable=self.server_version_var, values=["Loading..."], state="disabled")
+        self.version_menu = ctk.CTkComboBox(self.vanilla_version_frame, variable=self.server_version_var, values=["Loading..."], state="disabled", command=self._check_java_compatibility)
         self.version_menu.pack(fill=tk.X, pady=5)
         
         # Steps 2 & 3 (Forge): Forge-specific widgets
@@ -356,9 +356,20 @@ class ServerControlGUI:
         self.server_name_var = tk.StringVar()
         self.server_name_entry = ctk.CTkEntry(self.install_frame, textvariable=self.server_name_var)
         self.server_name_entry.pack(fill=tk.X, pady=5)
+
+        # --- Java Validation ---
+        self.java_status_frame = ctk.CTkFrame(self.install_frame, fg_color="gray20")
+        self.java_status_frame.pack(fill=tk.X, pady=10, ipady=5)
+        self.java_status_label = ctk.CTkLabel(self.java_status_frame, text="Java Status: Checking...", anchor="w")
+        self.java_status_label.pack(side=tk.LEFT, padx=10)
         
+        self.download_jre_var = tk.BooleanVar(value=False)
+        self.download_jre_checkbox = ctk.CTkCheckBox(self.install_frame, text="Automatically download a compatible Java runtime", variable=self.download_jre_var)
+        # Will be packed later if needed
+
         self.eula_accepted_var = tk.BooleanVar(value=False)
-        ctk.CTkCheckBox(self.install_frame, text="I agree to the Minecraft EULA (minecraft.net/eula)", variable=self.eula_accepted_var).pack(fill=tk.X, pady=10)
+        self.eula_checkbox = ctk.CTkCheckBox(self.install_frame, text="I agree to the Minecraft EULA (minecraft.net/eula)", variable=self.eula_accepted_var)
+        self.eula_checkbox.pack(fill=tk.X, pady=10)
         
         # --- Widgets for "Use Existing Server" ---
         ctk.CTkLabel(self.existing_frame, text="1. Choose Existing Server Location", font=ctk.CTkFont(weight="bold")).pack(anchor='w', pady=(10,5))
@@ -370,7 +381,7 @@ class ServerControlGUI:
 
         # --- Action Button & Progress ---
         self.action_button = ctk.CTkButton(setup_frame, text="Download and Install Server", command=self._start_setup_action)
-        self.action_button.pack(pady=(30, 10), ipady=10, fill=tk.X)
+        self.action_button.pack(pady=(20, 10), ipady=10, fill=tk.X)
         self.progress_bar = ctk.CTkProgressBar(setup_frame)
         self.progress_bar.set(0)
         self.progress_bar.pack(fill=tk.X, pady=5)
@@ -382,6 +393,36 @@ class ServerControlGUI:
         self.forge_mc_version_var.trace_add('write', self._update_default_folder_name)
         self._toggle_setup_view()
         self._on_server_type_change()
+
+    def _check_java_compatibility(self, *args):
+        mc_version_str = self.server_version_var.get()
+        if self.server_type_var.get().lower() == 'forge':
+            mc_version_str = self.forge_mc_version_var.get()
+
+        if not mc_version_str or "Loading" in mc_version_str or "Error" in mc_version_str:
+            self.java_status_label.configure(text="Java Status: Select a Minecraft version first")
+            return
+
+        required_version = get_required_java_version(mc_version_str)
+        installed_version = get_java_version()
+
+        if installed_version is None:
+            status_text = f"❌ Java Not Found (Required: Java {required_version}+)"
+            status_color = "red"
+            self.download_jre_var.set(True)
+            self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
+        elif installed_version < required_version:
+            status_text = f"⚠️ Wrong Version: Java {installed_version} found (Required: Java {required_version}+)"
+            status_color = "orange"
+            self.download_jre_var.set(True)
+            self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
+        else:
+            status_text = f"✅ Java {installed_version} Found (Compatible)"
+            status_color = "green"
+            self.download_jre_var.set(False)
+            self.download_jre_checkbox.pack_forget()
+
+        self.java_status_label.configure(text=status_text, text_color=status_color)
 
     def _on_server_type_change(self, *args):
         server_type = self.server_type_var.get().lower()
@@ -400,6 +441,8 @@ class ServerControlGUI:
             self.location_step_label.configure(text="3. Choose Parent Directory")
             self.name_step_label.configure(text="4. Name Server Folder")
             self._update_server_versions()
+        
+        self._check_java_compatibility()
 
     def _update_forge_versions(self):
         self.forge_mc_version_var.set("Loading...")
@@ -420,6 +463,7 @@ class ServerControlGUI:
             else:
                 self.forge_mc_version_var.set("Error")
                 self.forge_version_var.set("Error")
+            self._check_java_compatibility()
 
         if hasattr(self, 'master'):
             self.master.after(0, update_ui)
@@ -435,11 +479,13 @@ class ServerControlGUI:
         else:
             self.forge_version_menu.configure(values=[], state="disabled")
             self.forge_version_var.set("N/A")
+        self._check_java_compatibility()
 
     def _update_server_versions(self, *args):
         server_type = self.server_type_var.get()
         if server_type.lower() == "forge":
-            return # No need to fetch versions for Forge this way
+            self._check_java_compatibility()
+            return
 
         self.server_version_var.set("Loading...")
         self.version_menu.configure(state=tk.DISABLED)
@@ -455,6 +501,7 @@ class ServerControlGUI:
                 self.server_version_var.set(versions[0])
             else:
                 self.server_version_var.set("Error fetching versions")
+            self._check_java_compatibility()
         
         if hasattr(self, 'master'):
             self.master.after(0, update_ui)
@@ -580,6 +627,32 @@ class ServerControlGUI:
 
     def _perform_server_installation(self):
         try:
+            # --- Java Handling ---
+            if self.download_jre_var.get():
+                mc_version_str = self.server_version_var.get()
+                if self.server_type_var.get().lower() == 'forge':
+                    mc_version_str = self.forge_mc_version_var.get()
+                
+                required_java = get_required_java_version(mc_version_str)
+                self.master.after(0, self.status_label.configure, {'text': f"Downloading compatible Java JRE (Version {required_java})..."})
+                
+                def progress_callback(p):
+                    self.master.after(0, self.progress_bar.set, p / 100)
+
+                jre_path = download_jre(java_version=required_java, progress_callback=progress_callback)
+
+                if not jre_path:
+                    raise Exception(f"Failed to download the required Java JRE. Please install Java {required_java} manually and try again.")
+                
+                # On Windows, the executable is in /bin/java.exe
+                java_exe_path = os.path.join(jre_path, 'bin', 'java.exe')
+                if not os.path.exists(java_exe_path):
+                    raise Exception(f"Could not find java.exe in the downloaded JRE folder.")
+                
+                self.java_path_var.set(java_exe_path)
+                self.master.after(0, self.status_label.configure, {'text': "Java JRE downloaded successfully."})
+                self.master.after(0, self.progress_bar.set, 0)
+
             server_type = self.server_type_var.get().lower()
             parent_dir = self.install_location_var.get()
             server_folder_name = self.server_name_var.get()
@@ -595,7 +668,7 @@ class ServerControlGUI:
             os.makedirs(install_path, exist_ok=True)
 
             # Initialize ServerHandler here to use its methods
-            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level))
+            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level), java_path=self.java_path_var.get())
 
             if server_type == 'forge':
                 forge_version = self.forge_version_var.get()
@@ -627,7 +700,7 @@ class ServerControlGUI:
                 self.master.after(0, self.status_label.configure, {'text': "First-time server run to generate files..."})
                 self.master.after(0, self.progress_bar.set, 0)
                 
-                initial_run_command = ['java', '-jar', jar_name, '--nogui']
+                initial_run_command = [self.java_path_var.get(), '-jar', jar_name, '--nogui']
                 process = subprocess.Popen(initial_run_command, cwd=install_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
                 try:
                     stdout, stderr = process.communicate(timeout=600)

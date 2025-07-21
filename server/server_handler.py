@@ -9,13 +9,14 @@ import re
 from utils.api_client import download_file_from_url, download_and_extract_zip
 
 class ServerHandler:
-    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback):
+    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java"):
         self.server_path = server_path
         self.server_type = server_type
         self.ram_min = ram_min
         self.ram_max = ram_max
         self.ram_unit = ram_unit
         self.output_callback = output_callback
+        self.java_path = java_path
         self.server_process = None
         self.tunnel_process = None
         self.public_url = None
@@ -44,7 +45,7 @@ class ServerHandler:
         
         # Run the installer
         try:
-            install_command = ["java", "-jar", installer_path, "--installServer"]
+            install_command = [self.java_path, "-jar", installer_path, "--installServer"]
             process = subprocess.Popen(install_command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
             
             # Log stdout and stderr from the installer
@@ -100,7 +101,7 @@ class ServerHandler:
         threading.Thread(target=self._run_server, args=(command, env), daemon=True).start()
 
     def _get_start_command(self):
-        java_path = "java"
+        java_path = self.java_path
         run_script = None
         
         # Universal check for startup scripts

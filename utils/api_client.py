@@ -139,8 +139,11 @@ def download_file_from_url(download_url, save_path, progress_callback):
         logging.error(f"Failed to download file: {e}")
         return False
 
-def download_and_extract_zip(url, extract_to_dir, progress_callback):
-    """Downloads a zip file and extracts its contents."""
+def download_and_extract_zip(url, extract_to_dir, progress_callback, contains_single_folder=True):
+    """
+    Downloads a zip file and extracts its contents.
+    If contains_single_folder is True, it moves the contents of the single top-level folder up one level.
+    """
     os.makedirs(extract_to_dir, exist_ok=True)
     zip_path = os.path.join(extract_to_dir, 'temp.zip')
     
@@ -152,10 +155,38 @@ def download_and_extract_zip(url, extract_to_dir, progress_callback):
     logging.info(f"Extracting {zip_path} to {extract_to_dir}")
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_to_dir)
+            if contains_single_folder:
+                # Extract to a temporary subdirectory to handle the nested folder structure
+                temp_extract_dir = os.path.join(extract_to_dir, "temp_extract")
+                os.makedirs(temp_extract_dir, exist_ok=True)
+                zip_ref.extractall(temp_extract_dir)
+                
+                # Identify the single folder inside the temp directory
+                extracted_items = os.listdir(temp_extract_dir)
+                if len(extracted_items) == 1 and os.path.isdir(os.path.join(temp_extract_dir, extracted_items[0])):
+                    single_folder_path = os.path.join(temp_extract_dir, extracted_items[0])
+                    # Move each item from the single folder to the final destination
+                    for item_name in os.listdir(single_folder_path):
+                        source_item = os.path.join(single_folder_path, item_name)
+                        dest_item = os.path.join(extract_to_dir, item_name)
+                        os.rename(source_item, dest_item)
+                    # Clean up the temporary extraction directory
+                    os.rmdir(single_folder_path)
+                    os.rmdir(temp_extract_dir)
+                else:
+                    # If it's not a single folder, move items directly
+                    for item_name in extracted_items:
+                        source_item = os.path.join(temp_extract_dir, item_name)
+                        dest_item = os.path.join(extract_to_dir, item_name)
+                        os.rename(source_item, dest_item)
+                    os.rmdir(temp_extract_dir)
+
+            else: # Original behavior
+                zip_ref.extractall(extract_to_dir)
+
         logging.info("Extraction complete.")
-    except zipfile.BadZipFile:
-        logging.error("Failed to extract: The file is not a valid zip file.")
+    except (zipfile.BadZipFile, IOError) as e:
+        logging.error(f"Failed to extract: {e}")
         return False
     finally:
         if os.path.exists(zip_path):
@@ -163,6 +194,60 @@ def download_and_extract_zip(url, extract_to_dir, progress_callback):
             
     return True
 
+def download_jre(java_version, os_type="windows", arch="x64", progress_callback=None):
+    """
+    Downloads a portable JRE from Adoptium API.
+    Returns the path to the extracted JRE folder or None on failure.
+    """
+    if progress_callback is None:
+        progress_callback = lambda p: None
+
+    try:
+        api_url = f"https://api.adoptium.net/v3/assets/latest/{java_version}/hotspot?vendor=eclipse"
+        response = requests.get(api_url, timeout=15)
+        response.raise_for_status()
+        releases = response.json()
+
+        binary_info = None
+        for release in releases:
+            if release['binary']['os'] == os_type and release['binary']['architecture'] == arch and release['binary']['image_type'] == 'jre':
+                binary_info = release['binary']
+                break
+        
+        if not binary_info:
+            logging.error(f"Could not find a matching JRE for Java {java_version}, OS: {os_type}, Arch: {arch}")
+            return None
+
+        download_url = binary_info['package']['link']
+        jre_name = f"jre-{java_version}"
+        extract_path = os.path.join(os.getcwd(), "jre_temp") # Temp extraction folder
+        final_path = os.path.join(os.getcwd(), jre_name) # Final destination
+
+        if os.path.exists(final_path):
+            logging.info(f"JRE for Java {java_version} already exists. Skipping download.")
+            return final_path
+
+        logging.info(f"Downloading JRE from: {download_url}")
+        
+        # The JRE zip from Adoptium contains a single top-level folder, so we need to handle that.
+        if download_and_extract_zip(download_url, extract_path, progress_callback, contains_single_folder=True):
+            os.rename(extract_path, final_path)
+            logging.info(f"JRE successfully downloaded and extracted to {final_path}")
+            return final_path
+        else:
+            logging.error("Failed to download and extract JRE.")
+            # Clean up failed extraction
+            if os.path.exists(extract_path):
+                import shutil
+                shutil.rmtree(extract_path)
+            return None
+
+    except requests.RequestException as e:
+        logging.error(f"API Error fetching JRE data: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during JRE download: {e}")
+        return None
 
 if __name__ == '__main__':
     print("Fetching Forge versions...")
