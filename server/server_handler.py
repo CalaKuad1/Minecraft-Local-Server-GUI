@@ -213,7 +213,6 @@ class ServerHandler:
             try:
                 self.server_process.stdin.write(f"{command}\n")
                 self.server_process.stdin.flush()
-                self.output_callback(f"> {command}\n", "info")
             except (IOError, ValueError) as e:
                 self.output_callback(f"Error sending command: {e}\n", "error")
         else:

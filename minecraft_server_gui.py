@@ -59,6 +59,7 @@ class ServerControlGUI:
         self.expecting_player_list_next_line = False
         self.player_count_line_prefix = "There are "
         self.player_count_line_suffix = " players online:"
+        self.psutil_proc = None
 
         # --- TK Variables ---
         self.master = master
@@ -1200,7 +1201,10 @@ class ServerControlGUI:
         self.cpu_percent_label.pack(side=tk.LEFT, expand=True)
 
     def _update_resource_usage(self):
-        if not hasattr(self, 'server_handler') or not self.server_handler.is_running():
+        is_running = hasattr(self, 'server_handler') and self.server_handler.is_running()
+
+        if not is_running:
+            self.psutil_proc = None # Reset process cache when server is off
             if matplotlib_available and hasattr(self, 'line_cpu'):
                 self.cpu_history = [0.0] * 50
                 self.ram_history = [0.0] * 50
@@ -1214,29 +1218,52 @@ class ServerControlGUI:
 
         try:
             pid = self.server_handler.get_pid()
-            if pid is None: return
-            proc = psutil.Process(pid)
-            cpu_percent = proc.cpu_percent(interval=None) / (psutil.cpu_count() or 1)
-            self.cpu_history.pop(0)
-            self.cpu_history.append(float(cpu_percent))
-            
-            mem_info = proc.memory_info()
+            if pid is None:
+                self.psutil_proc = None
+                self.master.after(2000, self._update_resource_usage)
+                return
+
+            # If we don't have a process object or the PID has changed, find the correct process to monitor.
+            if self.psutil_proc is None or self.psutil_proc.pid != pid:
+                parent_proc = psutil.Process(pid)
+                
+                # Search for a java child process, which is the actual server
+                java_proc = None
+                try:
+                    children = parent_proc.children(recursive=True)
+                    for child in children:
+                        if child.name().lower() in ['java.exe', 'javaw.exe']:
+                            java_proc = child
+                            break
+                except psutil.NoSuchProcess:
+                    pass # Parent process might have already died, which is fine.
+
+                self.psutil_proc = java_proc if java_proc else parent_proc
+                self.psutil_proc.cpu_percent(interval=None) # Prime the measurement
+
+            # Now, get the actual usage from the correct process
+            cpu_percent = self.psutil_proc.cpu_percent(interval=None) / (psutil.cpu_count() or 1)
+            mem_info = self.psutil_proc.memory_info()
             ram_percent = (mem_info.rss / psutil.virtual_memory().total) * 100
-            self.ram_history.pop(0)
-            self.ram_history.append(ram_percent)
+
+            self.cpu_history.pop(0); self.cpu_history.append(float(cpu_percent))
+            self.ram_history.pop(0); self.ram_history.append(ram_percent)
 
             if matplotlib_available and self.resource_canvas.get_tk_widget().winfo_exists():
                 self.line_cpu.set_ydata(self.cpu_history)
                 self.line_ram.set_ydata(self.ram_history)
+                self.ax_cpu.set_ylim(0, max(10, (max(self.cpu_history) // 10 + 2) * 10))
+                self.ax_ram.set_ylim(0, max(10, (max(self.ram_history) // 5 + 2) * 5))
                 self.resource_canvas.draw()
                 self.cpu_percent_label.configure(text=f"CPU: {cpu_percent:.1f}%")
                 self.ram_label.configure(text=f"RAM: {mem_info.rss / (1024**2):.0f}MB ({ram_percent:.1f}%)")
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied): pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            self.psutil_proc = None # Process died, clear the cache
         finally:
             self.master.after(2000, self._update_resource_usage)
 
-    def log_to_console(self, msg, level="info"):
+    def _write_to_console_widgets(self, msg, level="info"):
         text_boxes = []
         if hasattr(self, 'full_console_output_area') and self.full_console_output_area.winfo_exists():
             text_boxes.append(self.full_console_output_area)
@@ -1247,6 +1274,8 @@ class ServerControlGUI:
             text_box.insert(tk.END, msg, level)
             text_box.see(tk.END)
 
+    def log_to_console(self, msg, level="info"):
+        self._write_to_console_widgets(msg, level)
         self.process_server_output(msg, level)
         
     def start_server_thread(self):
@@ -1406,6 +1435,7 @@ class ServerControlGUI:
     def send_command_from_button(self):
         cmd = self.command_entry.get().strip()
         if cmd:
+            self._write_to_console_widgets(f"> {cmd}\n", "info")
             self.server_handler.send_command(cmd)
             self.command_entry.delete(0, tk.END)
 
@@ -1413,6 +1443,7 @@ class ServerControlGUI:
     def send_command_from_console_button(self):
         cmd = self.console_command_entry.get().strip()
         if cmd:
+            self._write_to_console_widgets(f"> {cmd}\n", "info")
             self.server_handler.send_command(cmd)
             self.console_command_entry.delete(0, tk.END)
 
@@ -1522,13 +1553,11 @@ class ServerControlGUI:
                 
                 ctk.CTkButton(row, text="Ban", width=50, command=lambda p=player_name: self._context_ban_player(p)).pack(side=tk.RIGHT, padx=5, pady=5)
                 ctk.CTkButton(row, text="Kick", width=50, command=lambda p=player_name: self._context_kick_player(p)).pack(side=tk.RIGHT, padx=5, pady=5)
-                op_button = ctk.CTkButton(row, text="Op", width=50, command=lambda p=player_name: self._context_op_player(p, True))
-                deop_button = ctk.CTkButton(row, text="De-Op", width=50, command=lambda p=player_name: self._context_op_player(p, False))
                 
                 if player_name in self.ops_list:
-                    deop_button.pack(side=tk.RIGHT, padx=5, pady=5)
+                    ctk.CTkButton(row, text="De-Op", width=50, command=lambda p=player_name: self._context_op_player(p, False)).pack(side=tk.RIGHT, padx=5, pady=5)
                 else:
-                    op_button.pack(side=tk.RIGHT, padx=5, pady=5)
+                    ctk.CTkButton(row, text="Op", width=50, command=lambda p=player_name: self._context_op_player(p, True)).pack(side=tk.RIGHT, padx=5, pady=5)
 
         self._update_dashboard_info()
         

@@ -45,13 +45,21 @@ def get_required_java_version(minecraft_version_str):
         if len(parts) >= 2:
             minor_version = int(parts[1])
             
-            if minor_version >= 20:
-                # MC 1.20.5+ requires Java 21
+            # Minecraft 1.21+ requires Java 21
+            if minor_version >= 21:
+                return 21
+            
+            # Minecraft 1.20.5+ requires Java 21
+            if minor_version == 20:
                 if len(parts) > 2 and int(parts[2]) >= 5:
                     return 21
-                return 17 # MC 1.20 to 1.20.4
-            elif minor_version >= 17:
-                return 17 # MC 1.17 to 1.19
+                # MC 1.20 to 1.20.4 use Java 17
+                return 17
+            
+            # Minecraft 1.17 to 1.19.4 use Java 17
+            if minor_version >= 17:
+                return 17
+                
     except (ValueError, IndexError):
         pass # Fallback to default if parsing fails
         
