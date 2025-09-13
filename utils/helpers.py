@@ -13,57 +13,21 @@ def create_rounded_rectangle(width, height, radius, color):
     draw.rounded_rectangle((0, 0, width, height), radius, fill=color)
     return img
 
+# Las funciones de Java han sido movidas a utils/java_manager.py
+# Mantenemos estas funciones por compatibilidad, pero redirigen al nuevo sistema
+
 def get_java_version(java_path="java"):
-    """Checks the version of the specified Java executable."""
-    try:
-        # The 'java -version' command outputs to stderr
-        process = subprocess.run([java_path, "-version"], capture_output=True, text=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-        output = process.stderr
-        # Regex to find the version number (e.g., "1.8.0_291", "17.0.1", "21")
-        match = re.search(r'version "(\d+)(?:\.\d+)*.*"', output)
-        if match:
-            major_version = int(match.group(1))
-            # Java 8 reports as "1.8", so we need to handle that
-            if major_version == 1:
-                match_java_8 = re.search(r'version "1\.(\d+)', output)
-                if match_java_8:
-                    return int(match_java_8.group(1))
-            return major_version
-        return None
-    except (FileNotFoundError, subprocess.CalledProcessError, ValueError):
-        # Return None if java is not found, the command fails, or parsing fails
-        return None
+    """Checks the version of the specified Java executable. (Legacy function)"""
+    from .java_manager import JavaManager
+    manager = JavaManager()
+    result = manager.detect_system_java(java_path)
+    return result[0] if result else None
 
 def get_required_java_version(minecraft_version_str):
-    """Determines the required major Java version for a given Minecraft version string."""
-    if not minecraft_version_str:
-        return 8 # Default to 8 if version is unknown
-    
-    try:
-        # Extract the minor version number (e.g., 16, 17, 20)
-        parts = minecraft_version_str.split('.')
-        if len(parts) >= 2:
-            minor_version = int(parts[1])
-            
-            # Minecraft 1.21+ requires Java 21
-            if minor_version >= 21:
-                return 21
-            
-            # Minecraft 1.20.5+ requires Java 21
-            if minor_version == 20:
-                if len(parts) > 2 and int(parts[2]) >= 5:
-                    return 21
-                # MC 1.20 to 1.20.4 use Java 17
-                return 17
-            
-            # Minecraft 1.17 to 1.19.4 use Java 17
-            if minor_version >= 17:
-                return 17
-                
-    except (ValueError, IndexError):
-        pass # Fallback to default if parsing fails
-        
-    return 8 # Default for 1.16.5 and below
+    """Determines the required major Java version for a given Minecraft version string. (Legacy function)"""
+    from .java_manager import JavaManager
+    manager = JavaManager()
+    return manager.get_required_java_version(minecraft_version_str)
 
 def format_size(size_bytes):
     if size_bytes == 0: return "0B"

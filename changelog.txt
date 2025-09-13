@@ -1,6 +1,36 @@
-# Application Changelog
+# Minecraft Server GUI - Changelog
 
-## Version 1.2.2 - YYYY-MM-DD
+## Version 2.0.0 - 2024-12-09 🚀 JAVA MANAGEMENT REVOLUTION
+
+### 🎯 CARACTERÍSTICAS PRINCIPALES NUEVAS:
+- **⚡ Gestión Automática de Java**: Sistema revolucionario que detecta y descarga automáticamente las versiones correctas de Java
+- **🎮 Detección Inteligente de Versiones**: Identifica automáticamente versiones de Minecraft desde archivos JAR
+- **📦 Soporte Multi-Java**: Mantiene Java 8, 17 y 21 simultáneamente según necesidades
+- **🔗 Configuración por Servidor**: Cada servidor usa automáticamente su versión de Java apropiada
+- **🛠️ Asistente Mejorado**: Proceso de instalación renovado con verificación automática de Java
+- **📊 Monitoreo de Estado Java**: Verificación en tiempo real de compatibilidad de Java
+- **🔄 Migración Automática**: Servidores existentes migran sin problemas al nuevo sistema
+
+### 🚀 MEJORAS TÉCNICAS:
+- Nueva clase JavaManager para gestión inteligente de Java
+- ServerHandler mejorado con configuración automática de Java
+- Integración mejorada con Eclipse Adoptium para descargas de Java
+- Mejor soporte multiplataforma (Windows, macOS, Linux)
+- Gestión de configuración y persistencia mejoradas
+
+### ❌ PROBLEMAS RESUELTOS:
+- **CRÍTICO**: Eliminado completamente "UnsupportedClassVersionError" para versiones nuevas de Minecraft
+- Resueltos problemas de detección de ruta de Java en diferentes sistemas
+- Corregidos fallos de inicio de servidor con versiones incompatibles de Java
+- Mejorada validación de carpetas de servidor y mensajes de error
+
+### 📋 COMPATIBILIDAD:
+- Minecraft 1.21+ → Java 21 (descarga automática)
+- Minecraft 1.20.5+ → Java 21 (descarga automática)
+- Minecraft 1.17-1.20.4 → Java 17 (sistema o descarga)
+- Minecraft 1.16.5 y anteriores → Java 8 (sistema o descarga)
+
+## Version 1.2.2 - 2024-11-XX
 - Implemented view transitions: Added a subtle "dip to background" fade effect when switching between different sections/tabs in the GUI for a smoother user experience.
 
 **Core UI Enhancements & Modernization:**

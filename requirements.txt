@@ -1,5 +1,5 @@
-requests
-psutil
-Pillow
-matplotlib
-customtkinter
+requests>=2.25.0
+psutil>=5.8.0
+Pillow>=8.0.0
+matplotlib>=3.3.0
+customtkinter>=5.0.0

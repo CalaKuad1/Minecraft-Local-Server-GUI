@@ -3,10 +3,14 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
+*$py.class
 
 # Virtual Environment
 venv/
 .venv/
+env/
+ENV/
 
 # Downloaded Dependencies
 bore.exe
@@ -17,6 +21,9 @@ bore.exe
 # IDE / Editor specific
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # Build artifacts
 build/
@@ -25,3 +32,44 @@ dist/
 
 # Log files
 *.log
+
+# ===== MINECRAFT SERVER GUI SPECIFIC =====
+
+# Java runtime installations (downloaded automatically)
+java_runtimes/
+
+# Application configuration files
+gui_config.json
+
+# Test servers created during development
+test_server/
+test_server_*/
+
+# Minecraft server files (if testing locally)
+server.properties
+eula.txt
+ops.json
+banned-*.json
+whitelist.json
+usercache.json
+world/
+world_*/
+logs/
+crash-reports/
+
+# Backup files
+*.bak
+*.backup
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

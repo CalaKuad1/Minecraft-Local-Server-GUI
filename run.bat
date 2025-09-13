@@ -1,58 +1,49 @@
 @echo off
-setlocal
+title Minecraft Server GUI
+color 0A
 
-REM --- Configuration ---
-set VENV_DIR=venv
-set REQUIREMENTS_FILE=requirements.txt
-set MAIN_SCRIPT=main.py
-set PYTHON_CMD=python
+echo.
+echo ==========================================
+echo   🎮 Minecraft Server GUI
+echo ==========================================
+echo.
 
-REM --- Check for Python ---
-echo Checking for Python...
-%PYTHON_CMD% --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Error: Python is not installed or not found in your PATH.
-    echo Please install Python 3 from python.org and ensure it's added to your PATH.
+REM Verificar si Python está instalado
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo ❌ Python no encontrado
+    echo.
+    echo Instala Python desde: https://python.org
+    echo ✅ Marca "Add Python to PATH" durante la instalacion
+    echo.
     pause
     exit /b 1
 )
 
-REM --- Virtual Environment Setup ---
-if not exist "%VENV_DIR%\Scripts\activate.bat" (
-    echo ---------------------------------------------------
-    echo  First-time setup: Creating virtual environment...
-    echo ---------------------------------------------------
-    %PYTHON_CMD% -m venv %VENV_DIR%
-    if %errorlevel% neq 0 (
-        echo Error: Failed to create the virtual environment.
-        pause
-        exit /b 1
-    )
+echo ✅ Python detectado
+echo.
 
-    echo.
-    echo ---------------------------------------------------
-    echo  Installing required packages...
-    echo ---------------------------------------------------
-    call "%VENV_DIR%\Scripts\activate.bat"
-    pip install -r %REQUIREMENTS_FILE%
-    if %errorlevel% neq 0 (
-        echo Error: Failed to install packages from %REQUIREMENTS_FILE%.
+REM Verificar si existe el entorno virtual
+if not exist "venv" (
+    echo 📦 Creando entorno virtual...
+    python -m venv venv
+    if errorlevel 1 (
+        echo ❌ Error creando entorno virtual
         pause
         exit /b 1
     )
-    echo.
-    echo ---------------------------------------------------
-    echo  Setup complete!
-    echo ---------------------------------------------------
-    echo.
 )
 
-REM --- Run the Application ---
-echo Starting the Minecraft Server GUI...
-call "%VENV_DIR%\Scripts\activate.bat"
-%PYTHON_CMD% %MAIN_SCRIPT%
+REM Activar entorno virtual e instalar dependencias
+echo 🔧 Configurando dependencias...
+call venv\Scripts\activate.bat
+pip install -r requirements.txt >nul 2>&1
+
+REM Ejecutar la aplicación
+echo 🚀 Iniciando aplicación...
+echo.
+python main.py
 
 echo.
-echo Application closed.
+echo 👋 Aplicación cerrada
 pause
-endlocal

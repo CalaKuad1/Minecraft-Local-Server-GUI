@@ -7,9 +7,10 @@ import logging
 import re
 
 from utils.api_client import download_file_from_url, download_and_extract_zip
+from utils.java_manager import JavaManager
 
 class ServerHandler:
-    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java"):
+    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None):
         self.server_path = server_path
         self.server_type = server_type
         self.ram_min = ram_min
@@ -17,6 +18,11 @@ class ServerHandler:
         self.ram_unit = ram_unit
         self.output_callback = output_callback
         self.java_path = java_path
+        self.minecraft_version = minecraft_version
+        
+        # Inicializar el gestor de Java
+        self.java_manager = JavaManager()
+        
         self.server_process = None
         self.tunnel_process = None
         self.public_url = None
@@ -25,6 +31,53 @@ class ServerHandler:
         self.server_fully_started = False
         self.server_stopping = False
         self.server_running = False
+        
+        # Si tenemos la versión de Minecraft, configurar Java automáticamente
+        if minecraft_version:
+            self._setup_java_for_minecraft(minecraft_version)
+    
+    def _setup_java_for_minecraft(self, minecraft_version):
+        """Configura automáticamente la versión correcta de Java para Minecraft."""
+        try:
+            self.output_callback(f"Configurando Java para Minecraft {minecraft_version}...\n", "info")
+            
+            # Obtener el Java apropiado
+            java_path = self.java_manager.get_java_for_server(self.server_path, minecraft_version)
+            
+            if java_path:
+                self.java_path = java_path
+                self.output_callback(f"Java configurado: {java_path}\n", "info")
+            else:
+                self.output_callback("No se pudo configurar Java automáticamente. Usando Java del sistema.\n", "warning")
+                
+        except Exception as e:
+            self.output_callback(f"Error configurando Java: {e}\n", "error")
+    
+    def set_minecraft_version(self, minecraft_version):
+        """Establece la versión de Minecraft y reconfigura Java si es necesario."""
+        self.minecraft_version = minecraft_version
+        self._setup_java_for_minecraft(minecraft_version)
+    
+    def get_java_status(self):
+        """Obtiene el estado actual de Java para este servidor."""
+        if not self.minecraft_version:
+            return {"status_message": "Versión de Minecraft no especificada", "status_color": "orange"}
+        
+        return self.java_manager.get_java_status(self.minecraft_version)
+    
+    def _verify_java_installation(self, java_path):
+        """Verifica que la instalación de Java funciona correctamente."""
+        try:
+            result = subprocess.run(
+                [java_path, "-version"], 
+                capture_output=True, 
+                text=True, 
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
 
     def install_forge_server(self, forge_version, minecraft_version, progress_callback):
@@ -101,7 +154,19 @@ class ServerHandler:
         threading.Thread(target=self._run_server, args=(command, env), daemon=True).start()
 
     def _get_start_command(self):
+        # Verificar que tenemos una ruta de Java válida
         java_path = self.java_path
+        
+        # Si tenemos versión de Minecraft y no hemos configurado Java específico, intentar configurarlo
+        if self.minecraft_version and java_path == "java":
+            self._setup_java_for_minecraft(self.minecraft_version)
+            java_path = self.java_path
+        
+        # Verificar que Java existe y funciona
+        if not self._verify_java_installation(java_path):
+            self.output_callback(f"Error: Java no encontrado o no funciona en: {java_path}\n", "error")
+            return None, None
+        
         run_script = None
         
         # Universal check for startup scripts
@@ -223,6 +288,32 @@ class ServerHandler:
         self.ram_min = ram_min
         self.ram_unit = ram_unit
         self.output_callback(f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n", "info")
+    
+    def ensure_java_compatibility(self, minecraft_version):
+        """
+        Asegura que Java sea compatible con la versión de Minecraft especificada.
+        Descarga automáticamente si es necesario.
+        """
+        if not self.java_manager:
+            return self.java_path
+        
+        try:
+            # Intentar obtener Java compatible para este servidor
+            compatible_java = self.java_manager.get_java_for_server(self.server_path, minecraft_version)
+            
+            if compatible_java:
+                old_java = self.java_path
+                self.java_path = compatible_java
+                if old_java != compatible_java:
+                    self.output_callback(f"Java actualizado automáticamente: {compatible_java}\n", "info")
+                return compatible_java
+            else:
+                self.output_callback(f"Advertencia: No se pudo obtener Java compatible para Minecraft {minecraft_version}\n", "warning")
+                return self.java_path
+                
+        except Exception as e:
+            self.output_callback(f"Error al verificar compatibilidad de Java: {e}\n", "warning")
+            return self.java_path
 
     def get_pid(self):
         if self.server_process:

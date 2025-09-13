@@ -18,7 +18,8 @@ from PIL import Image, ImageTk
 from gui.widgets import CollapsiblePane
 from utils.constants import *
 from utils.helpers import format_size, get_folder_size, get_local_ip, get_server_port, get_java_version, get_required_java_version
-from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions, download_jre
+from utils.api_client import fetch_player_avatar_image, fetch_player_uuid, download_server_jar, get_server_versions, fetch_username_from_uuid, get_forge_versions
+from utils.java_manager import JavaManager
 from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
 
@@ -60,6 +61,9 @@ class ServerControlGUI:
         self.player_count_line_prefix = "There are "
         self.player_count_line_suffix = " players online:"
         self.psutil_proc = None
+        
+        # Initialize Java Manager
+        self.java_manager = JavaManager()
 
         # --- TK Variables ---
         self.master = master
@@ -119,6 +123,45 @@ class ServerControlGUI:
         self.server_properties_path = os.path.join(self.server_path, "server.properties")
         self.mods_dir_path = os.path.join(self.server_path, "mods")
         self.config_dir_path = os.path.join(self.server_path, "config")
+    
+    def _detect_minecraft_version(self):
+        """Detecta la versión de Minecraft del servidor actual."""
+        if not self.server_path:
+            return None
+        
+        # Primero intentar obtener de la configuración guardada
+        saved_version = self.config_manager.get("minecraft_version")
+        if saved_version:
+            return saved_version
+        
+        # Intentar detectar desde el nombre del JAR del servidor
+        jar_files = glob.glob(os.path.join(self.server_path, "*.jar"))
+        for jar_file in jar_files:
+            jar_name = os.path.basename(jar_file).lower()
+            
+            # Buscar patrones de versión en el nombre del archivo
+            import re
+            version_patterns = [
+                r'minecraft[_-]server[_-](\d+\.\d+(?:\.\d+)?)',  # minecraft_server_1.20.1.jar
+                r'server[_-](\d+\.\d+(?:\.\d+)?)',              # server-1.20.1.jar
+                r'paper[_-](\d+\.\d+(?:\.\d+)?)',               # paper-1.20.1.jar
+                r'spigot[_-](\d+\.\d+(?:\.\d+)?)',              # spigot-1.20.1.jar
+                r'fabric[_-]server[_-](\d+\.\d+(?:\.\d+)?)',    # fabric-server-1.20.1.jar
+                r'(\d+\.\d+(?:\.\d+)?)',                        # Cualquier patrón de versión
+            ]
+            
+            for pattern in version_patterns:
+                match = re.search(pattern, jar_name)
+                if match:
+                    version = match.group(1)
+                    # Guardar la versión detectada
+                    self.config_manager.set("minecraft_version", version)
+                    return version
+        
+        # Si no se puede detectar, usar una versión por defecto
+        default_version = "1.20.1"
+        self.log_to_console(f"No se pudo detectar la versión de Minecraft. Usando {default_version} por defecto.\n", "warning")
+        return default_version
 
     def _initialize_main_gui(self):
         try:
@@ -128,13 +171,17 @@ class ServerControlGUI:
 
             self.main_gui_initialized = True
 
+            # Detectar versión de Minecraft del servidor
+            minecraft_version = self._detect_minecraft_version()
+            
             self.server_handler = ServerHandler(
                 self.server_path, 
                 self.server_type, 
                 self.ram_min_val_var.get(), 
                 self.ram_max_val_var.get(), 
                 self.ram_unit_var.get(), 
-                self.log_to_console
+                self.log_to_console,
+                minecraft_version=minecraft_version
             )
 
             # --- Initialize attributes ---
@@ -296,6 +343,10 @@ class ServerControlGUI:
         for widget in self.master.winfo_children():
             widget.destroy()
         
+        # Inicializar JavaManager para el setup wizard
+        from utils.java_manager import JavaManager
+        self.java_manager = JavaManager()
+        
         setup_frame = ctk.CTkFrame(self.master, fg_color="transparent")
         setup_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=20)
 
@@ -401,25 +452,22 @@ class ServerControlGUI:
             mc_version_str = self.forge_mc_version_var.get()
 
         if not mc_version_str or "Loading" in mc_version_str or "Error" in mc_version_str:
-            self.java_status_label.configure(text="Java Status: Select a Minecraft version first")
+            self.java_status_label.configure(text="Java Status: Selecciona una versión de Minecraft primero")
             return
 
-        required_version = get_required_java_version(mc_version_str)
-        installed_version = get_java_version()
+        # Usar el nuevo JavaManager para obtener el estado
+        java_status = self.java_manager.get_java_status(mc_version_str)
+        
+        status_text = java_status["status_message"]
+        status_color = java_status["status_color"]
+        needs_download = java_status["needs_download"]
 
-        if installed_version is None:
-            status_text = f"❌ Java Not Found (Required: Java {required_version}+)"
-            status_color = "red"
+        # Actualizar la UI según el estado
+        if needs_download:
             self.download_jre_var.set(True)
-            self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
-        elif installed_version < required_version:
-            status_text = f"⚠️ Wrong Version: Java {installed_version} found (Required: Java {required_version}+)"
-            status_color = "orange"
-            self.download_jre_var.set(True)
+            self.download_jre_checkbox.configure(text=f"Descargar automáticamente Java {java_status['required_version']} (recomendado)")
             self.download_jre_checkbox.pack(fill=tk.X, pady=5, before=self.eula_checkbox)
         else:
-            status_text = f"✅ Java {installed_version} Found (Compatible)"
-            status_color = "green"
             self.download_jre_var.set(False)
             self.download_jre_checkbox.pack_forget()
 
@@ -564,32 +612,61 @@ class ServerControlGUI:
         try:
             server_path = self.existing_location_var.get()
             if not server_path:
-                messagebox.showerror("Error", "Please select an existing server directory.")
+                messagebox.showerror("Error", "Por favor selecciona un directorio de servidor existente.")
                 return
 
             jar_files = glob.glob(os.path.join(server_path, '*.jar'))
             properties_file = os.path.join(server_path, 'server.properties')
             run_script = os.path.join(server_path, 'run.bat') if sys.platform == "win32" else os.path.join(server_path, 'run.sh')
 
-            # A valid server must have server.properties and either a .jar file or a run script.
+            # Un servidor válido debe tener server.properties y al menos un archivo .jar o un script de ejecución
             if not os.path.exists(properties_file) or (not jar_files and not os.path.exists(run_script)):
-                messagebox.showerror("Invalid Folder", "The selected folder does not appear to be a valid Minecraft server. (Missing server.properties and a .jar file or run script)")
+                messagebox.showerror("Carpeta Inválida", "La carpeta seleccionada no parece ser un servidor válido de Minecraft. (Faltan server.properties y un archivo .jar o script de ejecución)")
                 return
 
-            self.master.after(0, self.status_label.configure, {'text': "Configuration saved! Launching..."})
-            self.server_path = server_path
-            self.server_type = self._detect_server_type(server_path)
+            self.master.after(0, self.status_label.configure, {'text': "Validando directorio del servidor..."})
+            self.master.after(0, self.progress_bar.set, 0.3)
             
-            # Detect and store the server version
+            # Detectar tipo y versión del servidor
+            self.server_type = self._detect_server_type(server_path)
             detected_version = self._detect_server_version(server_path)
             self.server_version_var = tk.StringVar(value=detected_version)
+            
+            self.master.after(0, self.status_label.configure, {'text': "Configurando Java compatible..."})
+            self.master.after(0, self.progress_bar.set, 0.6)
+            
+            # Configurar Java automáticamente para el servidor existente
+            if detected_version and detected_version != "Unknown":
+                try:
+                    java_path = self.java_manager.get_java_for_server(server_path, detected_version)
+                    if java_path:
+                        self.java_path_var.set(java_path)
+                        self.master.after(0, self.status_label.configure, {'text': f"Java configurado automáticamente para Minecraft {detected_version}"})
+                    else:
+                        # Usar Java del sistema como fallback
+                        system_java = self.java_manager.detect_system_java()
+                        if system_java:
+                            self.java_path_var.set(system_java[1])
+                            self.master.after(0, self.status_label.configure, {'text': f"Usando Java del sistema (versión {system_java[0]})"})
+                        else:
+                            self.java_path_var.set("java")
+                            self.master.after(0, self.status_label.configure, {'text': "Advertencia: Java no detectado automáticamente"})
+                except Exception as e:
+                    print(f"Error configurando Java: {e}")
+                    self.java_path_var.set("java")
+            
+            self.master.after(0, self.progress_bar.set, 0.9)
+            time.sleep(1)
+            
+            self.master.after(0, self.status_label.configure, {'text': "¡Configuración guardada! Iniciando..."})
+            self.server_path = server_path
             
             self._save_config()
             time.sleep(1)
             self.master.after(0, self._initialize_main_gui)
 
         except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            messagebox.showerror("Error", f"Ocurrió un error inesperado: {e}")
         finally:
             if hasattr(self, 'action_button') and self.action_button.winfo_exists():
                 self.master.after(0, self.action_button.configure, {'state': tk.NORMAL})
@@ -628,53 +705,76 @@ class ServerControlGUI:
 
     def _perform_server_installation(self):
         try:
-            # --- Java Handling ---
-            if self.download_jre_var.get():
-                mc_version_str = self.server_version_var.get()
-                if self.server_type_var.get().lower() == 'forge':
-                    mc_version_str = self.forge_mc_version_var.get()
-                
-                required_java = get_required_java_version(mc_version_str)
-                self.master.after(0, self.status_label.configure, {'text': f"Downloading compatible Java JRE (Version {required_java})..."})
-                
-                def progress_callback(p):
-                    self.master.after(0, self.progress_bar.set, p / 100)
-
-                jre_path = download_jre(java_version=required_java, progress_callback=progress_callback)
-
-                if not jre_path:
-                    raise Exception(f"Failed to download the required Java JRE. Please install Java {required_java} manually and try again.")
-                
-                # On Windows, the executable is in /bin/java.exe
-                java_exe_path = os.path.join(jre_path, 'bin', 'java.exe')
-                if not os.path.exists(java_exe_path):
-                    raise Exception(f"Could not find java.exe in the downloaded JRE folder.")
-                
-                self.java_path_var.set(java_exe_path)
-                self.master.after(0, self.status_label.configure, {'text': "Java JRE downloaded successfully."})
-                self.master.after(0, self.progress_bar.set, 0)
-
             server_type = self.server_type_var.get().lower()
             parent_dir = self.install_location_var.get()
             server_folder_name = self.server_name_var.get()
             
+            # Determinar la versión de Minecraft
+            mc_version_str = self.server_version_var.get()
+            if server_type == 'forge':
+                mc_version_str = self.forge_mc_version_var.get()
+            
             install_path = os.path.join(parent_dir, server_folder_name)
 
             if os.path.exists(install_path) and os.listdir(install_path):
-                dialog = ctk.CTkInputDialog(text="Destination folder is not empty. Overwrite?", title="Warning")
+                dialog = ctk.CTkInputDialog(text="La carpeta de destino no está vacía. ¿Sobrescribir?", title="Advertencia")
                 if dialog.get_input() is None:
-                    raise Exception("Installation cancelled by user.")
+                    raise Exception("Instalación cancelada por el usuario.")
 
-            self.master.after(0, self.status_label.configure, {'text': f"Creating directory: {os.path.basename(install_path)}"})
+            self.master.after(0, self.status_label.configure, {'text': f"Creando directorio: {os.path.basename(install_path)}"})
             os.makedirs(install_path, exist_ok=True)
 
-            # Initialize ServerHandler here to use its methods
-            temp_server_handler = ServerHandler(install_path, server_type, "1", "2", "G", lambda msg, level: self.master.after(0, self.log_to_console, msg, level), java_path=self.java_path_var.get())
+            # --- Gestión de Java con el nuevo sistema ---
+            java_exe_path = None
+            
+            if self.download_jre_var.get():
+                required_java = self.java_manager.get_required_java_version(mc_version_str)
+                self.master.after(0, self.status_label.configure, {'text': f"Descargando Java {required_java} compatible..."})
+                
+                def progress_callback(p):
+                    self.master.after(0, self.progress_bar.set, p / 100)
+
+                # Usar el nuevo JavaManager para descargar Java
+                java_exe_path = self.java_manager.get_java_for_server(install_path, mc_version_str)
+                
+                if not java_exe_path:
+                    # Intentar descarga directa si falla la vinculación
+                    java_install_dir = self.java_manager.download_java(required_java, progress_callback)
+                    if java_install_dir:
+                        from pathlib import Path
+                        java_exe = self.java_manager._get_java_executable_path(Path(java_install_dir))
+                        java_exe_path = str(java_exe) if java_exe else None
+                
+                if not java_exe_path:
+                    raise Exception(f"Error al descargar Java {required_java}. Por favor, instala Java {required_java} manualmente e inténtalo de nuevo.")
+                
+                self.java_path_var.set(java_exe_path)
+                self.master.after(0, self.status_label.configure, {'text': f"Java {required_java} descargado exitosamente."})
+                self.master.after(0, self.progress_bar.set, 0)
+            else:
+                # Usar Java del sistema o ya configurado
+                java_exe_path = self.java_path_var.get() or "java"
+
+            # Initialize ServerHandler con la ruta de Java correcta
+            # Obtener la versión de Minecraft para el setup
+            if server_type == 'forge':
+                setup_mc_version = self.forge_mc_version_var.get()
+            else:
+                setup_mc_version = self.server_version_var.get()
+            
+            temp_server_handler = ServerHandler(
+                install_path, 
+                server_type, 
+                "1", "2", "G", 
+                lambda msg, level: self.master.after(0, self.log_to_console, msg, level), 
+                java_path=java_exe_path,
+                minecraft_version=setup_mc_version
+            )
 
             if server_type == 'forge':
                 forge_version = self.forge_version_var.get()
                 mc_version = self.forge_mc_version_var.get()
-                self.master.after(0, self.status_label.configure, {'text': f"Downloading Forge {forge_version} installer..."})
+                self.master.after(0, self.status_label.configure, {'text': f"Descargando instalador de Forge {forge_version}..."})
                 
                 def install_logic():
                     temp_server_handler.install_forge_server(
@@ -690,42 +790,49 @@ class ServerControlGUI:
                     self.master.update()
                     time.sleep(0.1)
 
-            else: # Standard installation for other server types
+            else: # Instalación estándar para otros tipos de servidor
                 server_version = self.server_version_var.get()
                 jar_name = "server.jar"
                 jar_path = os.path.join(install_path, jar_name)
 
-                self.master.after(0, self.status_label.configure, {'text': f"Downloading {server_type} {server_version}..."})
+                self.master.after(0, self.status_label.configure, {'text': f"Descargando {server_type} {server_version}..."})
                 download_server_jar(server_type, server_version, jar_path, lambda p: self.master.after(0, self.progress_bar.set, p / 100))
                 
-                self.master.after(0, self.status_label.configure, {'text': "First-time server run to generate files..."})
+                self.master.after(0, self.status_label.configure, {'text': "Primera ejecución del servidor para generar archivos..."})
                 self.master.after(0, self.progress_bar.set, 0)
                 
-                initial_run_command = [self.java_path_var.get(), '-jar', jar_name, '--nogui']
-                process = subprocess.Popen(initial_run_command, cwd=install_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+                initial_run_command = [java_exe_path, '-jar', jar_name, '--nogui']
+                process = subprocess.Popen(
+                    initial_run_command, 
+                    cwd=install_path, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE, 
+                    text=True, 
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                )
                 try:
                     stdout, stderr = process.communicate(timeout=600)
                     if process.returncode != 0 and 'eula' not in (stdout + stderr).lower():
-                        raise RuntimeError(f"Server process failed. Log:\n{stderr or stdout}")
+                        raise RuntimeError(f"El proceso del servidor falló. Log:\n{stderr or stdout}")
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    raise RuntimeError("Server setup timed out (10+ min).")
+                    raise RuntimeError("La configuración del servidor tardó demasiado (más de 10 min).")
 
-            # EULA Acceptance (common for all types)
+            # Aceptación del EULA (común para todos los tipos)
             eula_path = os.path.join(install_path, "eula.txt")
-            self.master.after(0, self.status_label.configure, {'text': "Accepting EULA..."})
+            self.master.after(0, self.status_label.configure, {'text': "Aceptando EULA..."})
             time.sleep(2) 
             if not os.path.exists(eula_path):
                 if server_type != 'forge':
-                    self.log_to_console("eula.txt was not created. It will need to be accepted on the first server launch.\n", "warning")
+                    self.log_to_console("eula.txt no fue creado. Necesitará ser aceptado en el primer lanzamiento del servidor.\n", "warning")
             else:
                 with open(eula_path, 'r+') as f:
                     content = f.read().replace("eula=false", "eula=true")
                     f.seek(0); f.write(content); f.truncate()
             
-            self.master.after(0, self.status_label.configure, {'text': "Setup complete! Launching..."})
+            self.master.after(0, self.status_label.configure, {'text': "¡Configuración completa! Iniciando..."})
             
-            # BUG FIX: Ensure the correct version is set before saving
+            # Asegurar que la versión correcta esté configurada antes de guardar
             if server_type == 'forge':
                 self.server_version_var.set(self.forge_mc_version_var.get())
 
@@ -736,8 +843,8 @@ class ServerControlGUI:
             self.master.after(0, self._initialize_main_gui)
 
         except Exception as e:
-            messagebox.showerror("Installation Failed", str(e))
-            self.master.after(0, self.status_label.configure, {'text': "Error during installation."})
+            messagebox.showerror("Instalación Fallida", str(e))
+            self.master.after(0, self.status_label.configure, {'text': "Error durante la instalación."})
         finally:
             if hasattr(self, 'action_button') and self.action_button.winfo_exists():
                 self.master.after(0, self.action_button.configure, {'state': tk.NORMAL})
