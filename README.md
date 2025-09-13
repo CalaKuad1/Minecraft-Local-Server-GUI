@@ -2,9 +2,9 @@
   <img src="assets/logo.png" alt="Logo" width="150">
   <h1>Minecraft Local Server GUI</h1>
   
-  <p><strong>🎮 La herramienta definitiva para gestionar servidores de Minecraft locales</strong></p>
+  <p><strong>🎮 The definitive tool for managing local Minecraft servers</strong></p>
   
-  <p>Una aplicación de escritorio intuitiva que automatiza completamente la instalación, configuración y gestión de servidores de Minecraft. Con gestión automática de Java, interfaz gráfica moderna y soporte completo para todos los tipos de servidores.</p>
+  <p>An intuitive desktop application that completely automates the installation, configuration, and management of Minecraft servers. Featuring automatic Java management, a modern graphical interface, and full support for all server types.</p>
   
   <p>
     <img src="https://img.shields.io/badge/Python-3.7+-blue.svg" alt="Python Version">
@@ -14,247 +14,207 @@
   </p>
 </div>
 
-## 🚀 Características Principales
+---
 
-### ⚡ **NUEVO: Gestión Automática de Java**
-- **🎯 Detección Inteligente**: Detecta automáticamente qué versión de Java necesita cada versión de Minecraft
-- **📦 Descarga Automática**: Descarga e instala Java 8, 17 o 21 según sea necesario
-- **🔗 Configuración por Servidor**: Cada servidor usa automáticamente su versión de Java correcta
-- **❌ Adiós a los Errores**: Elimina completamente los errores de "UnsupportedClassVersionError"
+### 🚀 Key Features
 
-### 🛠️ **Instalación y Configuración Sin Esfuerzo**
-- **Asistente de Instalación**: Descarga y configura servidores con unos pocos clics
-- **Soporte Universal**: Compatible con **Vanilla, Paper, Spigot, Forge y Fabric**
-- **Importación Fácil**: Importa y gestiona servidores existentes automáticamente
-- **Configuración Inteligente**: Detecta automáticamente versiones y configura Java apropiado
+**NEW: Automatic Java Management**
+*   **Smart Detection**: Automatically detects the required Java version for each Minecraft version.
+*   **Automatic Download**: Downloads and installs Java 8, 17, or 21 as required.
+*   **Per-Server Configuration**: Each server is automatically configured to use its correct Java version.
+*   **Error Elimination**: Completely eliminates "UnsupportedClassVersionError" issues.
 
-## 🌟 Características Completas
-
-### 🎮 **Control Total del Servidor**
-- **🚀 Acciones de Un Clic**: Inicia, detén y reinicia servidores directamente desde la interfaz
-- **📺 Consola en Vivo**: Ve los logs del servidor en tiempo real con colores para errores y advertencias
-- **⌨️ Entrada de Comandos**: Envía comandos directamente al servidor desde la interfaz
-- **📊 Monitoreo de Recursos**: Gráficos en tiempo real de uso de CPU y RAM
-
-### 👥 **Gestión Avanzada de Jugadores**
-- **🖼️ Lista Visual**: Ve jugadores conectados con sus avatares de Minecraft
-- **⭐ Gestión de Operadores**: Otorga/quita permisos de administrador fácilmente
-- **🚫 Sistema de Baneos**: Banea jugadores o IPs con soporte para modificaciones offline
-- **📈 Estadísticas**: Ve estadísticas detalladas de cada jugador
-
-### ⚙️ **Configuración Intuitiva**
-- **🎛️ Editor de Propiedades**: Editor gráfico para `server.properties` con secciones organizadas
-- **🌍 Gestión de Mundos**: Ve todas las carpetas de mundos y crea backups con un clic
-- **🧩 Gestión de Mods**: Para Forge/Fabric - habilita/deshabilita mods, edita configuraciones
-- **💾 Configuración Persistente**: Recuerda todas tus configuraciones entre sesiones
-
-### 🌐 **Funciones Avanzadas**
-- **🔗 Hacer Público (Experimental)**: Expone tu servidor local a internet con un clic
-- **🤖 Manejo Automático de EULA**: Acepta automáticamente el EULA en la primera ejecución
-- **🎯 Inicio Inteligente**: Usa automáticamente scripts de inicio correctos para servidores Forge
-- **🔧 Asignación de RAM Personalizada**: Configura fácilmente RAM mínima y máxima
-
-### 🛡️ **Seguridad y Estabilidad**
-- **✅ Validación Automática**: Verifica configuraciones antes de aplicar cambios
-- **🔄 Recuperación de Errores**: Manejo inteligente de errores y recuperación automática
-- **📝 Logs Detallados**: Sistema de logging completo para diagnóstico de problemas
-
-## Screenshots
-
-<div align="center">
-  <img src="assets/ServerSetup.png" alt="Server Setup Wizard" width="400">
-  <p><em>Setup Wizard</em></p>
-  <br>
-  <img src="assets/ControlPanel.png" alt="Main Control Panel" width="700">
-  <p><em>Main Control Panel</em></p>
-</div>
-
-## 📋 Requisitos del Sistema
-
-- **Python 3.7+**: Debe estar instalado y agregado al PATH del sistema
-- **Java**: ⚡ **¡YA NO ES NECESARIO!** - La aplicación descarga e instala automáticamente las versiones de Java necesarias
-- **Conexión a Internet**: Para descargas de servidores y Java (solo durante la configuración inicial)
-- **Espacio en Disco**: ~500MB para instalaciones de Java + espacio para servidores
+**Effortless Installation and Setup**
+*   **Installation Wizard**: Download and configure servers with just a few clicks.
+*   **Universal Support**: Compatible with Vanilla, Paper, Spigot, Forge, and Fabric.
+*   **Easy Import**: Automatically import and manage existing server installations.
+*   **Smart Configuration**: Automatically detects server versions and configures the appropriate Java environment.
 
 ---
 
-## 🚀 Instalación y Uso
+### ⚙️ Full Feature List
 
-### 🎯 Inicio Rápido (Recomendado)
+**Complete Server Control**
+*   **One-Click Actions**: Start, stop, and restart servers directly from the interface.
+*   **Live Console**: View server logs in real-time with color-coded errors and warnings.
+*   **Command Input**: Send commands directly to the server from the application interface.
+*   **Resource Monitoring**: View real-time graphs of CPU and RAM usage.
 
-#### Para Windows:
-1. **Descarga** el proyecto desde GitHub (botón verde "Code" → "Download ZIP")
-2. **Extrae** el archivo ZIP en tu carpeta preferida
-3. **Ejecuta** `run.bat` (doble clic)
-4. **¡Listo!** La aplicación se instalará y ejecutará automáticamente
+**Advanced Player Management**
+*   **Visual Player List**: See currently connected players with their Minecraft avatars.
+*   **Operator Management**: Grant or revoke administrator permissions with ease.
+*   **Ban System**: Ban players or IPs, with support for offline-mode servers.
+*   **Player Statistics**: View detailed statistics for each player.
 
-#### Para macOS/Linux:
-1. **Clona o descarga** el repositorio:
-   ```bash
-   git clone https://github.com/tu-usuario/Minecraft-Local-Server-GUI.git
-   cd Minecraft-Local-Server-GUI
-   ```
-2. **Instala dependencias y ejecuta**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   python main.py
-   ```
+**Intuitive Configuration**
+*   **Properties Editor**: A graphical editor for `server.properties` with organized, easy-to-navigate sections.
+*   **World Management**: View all world folders and create backups with a single click.
+*   **Mod Management**: For Forge and Fabric, you can enable/disable mods and edit their configurations.
+*   **Persistent Settings**: All configurations and server paths are saved between sessions.
 
-### 🔧 Instalación Manual (Avanzada)
+**Advanced Functions**
+*   **Make Public (Experimental)**: Exposes your local server to the internet with one click. For better performance and stability, we recommend using a dedicated external service like `playit.gg`.
+*   **Automatic EULA Handling**: Automatically accepts the Minecraft EULA on the first launch of a new server.
+*   **Smart Start**: Automatically uses the correct startup scripts for modded servers like Forge.
+*   **Custom RAM Allocation**: Easily configure the minimum and maximum RAM for each server.
 
-Si prefieres instalar manualmente o tienes problemas con el instalador automático:
-
-1. **Clona el repositorio**:
-   ```bash
-   git clone https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git
-   cd Minecraft-Local-Server-GUI
-   ```
-
-2. **Crea un entorno virtual**:
-   ```bash
-   python -m venv venv
-   
-   # Actívalo:
-   # Windows:
-   .\venv\Scripts\activate
-   # macOS/Linux:
-   source venv/bin/activate
-   ```
-
-3. **Instala las dependencias**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Ejecuta la aplicación**:
-   ```bash
-   python main.py
-   ```
+**Security and Stability**
+*   **Automatic Validation**: Verifies server configurations before applying any changes.
+*   **Error Recovery**: Features intelligent error handling and automatic recovery mechanisms.
+*   **Detailed Logs**: A complete logging system is integrated for diagnosing application issues.
 
 ---
 
-## 🎮 Primer Uso
-
-### 🧙‍♂️ Asistente de Configuración
-1. **Primera ejecución**: Aparecerá un asistente de configuración intuitivo
-2. **Elige tu opción**:
-   - **🆕 Instalar Servidor Nuevo**: La app descarga y configura todo automáticamente
-   - **📁 Usar Servidor Existente**: Importa una carpeta de servidor existente
-3. **⚡ Magia de Java**: La aplicación detecta automáticamente la versión de Minecraft y descarga el Java correcto
-4. **🚀 ¡Listo!**: La interfaz principal se abre y tus configuraciones se guardan para la próxima vez
-
-## ☕ Sistema de Gestión de Java
-
-### 🎯 ¿Qué Problema Resuelve?
-**Antes**: `UnsupportedClassVersionError: class file version 65.0, this version only recognizes up to 61.0`
-**Ahora**: ✅ **Funciona automáticamente sin errores**
-
-### 🛠️ Cómo Funciona
-- **🔍 Detección Automática**: Identifica la versión de Minecraft de tu servidor
-- **📦 Descarga Inteligente**: Obtiene la versión de Java correcta desde Eclipse Adoptium
-- **🔗 Vinculación Automática**: Cada servidor usa su Java apropiado
-- **💾 Gestión Eficiente**: Reutiliza instalaciones entre servidores compatibles
-
-### 📊 Compatibilidad de Versiones
-| Versión de Minecraft | Java Requerido | Estado |
-|---------------------|----------------|---------|
-| 1.21+ | Java 21 | ✅ Descarga automática |
-| 1.20.5 - 1.20.6 | Java 21 | ✅ Descarga automática |
-| 1.17 - 1.20.4 | Java 17 | ✅ Sistema o descarga |
-| 1.16.5 y anteriores | Java 8 | ✅ Sistema o descarga |
-
-### 🎉 Beneficios
-- **❌ Cero errores de compatibilidad** - Cada servidor usa su Java correcto
-- **🚀 Instalación automática** - No necesitas instalar Java manualmente
-- **🔄 Múltiples versiones** - Mantiene Java 8, 17 y 21 simultáneamente
-- **🧠 Detección inteligente** - Reconoce versiones de Minecraft automáticamente
-
-## ❓ Preguntas Frecuentes
-
-### 🔧 **Problemas de Instalación**
-
-**P: ¿Qué hago si Python no está instalado?**
-R: Descarga Python desde [python.org](https://python.org) y asegúrate de marcar "Add Python to PATH" durante la instalación.
-
-**P: ¿El instalador automático no funciona?**
-R: Usa la instalación manual o verifica que tienes permisos de administrador.
-
-### ☕ **Problemas de Java**
-
-**P: ¿Qué pasa si tengo Java instalado pero sigue descargando más?**
-R: La aplicación descarga versiones específicas para garantizar compatibilidad. Esto es normal y beneficioso.
-
-**P: ¿Puedo usar mi Java existente?**
-R: Sí, si tu Java es compatible, la aplicación lo detectará y usará automáticamente.
-
-### 🎮 **Problemas de Servidores**
-
-**P: ¿Mi servidor no inicia?**
-R: Verifica los logs en la consola. La aplicación mostrará errores específicos y sugerencias.
-
-**P: ¿Cómo importo un servidor existente?**
-R: Usa "Usar Servidor Existente" en el asistente y selecciona la carpeta de tu servidor.
-
-### 🌐 **Función "Hacer Público"**
-
-**P: ¿Es seguro hacer público mi servidor?**
-R: La función usa un servicio de túnel público. Úsala solo con amigos de confianza y considera configurar whitelist.
-
-**P: ¿Por qué la dirección pública cambia cada vez?**
-R: Es normal con servicios de túnel gratuitos. La dirección se genera dinámicamente.
-
-## 🐛 Solución de Problemas
-
-### 🔍 **Diagnóstico Rápido**
-1. **Verifica Python**: `python --version` debe mostrar 3.7+
-2. **Verifica permisos**: Ejecuta como administrador si hay problemas
-3. **Revisa logs**: La consola de la aplicación muestra errores detallados
-4. **Reinicia la aplicación**: Muchos problemas se resuelven con un reinicio
-
-### 📞 **Obtener Ayuda**
-- **Issues de GitHub**: Reporta bugs o solicita características
-- **Logs detallados**: Incluye siempre los logs al reportar problemas
-- **Información del sistema**: Menciona tu OS, versión de Python y Java
-
-## 🤝 Contribuir
-
-¡Las contribuciones son bienvenidas! Por favor:
-1. Fork el repositorio
-2. Crea una rama para tu característica (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Este proyecto está licenciado bajo la Licencia MIT - ve el archivo [LICENSE](LICENSE) para más detalles.
-
-## 📝 Historial de Cambios
-
-### 🆕 Versión 2.0.0 - Revolución de Gestión de Java
-
-**Características Nuevas:**
-- ⚡ **Gestión Automática de Java**: Detecta y descarga automáticamente las versiones correctas
-- 🎮 **Detección Inteligente**: Identifica versiones de Minecraft desde archivos JAR
-- 📦 **Multi-Java**: Mantiene Java 8, 17 y 21 simultáneamente
-- 🔗 **Configuración por Servidor**: Cada servidor usa su Java apropiado automáticamente
-
-**Problemas Resueltos:**
-- ❌ **CRÍTICO**: Eliminado "UnsupportedClassVersionError" para versiones nuevas de Minecraft
-- 🔧 Resueltos problemas de detección de Java en diferentes sistemas
-- 🚀 Corregidos fallos de inicio con versiones incompatibles
-
-## ⭐ ¿Te Gusta el Proyecto?
-
-Si este proyecto te ha sido útil, ¡considera darle una estrella en GitHub! ⭐
-
-Esto ayuda a otros usuarios a encontrar la herramienta y motiva el desarrollo continuo.
+### 📋 System Requirements
+*   **Python 3.7+**: Must be installed and added to the system's PATH.
+*   **Java**: No longer required. The application automatically downloads and manages all necessary Java versions.
+*   **Internet Connection**: Required for the initial download of server files and Java runtimes.
+*   **Disk Space**: Approximately 500MB for Java installations, plus additional space for each server.
 
 ---
 
-<div align="center">
-  <p><strong>🎮 Minecraft Server GUI - La herramienta definitiva para servidores locales</strong></p>
-  <p>Con gestión automática de Java • Sin configuración manual • Compatible con todas las versiones</p>
-</div> 
+### 🚀 Installation and Use
+
+**Quick Start (Recommended)**
+
+**For Windows:**
+1.  Download the project from GitHub (Code button → Download ZIP).
+2.  Extract the ZIP file to your preferred folder.
+3.  Execute `run.bat`.
+4.  The application will install dependencies and launch automatically.
+
+**For macOS/Linux:**
+1.  Clone or download the repository:
+    ```bash
+    git clone https://github.com/your-username/Minecraft-Local-Server-GUI.git
+    cd Minecraft-Local-Server-GUI
+    ```
+2.  Install dependencies and run:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    python main.py
+    ```
+
+**Manual Installation (Advanced)**
+
+If you prefer to install manually or encounter issues with the automated scripts:
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git
+    cd Minecraft-Local-Server-GUI
+    ```
+2.  **Create and activate a virtual environment:**
+    *   **Windows:**
+        ```bash
+        python -m venv venv
+        .\venv\Scripts\activate
+        ```
+    *   **macOS/Linux:**
+        ```bash
+        python3 -m venv venv
+        source venv/bin/activate
+        ```
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Run the application:**
+    ```bash
+    python main.py
+    ```
+
+---
+
+### 🎮 First Use
+
+**Setup Wizard**
+*   On its first run, the application will launch an intuitive setup wizard.
+*   **Choose an option**:
+    *   **Install New Server**: The application will download and configure everything automatically.
+    *   **Use Existing Server**: Import a pre-existing server folder.
+*   **Automated Java Handling**: The application detects the Minecraft version and downloads the correct Java runtime automatically.
+*   Once completed, the main interface will open, and your settings will be saved for future sessions.
+
+---
+
+### ☕ Java Management System
+
+**The Problem It Solves**
+*   **Previously**: Users would encounter `UnsupportedClassVersionError` when running new Minecraft versions with outdated Java.
+*   **Currently**: The system functions automatically without these errors.
+
+**How It Works**
+*   **Automatic Detection**: Identifies the server's Minecraft version from its core files.
+*   **Smart Download**: Fetches the correct Java version from trusted sources like Eclipse Adoptium.
+*   **Automatic Linking**: Ensures each server instance uses the appropriate Java runtime.
+*   **Efficient Management**: Reuses existing Java installations for other compatible servers.
+
+**Version Compatibility**
+| Minecraft Version   | Required Java | Status                 |
+|:--------------------|:--------------|:-----------------------|
+| 1.21+               | Java 21       | ✅ Automatic Download |
+| 1.20.5 - 1.20.6     | Java 21       | ✅ Automatic Download |
+| 1.17 - 1.20.4       | Java 17       | ✅ System or Download   |
+| 1.16.5 and earlier  | Java 8        | ✅ System or Download   |
+
+
+**Benefits**
+*   **Zero compatibility errors**: Each server runs on its correct Java version.
+*   **Automated installation**: No need to install or manage Java manually.
+*   **Multi-version support**: Maintains separate installations of Java 8, 17, and 21 simultaneously.
+*   **Intelligent detection**: Automatically recognizes Minecraft versions.
+
+---
+
+### ❓ Frequently Asked Questions
+
+**Installation Issues**
+*   **Q: What should I do if Python is not installed?**
+    A: Download Python from python.org. During installation, ensure the "Add Python to PATH" option is checked.
+*   **Q: The automatic installer is not working. What can I do?**
+    A: Follow the manual installation instructions. Ensure you have the necessary administrative permissions if required.
+
+**Java Issues**
+*   **Q: I already have Java installed. Why is the application downloading another version?**
+    A: The application downloads specific, sandboxed versions of Java to guarantee compatibility and prevent conflicts with system-wide installations. This is intended behavior.
+*   **Q: Can I use my existing system Java installation?**
+    A: Yes. If a compatible system-wide Java version is detected, the application may use it. However, its internal manager is designed to prevent version conflicts.
+
+**Server Issues**
+*   **Q: My server fails to start. How can I diagnose the issue?**
+    A: Check the server logs in the console tab. The application will display specific errors and may provide suggestions.
+*   **Q: How can I import an existing server?**
+    A: In the initial setup wizard, select "Use Existing Server" and navigate to your server's root folder.
+
+**"Make Public" Functionality**
+*   **Q: Is it safe to make my server public?**
+    A: This feature uses a public tunneling service. It should only be used with trusted individuals. We strongly recommend configuring a whitelist for your server.
+*   **Q: Why does the public address change with each session?**
+    A: This is standard for free tunneling services, which generate dynamic addresses upon connection.
+
+---
+
+### 🛠️ Troubleshooting
+
+**Quick Diagnostics**
+*   **Verify Python**: Open a terminal and run `python --version`. It should return version 3.7 or higher.
+*   **Check Permissions**: If you encounter file access errors, try running the application as an administrator.
+*   **Review Logs**: The application's console provides detailed error messages for diagnostics.
+*   **Restart the Application**: A simple restart can resolve many temporary issues.
+
+**Getting Help**
+*   **GitHub Issues**: Report bugs or request new features on the project's GitHub page.
+*   **Provide Detailed Logs**: When reporting an issue, always include the relevant logs from the console.
+*   **Include System Information**: Mention your operating system, Python version, and Java version.
+
+---
+
+### 📄 License
+This project is licensed under the MIT License. See the LICENSE file for more details.
+
+---
+
+### ⭐ Support the Project
+If this project has been useful to you, please consider giving it a star on GitHub! This helps other users discover the tool and motivates continued development.
