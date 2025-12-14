@@ -102,12 +102,14 @@ class JavaManager:
                     return 21
                 elif minor_version >= 17:
                     return 17
-            except ValueError:
-                pass
+            except Exception as e:
+                logger.warning(f"Error parsing version {minecraft_version}: {e}")
+                logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 21")
+                return 21 # Default to modern Java (21) instead of 8, as it's safer for new servers
         
         # Fallback para versiones desconocidas
-        logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 8")
-        return 8
+        logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 21")
+        return 21
     
     def detect_system_java(self, java_path: str = "java") -> Optional[Tuple[int, str]]:
         """
@@ -271,32 +273,47 @@ class JavaManager:
             return None
     
     def _download_file(self, url: str, path: Path, progress_callback: Callable[[float], None]) -> bool:
-        """Descarga un archivo con reporte de progreso."""
+        """Descarga un archivo con reporte de progreso usando urllib nativo."""
+        import urllib.request
+        import ssl
+        
         try:
-            response = requests.get(url, stream=True, timeout=30)
-            response.raise_for_status()
+            # Unverified context for robustness in frozen envs
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
             
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
+            headers = {'User-Agent': 'MinecraftServerGUI/1.0'}
+            req = urllib.request.Request(url, headers=headers)
             
-            with open(path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
+            # Increased chunk size for better performance
+            chunk_size = 64 * 1024 
+            
+            with urllib.request.urlopen(req, context=ctx, timeout=60) as response:
+                total_size = int(response.getheader('Content-Length', 0))
+                downloaded = 0
+                
+                with open(path, 'wb') as f:
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total_size > 0:
-                            progress = min((downloaded / total_size) * 90, 90)  # Reservar 10% para extracción
+                            progress = min((downloaded / total_size) * 90, 90)
                             progress_callback(progress)
             
             return True
             
         except Exception as e:
-            logger.error(f"Error downloading file: {e}")
+            logger.error(f"Error downloading file (urllib): {e}")
             return False
     
     def _extract_java_archive(self, archive_path: Path, extract_to: Path) -> bool:
         """Extrae un archivo de Java (zip o tar.gz)."""
         try:
+            logger.info(f"Starting extraction of {archive_path.name}")
             extract_to.mkdir(parents=True, exist_ok=True)
             
             if archive_path.suffix.lower() == '.zip':
@@ -309,8 +326,12 @@ class JavaManager:
                 logger.error(f"Unsupported archive format: {archive_path.suffix}")
                 return False
             
+            logger.info("Extraction complete. Flattening directory...")
+            
             # Mover contenido si está en un subdirectorio
             self._flatten_java_directory(extract_to)
+            
+            logger.info("Flattening complete.")
             return True
             
         except Exception as e:
@@ -319,25 +340,40 @@ class JavaManager:
     
     def _flatten_java_directory(self, java_dir: Path):
         """Aplana la estructura de directorios si Java está en un subdirectorio."""
-        contents = list(java_dir.iterdir())
-        
-        # Si hay solo un directorio, mover su contenido al nivel superior
-        if len(contents) == 1 and contents[0].is_dir():
-            subdir = contents[0]
-            temp_dir = java_dir.parent / f"{java_dir.name}_temp"
+        try:
+            contents = list(java_dir.iterdir())
             
-            # Mover subdirectorio temporalmente
-            subdir.rename(temp_dir)
-            
-            # Mover contenido del subdirectorio al directorio principal
-            for item in temp_dir.iterdir():
-                item.rename(java_dir / item.name)
-            
-            # Eliminar directorio temporal
-            temp_dir.rmdir()
+            # Si hay solo un directorio, mover su contenido al nivel superior
+            if len(contents) == 1 and contents[0].is_dir():
+                subdir = contents[0]
+                temp_dir = java_dir.parent / f"{java_dir.name}_temp"
+                
+                # Mover subdirectorio temporalmente
+                subdir.rename(temp_dir)
+                
+                # Mover contenido del subdirectorio al directorio principal
+                for item in temp_dir.iterdir():
+                    item.rename(java_dir / item.name)
+                
+                # Eliminar directorio temporal
+                temp_dir.rmdir()
+                logger.info(f"Flattened subdirectory: {subdir.name}")
+        except Exception as e:
+            logger.error(f"Error flattening directory: {e}")
+            # Raise so it's caught by _extract_java_archive
+            raise e
     
     def _get_java_executable_path(self, java_dir: Path) -> Optional[Path]:
         """Obtiene la ruta al ejecutable de Java en un directorio de instalación."""
+        logger.info(f"Looking for Java executable in: {java_dir}")
+        
+        # List directory contents for debugging
+        try:
+            contents = list(java_dir.iterdir()) if java_dir.exists() else []
+            logger.info(f"Directory contents: {[p.name for p in contents]}")
+        except Exception as e:
+            logger.error(f"Error listing directory: {e}")
+        
         possible_paths = [
             java_dir / "bin" / "java.exe",  # Windows
             java_dir / "bin" / "java",      # Unix
@@ -345,58 +381,116 @@ class JavaManager:
         ]
         
         for path in possible_paths:
+            logger.debug(f"Checking: {path} - exists: {path.exists()}")
             if path.exists():
+                logger.info(f"Found Java at: {path}")
                 return path
         
+        logger.warning(f"No Java executable found in {java_dir}")
         return None
     
-    def get_java_for_server(self, server_path: str, minecraft_version: str) -> Optional[str]:
+    def _validate_java_install(self, java_path: str) -> bool:
+        """Verifica que el ejecutable de Java funcione correctamente."""
+        try:
+            logger.info(f"Validating Java installation at: {java_path}")
+            # Run java -version with timeout
+            result = subprocess.run(
+                [java_path, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
+            if result.returncode == 0:
+                logger.info("Java validation successful.")
+                return True
+            else:
+                logger.warning(f"Java validation failed (RC {result.returncode}): {result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Java validation error: {e}")
+            return False
+
+    def get_java_for_server(self, server_path: str, minecraft_version: str, force_download: bool = False, skip_download: bool = False) -> Optional[str]:
         """
         Obtiene la ruta de Java apropiada para un servidor específico.
-        Descarga automáticamente si es necesario.
-        
-        Args:
-            server_path: Ruta del servidor
-            minecraft_version: Versión de Minecraft
-            
-        Returns:
-            Ruta al ejecutable de Java o None si falla
+        Descarga automáticamente si es necesario (unless skip_download=True).
         """
-        required_version = self.get_required_java_version(minecraft_version)
-        
-        # Verificar si ya tenemos Java configurado para este servidor
-        server_key = str(Path(server_path).resolve())
-        if server_key in self.config["servers"]:
-            java_path = self.config["servers"][server_key]["java_path"]
-            if Path(java_path).exists():
-                return java_path
-        
-        # Buscar instalación local de la versión requerida
-        java_dir = self.base_dir / f"java-{required_version}"
-        if java_dir.exists():
-            java_exe = self._get_java_executable_path(java_dir)
-            if java_exe and java_exe.exists():
-                self._link_java_to_server(server_path, minecraft_version, str(java_exe))
-                return str(java_exe)
-        
-        # Verificar Java del sistema
-        system_java = self.detect_system_java()
-        if system_java and system_java[0] >= required_version:
-            self._link_java_to_server(server_path, minecraft_version, system_java[1])
-            return system_java[1]
-        
-        # Necesitamos descargar Java
-        logger.info(f"Java {required_version} required for Minecraft {minecraft_version}, downloading...")
-        java_install_dir = self.download_java(required_version)
-        
-        if java_install_dir:
-            java_exe = self._get_java_executable_path(Path(java_install_dir))
-            if java_exe:
-                java_path = str(java_exe)
-                self._link_java_to_server(server_path, minecraft_version, java_path)
-                return java_path
-        
-        return None
+        try:
+            required_version = self.get_required_java_version(minecraft_version)
+            logger.info(f"Looking for Java {required_version} for server at {server_path} (skip_download={skip_download})")
+            
+            # 1. Verificar si ya tenemos Java configurado explícitamente y válido
+            server_key = str(Path(server_path).resolve())
+            if not force_download and server_key in self.config["servers"]:
+                java_path = self.config["servers"][server_key]["java_path"]
+                if Path(java_path).exists() and self._validate_java_install(java_path):
+                     logger.info("Using configured Java path.")
+                     return java_path
+            
+            # 2. Buscar instalación local de la versión requerida (Prioridad Alta)
+            java_dir = self.base_dir / f"java-{required_version}"
+            if java_dir.exists():
+                logger.info(f"Found local Java directory: {java_dir}")
+                java_exe = self._get_java_executable_path(java_dir)
+                
+                # Check if executable exists AND works
+                if java_exe and java_exe.exists():
+                    if self._validate_java_install(str(java_exe)):
+                        logger.info("Local Java is valid. Linking.")
+                        self._link_java_to_server(server_path, minecraft_version, str(java_exe))
+                        return str(java_exe)
+                    else:
+                        logger.warning("Local Java is corrupted. Deleting and re-downloading...")
+                        try:
+                            import shutil
+                            shutil.rmtree(java_dir)
+                            logger.info("Corrupted directory deleted.")
+                        except Exception as e:
+                            logger.error(f"Failed to delete corrupted directory: {e}")
+                else:
+                     logger.warning("Local Java directory exists but executable missing. Deleting...")
+                     try:
+                        import shutil
+                        shutil.rmtree(java_dir)
+                     except Exception as e:
+                        logger.error(f"Failed to delete empty directory: {e}")
+
+            # 3. Verificar Java del sistema (si no forzamos descarga)
+            if not force_download:
+                system_java = self.detect_system_java()
+                if system_java and system_java[0] >= required_version:
+                    path = system_java[1]
+                    logger.info(f"Checking system Java: {path}")
+                    if self._validate_java_install(path):
+                        self._link_java_to_server(server_path, minecraft_version, path)
+                        return path
+            
+            # 4. Skip download if requested (during server start)
+            if skip_download:
+                logger.warning("skip_download=True, not downloading Java. User must install via wizard.")
+                return None
+            
+            # 5. Descargar Java (Si llegamos aquí, no hay local ni system válido/suficiente)
+            logger.info(f"Java {required_version} required for Minecraft {minecraft_version}, downloading...")
+            java_install_dir = self.download_java(required_version)
+            
+            if java_install_dir:
+                java_exe = self._get_java_executable_path(Path(java_install_dir))
+                if java_exe:
+                    java_path = str(java_exe)
+                    if self._validate_java_install(java_path):
+                        self._link_java_to_server(server_path, minecraft_version, java_path)
+                        return java_path
+                    else:
+                        logger.error("Downloaded Java failed validation!")
+            
+            logger.error("Could not find or install a valid Java version.")
+            return None
+            
+        except Exception as e:
+            logger.exception(f"Error in get_java_for_server: {e}")
+            return None
     
     def _link_java_to_server(self, server_path: str, minecraft_version: str, java_path: str):
         """Vincula una instalación de Java a un servidor específico."""

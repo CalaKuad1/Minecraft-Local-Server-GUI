@@ -8,6 +8,8 @@ import re
 
 from utils.api_client import download_file_from_url, download_and_extract_zip
 from utils.java_manager import JavaManager
+import psutil
+import time
 
 class ServerHandler:
     def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None):
@@ -33,22 +35,24 @@ class ServerHandler:
         self.server_running = False
         
         # Si tenemos la versión de Minecraft, configurar Java automáticamente
-        if minecraft_version:
-            self._setup_java_for_minecraft(minecraft_version)
+        # OPTIMIZATION: Do NOT run this in __init__ to avoid blocking the UI during server selection.
+        # It will run lazily in start() -> _get_start_command()
+        # if minecraft_version:
+        #     self._setup_java_for_minecraft(minecraft_version)
     
     def _setup_java_for_minecraft(self, minecraft_version):
         """Configura automáticamente la versión correcta de Java para Minecraft."""
         try:
             self.output_callback(f"Configurando Java para Minecraft {minecraft_version}...\n", "info")
             
-            # Obtener el Java apropiado
-            java_path = self.java_manager.get_java_for_server(self.server_path, minecraft_version)
+            # Obtener el Java apropiado - NO descargar durante el start, solo usar lo que ya existe
+            java_path = self.java_manager.get_java_for_server(self.server_path, minecraft_version, skip_download=True)
             
             if java_path:
                 self.java_path = java_path
                 self.output_callback(f"Java configurado: {java_path}\n", "info")
             else:
-                self.output_callback("No se pudo configurar Java automáticamente. Usando Java del sistema.\n", "warning")
+                self.output_callback("Java no encontrado. Por favor instala Java desde el Setup Wizard antes de iniciar.\n", "warning")
                 
         except Exception as e:
             self.output_callback(f"Error configurando Java: {e}\n", "error")
@@ -75,8 +79,11 @@ class ServerHandler:
                 timeout=10,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
+            if result.returncode != 0:
+                print(f"[DEBUG] Java Check Failed. Path: {java_path}, RC: {result.returncode}, Stderr: {result.stderr}")
             return result.returncode == 0
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        except Exception as e:
+            print(f"[DEBUG] Java Check Exception. Path: {java_path}, Error: {e}")
             return False
 
 
@@ -134,6 +141,24 @@ class ServerHandler:
     def is_running(self):
         return self.server_process is not None and self.server_process.poll() is None and self.server_fully_started
 
+    def _accept_eula(self):
+        """Checks for eula.txt and sets eula=true if found or creates it."""
+        eula_path = os.path.join(self.server_path, 'eula.txt')
+        try:
+            if os.path.exists(eula_path):
+                with open(eula_path, 'r') as f:
+                    content = f.read()
+                if 'eula=true' not in content:
+                    with open(eula_path, 'w') as f:
+                        f.write('eula=true\n')
+                    self.output_callback("Accepted EULA automatically.\n", "info")
+            else:
+                with open(eula_path, 'w') as f:
+                    f.write('eula=true\n')
+                self.output_callback("Created eula.txt and accepted EULA.\n", "info")
+        except Exception as e:
+            self.output_callback(f"Warning: Could not accept EULA automatically: {e}\n", "warning")
+
     def start(self):
         if self.is_running() or self.is_starting():
             self.output_callback("Server is already running or starting.\n", "warning")
@@ -143,6 +168,9 @@ class ServerHandler:
             self.output_callback("Server path is not set up.\n", "error")
             return
 
+        # Auto-accept EULA before starting
+        self._accept_eula()
+
         command, env = self._get_start_command()
         if not command:
             return
@@ -151,6 +179,7 @@ class ServerHandler:
         self.server_stopping = False
         self.server_running = True
         self.output_callback(f"Starting server with command: {' '.join(command)}\n", "info")
+        self.output_callback(f"Working Directory: {self.server_path}\n", "info")
         threading.Thread(target=self._run_server, args=(command, env), daemon=True).start()
 
     def _get_start_command(self):
@@ -164,8 +193,23 @@ class ServerHandler:
         
         # Verificar que Java existe y funciona
         if not self._verify_java_installation(java_path):
-            self.output_callback(f"Error: Java no encontrado o no funciona en: {java_path}\n", "error")
-            return None, None
+            self.output_callback(f"Error: Java no funciona en: {java_path}. Intentando reparar...\n", "warning")
+            
+            # Intentar reparar buscando de nuevo
+            new_path = self.ensure_java_compatibility(self.minecraft_version)
+            if new_path and new_path != java_path and self._verify_java_installation(new_path):
+                self.output_callback(f"Reparado: Usando nueva ruta de Java: {new_path}\n", "success")
+                java_path = new_path
+                self.java_path = new_path
+            else:
+                # Último intento: usar simplemente "java" del sistema
+                if self._verify_java_installation("java"):
+                     self.output_callback("Reparado: Usando 'java' del sistema (PATH).\n", "success")
+                     java_path = "java"
+                     self.java_path = "java"
+                else:
+                    self.output_callback(f"Error Crítico: No se encontró ningún Java funcional. Por favor instala Java.\n", "error")
+                    return None, None
         
         run_script = None
         
@@ -299,7 +343,12 @@ class ServerHandler:
         
         try:
             # Intentar obtener Java compatible para este servidor
-            compatible_java = self.java_manager.get_java_for_server(self.server_path, minecraft_version)
+            # Si la ruta actual es sospechosa (Oracle javapath) forzamos descarga?
+            force = False
+            if self.java_path and "javapath" in self.java_path.lower():
+                 force = True
+                 
+            compatible_java = self.java_manager.get_java_for_server(self.server_path, minecraft_version, force_download=force)
             
             if compatible_java:
                 old_java = self.java_path
@@ -319,6 +368,96 @@ class ServerHandler:
         if self.server_process:
             return self.server_process.pid
         return None
+
+    def get_server_properties(self):
+        """Parses server.properties into a dict."""
+        props = {}
+        props_file = os.path.join(self.server_path, 'server.properties')
+        if os.path.exists(props_file):
+            try:
+                with open(props_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            props[key.strip()] = value.strip()
+            except Exception as e:
+                self.output_callback(f"Error reading server.properties: {e}\n", "error")
+        return props
+
+    def get_stats(self):
+        if not self.server_process:
+            self._cached_process = None
+            return {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
+        
+        try:
+            # Logic to find the actual Java process if we haven't already or if it died
+            if not hasattr(self, '_cached_process') or self._cached_process is None or not self._cached_process.is_running():
+                parent = psutil.Process(self.server_process.pid)
+                
+                # Get all descendants
+                try:
+                    children = parent.children(recursive=True)
+                except psutil.NoSuchProcess:
+                    children = []
+
+                # Include parent in candidates? Usually parent is cmd.exe, we want the heavy child.
+                candidates = children + [parent]
+                
+                best_proc = None
+                max_mem = -1
+
+                for p in candidates:
+                    try:
+                        # Get memory info
+                        mem_info = p.memory_info()
+                        rss = mem_info.rss
+                        
+                        # Prioritize if name contains java
+                        name = p.name().lower()
+                        score = rss
+                        if 'java' in name or 'openjdk' in name:
+                            # Give a massive bonus to java processes so they win even if they just started and have low ram
+                            score += 1024 * 1024 * 1024 * 100 # +100GB bonus
+                        
+                        if score > max_mem:
+                            max_mem = score
+                            best_proc = p
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+                
+                if best_proc:
+                    self._cached_process = best_proc
+                    # Debug log to verify we hooked the right one
+                    # self.output_callback(f"[Debug] Monitoring Process: {best_proc.name()} (PID: {best_proc.pid})\n", "normal")
+                else:
+                    self._cached_process = parent
+
+            proc = self._cached_process
+            
+            with proc.oneshot():
+                cpu_percent = proc.cpu_percent(interval=None) / psutil.cpu_count()
+                mem = proc.memory_info()
+                create_time = proc.create_time()
+
+            # RAM
+            ram_used_gb = mem.rss / (1024 * 1024 * 1024)
+            ram_max_gb = float(self.ram_max) # simple assumption
+            
+            # Uptime
+            uptime_seconds = time.time() - create_time
+            hours = int(uptime_seconds // 3600)
+            minutes = int((uptime_seconds % 3600) // 60)
+            
+            return {
+                "cpu": round(cpu_percent, 1),
+                "ram": f"{ram_used_gb:.1f}/{ram_max_gb:.1f} GB",
+                "uptime": f"{hours}h {minutes}m"
+            }
+        except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
+            # If process dies or we can't read it, reset cache
+            self._cached_process = None
+            return {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
 
     def force_stop_state(self):
         """Forcefully resets the server's state variables, e.g., after a crash or EULA stop."""
