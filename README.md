@@ -3,7 +3,7 @@
   
   <h1>🎮 Minecraft Local Server GUI</h1>
   
-  <p><strong>The ultimate tool for managing Minecraft servers — beautiful, modern, and effortless.</strong></p>
+  <p><strong>The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.</strong></p>
   
   <p>
     <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
