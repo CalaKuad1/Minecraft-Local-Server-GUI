@@ -20,7 +20,7 @@
 
   <br>
   
-  <img src="assets/screenshot-dashboard.png" alt="Dashboard Screenshot" width="800">
+  <img src="images/dashboard-screenshot.png" alt="Dashboard Screenshot" width="800">
 </div>
 
 ---
