@@ -65,8 +65,9 @@
 
 ### 📊 Dashboard
 - **Real-time stats** — CPU, RAM, and uptime monitoring
+- **One-Click Public Server** — Use **Pinggy** (Experimental) to share your server globally via SSH tunnel
+- **Region Selection** — Choose between EU, US, and Asia for best latency
 - **Local IP display** — Easy LAN connection for friends
-- **Public server guide** — Tips for playit.gg, ngrok, etc.
 - **Quick command input** — Send commands from dashboard
 
 </td>

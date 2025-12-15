@@ -176,7 +176,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
     }, [existingPath, mode]);
 
     return (
-        <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
+        <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto animate-in fade-in zoom-in duration-500 relative">
 
             {/* Back Button */}
             <button

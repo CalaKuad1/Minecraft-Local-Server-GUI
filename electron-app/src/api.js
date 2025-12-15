@@ -194,5 +194,19 @@ export const api = {
             return await window.electron.openDirectory();
         }
         return null;
+    },
+
+    // --- Tunnel (Public Server) ---
+    getTunnelStatus: async () => {
+        const res = await fetch('http://127.0.0.1:8000/tunnel/status');
+        return await res.json();
+    },
+    startTunnel: async (region = "eu") => {
+        const res = await fetch(`http://127.0.0.1:8000/tunnel/start?region=${region}`, { method: 'POST' });
+        return await res.json();
+    },
+    stopTunnel: async () => {
+        const res = await fetch('http://127.0.0.1:8000/tunnel/stop', { method: 'POST' });
+        return await res.json();
     }
 };

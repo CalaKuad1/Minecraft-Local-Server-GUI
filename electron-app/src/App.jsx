@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github } from 'lucide-react';
 import { api } from './api';
 
+import logo from './assets/logo2.png';
+
 // Components
 import Dashboard from './components/Dashboard';
 import Console from './components/Console';
@@ -30,7 +32,7 @@ function Sidebar({ activeTab, setActiveTab, onBack }) {
 
       <div className="p-6 flex justify-center mb-2">
         <img
-          src="/images/logo2.png"
+          src={logo}
           alt="Server Manager"
           className="w-full max-h-24 object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]"
         />

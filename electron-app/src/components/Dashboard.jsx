@@ -23,29 +23,20 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
     );
 };
 
+import { Select } from './ui/Select';
+
 // Custom Modal Component
 const PublicServerModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     const services = [
         {
-            name: 'playit.gg',
-            description: 'La forma más fácil. Descarga, ejecuta y listo. Sin configuración.',
-            color: 'from-green-500 to-emerald-600',
-            url: 'https://playit.gg',
-            recommended: true
-        },
-        {
-            name: 'ngrok',
-            description: 'Túneles seguros para desarrolladores. Requiere cuenta gratuita.',
-            color: 'from-blue-500 to-indigo-600',
-            url: 'https://ngrok.com'
-        },
-        {
-            name: 'Port Forwarding',
-            description: 'Configura tu router manualmente. Opción más avanzada pero permanente.',
-            color: 'from-orange-500 to-amber-600',
-            url: 'https://www.youtube.com/results?search_query=port+forwarding+minecraft+server'
+            name: 'pinggy.io',
+            description: 'Experimental. Túnel rápido sin instalación ni configuración. Usa SSH.',
+            color: 'from-purple-500 to-pink-600',
+            url: 'https://pinggy.io',
+            recommended: true,
+            badge: 'BETA'
         }
     ];
 
@@ -72,7 +63,7 @@ const PublicServerModal = ({ isOpen, onClose }) => {
                             </div>
                             <div>
                                 <h2 className="text-xl font-bold text-white">Hacer Servidor Público</h2>
-                                <p className="text-sm text-gray-400">Comparte tu servidor con amigos</p>
+                                <p className="text-sm text-gray-400">Experimental: Powered by Pinggy.io</p>
                             </div>
                         </div>
                         <button
@@ -87,7 +78,8 @@ const PublicServerModal = ({ isOpen, onClose }) => {
                 {/* Content */}
                 <div className="p-6 space-y-4">
                     <p className="text-gray-400 text-sm">
-                        Para que tus amigos puedan conectarse desde fuera de tu red local, usa uno de estos servicios:
+                        Tu servidor será accesible desde Internet usando un túnel seguro.
+                        <strong>Esta función es experimental</strong> y la dirección cambiará cada vez que reinicies el túnel.
                     </p>
 
                     {services.map((service, i) => (
@@ -107,8 +99,8 @@ const PublicServerModal = ({ isOpen, onClose }) => {
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-white">{service.name}</span>
                                             {service.recommended && (
-                                                <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full font-medium">
-                                                    Recomendado
+                                                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full font-medium">
+                                                    {service.badge || 'Recomendado'}
                                                 </span>
                                             )}
                                         </div>
@@ -139,11 +131,40 @@ export default function Dashboard() {
     const [status, setStatus] = useState({ status: 'offline' });
     const [loading, setLoading] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
+    const [tunnelAddress, setTunnelAddress] = useState(null);
+    const [tunnelConnecting, setTunnelConnecting] = useState(false);
+    const [tunnelRegion, setTunnelRegion] = useState('eu');
 
     useEffect(() => {
         fetchStatus();
         const interval = setInterval(fetchStatus, 2000);
         return () => clearInterval(interval);
+    }, []);
+
+    // WebSocket for tunnel events
+    useEffect(() => {
+        const ws = new WebSocket('ws://127.0.0.1:8000/ws/console');
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'tunnel_connected') {
+                    setTunnelAddress(data.address);
+                    setTunnelConnecting(false);
+                } else if (data.type === 'tunnel_disconnected') {
+                    setTunnelAddress(null);
+                    setTunnelConnecting(false);
+                }
+            } catch { }
+        };
+
+        // Check initial tunnel status
+        api.getTunnelStatus().then(status => {
+            if (status.active && status.address) {
+                setTunnelAddress(status.address);
+            }
+        }).catch(() => { });
+
+        return () => ws.close();
     }, []);
 
     const fetchStatus = async () => {
@@ -221,8 +242,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Local IP Info */}
-            <div className="flex items-center gap-4 p-4 bg-surface/40 backdrop-blur-md border border-white/5 rounded-xl">
+            {/* Local IP Info + Make Public */}
+            <div className="flex items-center gap-4 p-4 bg-surface/40 backdrop-blur-md border border-white/5 rounded-xl relative z-50">
                 <div className="flex items-center gap-3 flex-1">
                     <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -233,12 +254,57 @@ export default function Dashboard() {
                         </svg>
                     </div>
                     <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">Local IP Address</div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wider">
+                            {tunnelAddress ? '🌐 Public Address' : 'Local IP Address'}
+                        </div>
                         <div className="text-lg font-mono text-white font-bold">
-                            {status.local_ip || '127.0.0.1'}:{status.port || '25565'}
+                            {tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
                         </div>
                     </div>
                 </div>
+
+                {/* Region Selector */}
+                <div className="w-32 active:z-50">
+                    <Select
+                        value={tunnelRegion}
+                        onChange={setTunnelRegion}
+                        disabled={!!tunnelAddress || tunnelConnecting}
+                        options={[
+                            { value: 'eu', label: 'EU 🇪🇺' },
+                            { value: 'us', label: 'US 🇺🇸' },
+                            { value: 'ap', label: 'Asia 🌏' },
+                        ]}
+                    />
+                </div>
+
+                {/* Make Public Button */}
+                <button
+                    onClick={async () => {
+                        if (tunnelAddress) {
+                            await api.stopTunnel();
+                            setTunnelAddress(null);
+                            setTunnelConnecting(false);
+                        } else {
+                            setTunnelConnecting(true);
+                            await api.startTunnel(tunnelRegion);
+                        }
+                    }}
+                    disabled={tunnelConnecting && !tunnelAddress}
+                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${tunnelAddress
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                        : tunnelConnecting
+                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                            : 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
+                        }`}
+                >
+                    {tunnelAddress ? (
+                        <><Square size={14} /> Stop Public</>
+                    ) : tunnelConnecting ? (
+                        <><div className="w-4 h-4 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>
+                    ) : (
+                        <><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" x2="22" y1="12" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg> Make Public</>
+                    )}
+                </button>
 
                 {/* Help Button with Tooltip */}
                 <div className="relative group">
@@ -255,9 +321,9 @@ export default function Dashboard() {
 
                     {/* Tooltip on hover */}
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-black/90 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl z-50">
-                        <div className="text-sm text-white font-medium mb-1">¿Cómo hago mi servidor público?</div>
+                        <div className="text-sm text-white font-medium mb-1">Otras opciones</div>
                         <div className="text-xs text-gray-400">
-                            Haz clic para ver opciones como playit.gg que te permiten compartir tu servidor con amigos fuera de tu red local.
+                            Haz clic para ver alternativas como playit.gg o port forwarding.
                         </div>
                         <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-black/90 rotate-45 border-r border-b border-white/10"></div>
                     </div>

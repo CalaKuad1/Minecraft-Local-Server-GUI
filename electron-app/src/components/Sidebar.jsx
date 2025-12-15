@@ -1,3 +1,6 @@
+import { LayoutDashboard, Terminal, Users, Globe, Settings as SettingsIcon, Activity, Github } from 'lucide-react';
+import logo from '../assets/logo2.png';
+
 function Sidebar({ activeTab, setActiveTab }) {
     const menuItems = [
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -14,7 +17,7 @@ function Sidebar({ activeTab, setActiveTab }) {
 
             <div className="p-6 flex justify-center mb-2">
                 <img
-                    src="images/logo2.png"
+                    src={logo}
                     alt="Server Manager"
                     className="w-full max-h-24 object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]"
                 />

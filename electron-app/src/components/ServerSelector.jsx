@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Plus, Server, Trash2, Play, Settings } from 'lucide-react';
+import logo from '../assets/logo2.png';
 
 export default function ServerSelector({ onSelect, onAdd }) {
     const [servers, setServers] = useState([]);
@@ -45,7 +46,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col p-10 font-sans selection:bg-primary/30 relative overflow-hidden">
+        <div className="min-h-screen bg-[#050505] text-white flex flex-col p-10 font-sans selection:bg-primary/30 relative overflow-hidden animate-in fade-in zoom-in duration-500">
 
             {/* Background Effects */}
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse"></div>
@@ -55,7 +56,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
             {/* Header */}
             <div className="flex items-center justify-between mb-10 relative z-10">
                 <div className="flex items-center gap-4">
-                    <img src="images/logo2.png" className="h-12 w-auto opacity-80" alt="Logo" />
+                    <img src={logo} className="h-12 w-auto opacity-80" alt="Logo" />
                     <h1 className="text-3xl font-bold tracking-tight text-white/90 border-l border-white/10 pl-4">Server Library</h1>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-500">

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export function Select({ value, onChange, options, placeholder = "Select option", className = "" }) {
+export function Select({ value, onChange, options, placeholder = "Select option", className = "", disabled = false }) {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef(null);
 
@@ -24,8 +24,9 @@ export function Select({ value, onChange, options, placeholder = "Select option"
         <div className={`relative ${className}`} ref={containerRef}>
             <button
                 type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between bg-black/40 border ${isOpen ? 'border-primary' : 'border-white/10'} rounded-lg px-4 py-3 text-white transition-all hover:bg-white/5 outline-none`}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                disabled={disabled}
+                className={`w-full flex items-center justify-between bg-black/40 border ${isOpen ? 'border-primary' : 'border-white/10'} rounded-lg px-4 py-3 text-white transition-all hover:bg-white/5 outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
             >
                 <span className="truncate">{selectedLabel}</span>
                 <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
