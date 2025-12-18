@@ -31,7 +31,7 @@
 
 | Platform | Download |
 |:--------:|:---------|
-| **Windows** | [📦 Download Installer (.exe)]([https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft%20Local%20Server%20GUI%20Setup%201.1.0.exe](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft%20Local%20Server%20GUI%20Setup%201.1.0.exe)) |
+| **Windows** | [📦 Download Installer (.exe)]([https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft%20Local%20Server%20GUI%20Setup%201.1.0.exe]) |
 
 > **Note:** The app automatically downloads and manages Java for you. Just install and play!
 
