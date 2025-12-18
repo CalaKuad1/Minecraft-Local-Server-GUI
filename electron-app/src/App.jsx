@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github } from 'lucide-react';
+import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package } from 'lucide-react';
 import { api } from './api';
 
 import logo from './assets/logo2.png';
@@ -13,6 +13,7 @@ import SetupWizard from './components/SetupWizard';
 import Players from './components/Players';
 import Settings from './components/Settings';
 import Worlds from './components/Worlds';
+import Mods from './components/Mods';
 
 import ServerSelector from './components/ServerSelector';
 
@@ -22,6 +23,7 @@ function Sidebar({ activeTab, setActiveTab, onBack }) {
     { id: 'console', icon: Terminal, label: 'Console' },
     { id: 'players', icon: Users, label: 'Players' },
     { id: 'worlds', icon: Globe, label: 'Worlds' },
+    { id: 'mods', icon: Package, label: 'Mods' },
     { id: 'settings', icon: SettingsIcon, label: 'Settings' },
   ];
 
@@ -96,7 +98,8 @@ function Sidebar({ activeTab, setActiveTab, onBack }) {
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedServer, setSelectedServer] = useState(null);
+  const [selectedServer, setSelectedServer] = useState(null); // Now stores actual server config or null
+  const [serverStatus, setServerStatus] = useState(null); // Live status from backend
   const [checking, setChecking] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
 
@@ -113,13 +116,75 @@ function App() {
     }
   }, []);
 
-  const handleServerSelected = () => {
-    setSelectedServer(true);
+  const isSameStatus = (a, b) => {
+    if (!a || !b) return false;
+
+    const lastLogA = Array.isArray(a.recent_logs) && a.recent_logs.length > 0 ? a.recent_logs[a.recent_logs.length - 1] : null;
+    const lastLogB = Array.isArray(b.recent_logs) && b.recent_logs.length > 0 ? b.recent_logs[b.recent_logs.length - 1] : null;
+    const lastMsgA = lastLogA ? `${lastLogA.level || ''}:${lastLogA.message || ''}` : '';
+    const lastMsgB = lastLogB ? `${lastLogB.level || ''}:${lastLogB.message || ''}` : '';
+
+    return (
+      a.status === b.status &&
+      a.pid === b.pid &&
+      a.server_type === b.server_type &&
+      a.minecraft_version === b.minecraft_version &&
+      a.cpu === b.cpu &&
+      a.ram === b.ram &&
+      a.players === b.players &&
+      a.max_players === b.max_players &&
+      a.uptime === b.uptime &&
+      a.local_ip === b.local_ip &&
+      a.port === b.port &&
+      lastMsgA === lastMsgB
+    );
+  };
+
+  // Fetch server status periodically when a server is selected
+  useEffect(() => {
+    if (selectedServer) {
+      let cancelled = false;
+      let timer = null;
+
+      const tick = async () => {
+        if (cancelled) return;
+        try {
+          const status = await api.getStatus();
+          if (!cancelled) {
+            setServerStatus((prev) => (isSameStatus(prev, status) ? prev : status));
+          }
+
+          const nextMs = status?.status === 'starting' ? 6000 : 3000;
+          timer = setTimeout(tick, nextMs);
+        } catch (e) {
+          console.error("Failed to fetch status", e);
+          timer = setTimeout(tick, 6000);
+        }
+      };
+
+      tick();
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      };
+    }
+  }, [selectedServer]);
+
+  const handleServerSelected = async () => {
+    // Fetch the current server status to get config details
+    try {
+      const status = await api.getStatus();
+      setServerStatus(status);
+      setSelectedServer(status); // Store full status object
+    } catch (e) {
+      setSelectedServer(true); // Fallback
+    }
     setActiveTab('dashboard');
   };
 
   const handleBackToLibrary = async () => {
     setSelectedServer(null);
+    setServerStatus(null);
   };
 
   // --- Render: Shutdown Overlay (Priority 1) ---
@@ -139,7 +204,7 @@ function App() {
       <div className="h-screen w-screen bg-background text-white overflow-hidden flex flex-col">
         <div className="h-8 w-full bg-background" style={{ WebkitAppRegion: 'drag' }}></div>
         <div className="flex-1 overflow-y-auto">
-          <SetupWizard onComplete={() => setShowWizard(false)} onCancel={() => setShowWizard(false)} />
+          <SetupWizard onComplete={() => { setShowWizard(false); handleServerSelected(); }} onCancel={() => setShowWizard(false)} />
         </div>
       </div>
     );
@@ -176,14 +241,20 @@ function App() {
                 animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
+                style={{ display: activeTab === 'console' ? 'none' : 'block' }}
               >
-                {activeTab === 'dashboard' && <Dashboard />}
-                {activeTab === 'console' && <Console />}
-                {activeTab === 'players' && <Players />}
+                {activeTab === 'dashboard' && <Dashboard status={serverStatus} />}
+                {activeTab === 'players' && <Players status={serverStatus} />}
                 {activeTab === 'worlds' && <Worlds />}
+                {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
                 {activeTab === 'settings' && <Settings />}
               </motion.div>
             </AnimatePresence>
+
+            {/* Keep Console mounted to preserve WebSocket connection and history */}
+            <div style={{ display: activeTab === 'console' ? 'block' : 'none', height: '100%' }}>
+              <Console />
+            </div>
           </div>
         </div>
       </main>

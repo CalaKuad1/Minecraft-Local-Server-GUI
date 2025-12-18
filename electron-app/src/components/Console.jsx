@@ -7,6 +7,7 @@ export default function Console() {
     const [inputObj, setInputObj] = useState('');
     const ws = useRef(null);
     const scrollRef = useRef(null);
+    const MAX_LOGS = 800;
 
     useEffect(() => {
         let timeoutId;
@@ -29,7 +30,31 @@ export default function Console() {
                 if (!isMounted) return;
                 try {
                     const data = JSON.parse(event.data);
-                    setLogs((prev) => [...prev, data]);
+
+                    const appendItems = (items) => {
+                        const filtered = items.filter((it) => {
+                            // Ignore structured events that aren't real console lines
+                            if (it && typeof it === 'object' && it.type && it.message === undefined) return false;
+                            return true;
+                        });
+
+                        if (filtered.length === 0) return;
+
+                        setLogs((prev) => {
+                            const next = [...prev, ...filtered];
+                            if (next.length > MAX_LOGS) {
+                                return next.slice(next.length - MAX_LOGS);
+                            }
+                            return next;
+                        });
+                    };
+
+                    if (data && typeof data === 'object' && data.type === 'batch' && Array.isArray(data.items)) {
+                        appendItems(data.items);
+                        return;
+                    }
+
+                    appendItems([data]);
                 } catch (e) {
                     console.error("Failed to parse log", e);
                 }
@@ -53,10 +78,20 @@ export default function Console() {
 
         return () => {
             isMounted = false;
+            // Clear reconnection timeout
             if (timeoutId) clearTimeout(timeoutId);
+
+            // Close socket cleanly
             if (ws.current) {
-                ws.current.onclose = null; // Important: prevent reconnect loop during unmount
-                ws.current.close();
+                // Remove listeners to prevent logic from running during close
+                ws.current.onclose = null;
+                ws.current.onerror = null;
+                ws.current.onmessage = null;
+                ws.current.onopen = null;
+
+                if (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING) {
+                    ws.current.close();
+                }
             }
         };
     }, []);
@@ -73,10 +108,22 @@ export default function Console() {
 
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             ws.current.send(inputObj);
-            setLogs(prev => [...prev, { message: `> ${inputObj}`, level: 'input' }]);
+            setLogs(prev => {
+                const next = [...prev, { message: `> ${inputObj}`, level: 'input' }];
+                if (next.length > MAX_LOGS) {
+                    return next.slice(next.length - MAX_LOGS);
+                }
+                return next;
+            });
             setInputObj('');
         } else {
-            setLogs(prev => [...prev, { message: `Error: Not connected to console.`, level: 'error' }]);
+            setLogs(prev => {
+                const next = [...prev, { message: `Error: Not connected to console.`, level: 'error' }];
+                if (next.length > MAX_LOGS) {
+                    return next.slice(next.length - MAX_LOGS);
+                }
+                return next;
+            });
         }
     };
 

@@ -535,17 +535,17 @@ class JavaManager:
         }
         
         if local_java_available:
-            status["status_message"] = f"✅ Java {required_version} disponible (instalación local)"
+            status["status_message"] = f"✅ Java {required_version} available (local installation)"
             status["status_color"] = "green"
         elif system_java and system_java[0] >= required_version:
-            status["status_message"] = f"✅ Java {system_java[0]} del sistema (compatible)"
+            status["status_message"] = f"✅ System Java {system_java[0]} (compatible)"
             status["status_color"] = "green"
         elif system_java and system_java[0] < required_version:
-            status["status_message"] = f"⚠️ Java {system_java[0]} encontrado (se requiere Java {required_version}+)"
+            status["status_message"] = f"⚠️ Java {system_java[0]} found (Java {required_version}+ required)"
             status["status_color"] = "orange"
             status["needs_download"] = True
         else:
-            status["status_message"] = f"❌ Java no encontrado (se requiere Java {required_version}+)"
+            status["status_message"] = f"❌ Java not found (Java {required_version}+ required)"
             status["status_color"] = "red"
             status["needs_download"] = True
         

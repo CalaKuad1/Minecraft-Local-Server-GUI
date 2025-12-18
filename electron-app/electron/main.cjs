@@ -11,12 +11,22 @@ let isQuitting = false;
 const isDev = !app.isPackaged;
 const API_PORT = 8000;
 
+// Ensure Windows shows the correct app name in taskbar/start menu grouping
+// (must match electron-builder appId)
+try {
+  app.setAppUserModelId('com.minecraft.localservergui');
+} catch (_) {}
+try {
+  app.setName('Minecraft Local Server GUI');
+} catch (_) {}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 650,
+    title: 'Minecraft Local Server GUI',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -132,7 +142,7 @@ const shutdownBackend = () => {
     const req = http.request({
       hostname: '127.0.0.1',
       port: API_PORT,
-      path: '/stop',
+      path: '/system/shutdown',
       method: 'POST'
     }, (res) => {
       console.log(`Backend stop request status: ${res.statusCode}`);

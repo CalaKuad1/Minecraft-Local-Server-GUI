@@ -69,6 +69,7 @@ crash-reports/
 .Trashes
 ehthumbs.db
 Thumbs.db
+*.lnk
 
 # Temporary files
 *.tmp

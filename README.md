@@ -31,7 +31,7 @@
 
 | Platform | Download |
 |:--------:|:---------|
-| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft.Local.Server.GUI.Setup.1.0.1.exe) |
+| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft%20Local%20Server%20GUI%20Setup%201.1.0.exe) |
 
 > **Note:** The app automatically downloads and manages Java for you. Just install and play!
 
@@ -70,6 +70,16 @@
 - **Local IP display** — Easy LAN connection for friends
 - **Quick command input** — Send commands from dashboard
 
+### 🧩 Mods
+- **Mod search & install** — browse mods and install them in one click
+- **Installed mods list** — see what is currently installed
+- **Smart warning for non-modded servers** — Vanilla/Paper show a hint to install a mod loader (Setup Wizard)
+
+### 🌍 Worlds & Backups
+- **World list** with last modified time
+- **Fast loading** — world sizes are computed in the background and cached
+- **One-click backups** — create ZIP backups and keep them inside your server folder
+
 </td>
 <td width="50%">
 
@@ -78,6 +88,11 @@
 - **server.properties GUI** — All options organized by category
 - **RAM allocation** — Customize min/max memory per server
 - **Player management** — Op, ban, whitelist with one click
+
+### 👥 Players
+- **Accurate online players** — player counter is tracked from server logs and `/list`
+- **Cleaner console** — internal `/list` output is hidden from the console UI
+- **Faster refresh** — avoids full UI reloads during periodic updates
 
 </td>
 </tr>
@@ -134,7 +149,7 @@ npm run dev
 ```bash
 cd electron-app
 npm run electron:build
-# Output: electron-app/release/Minecraft Local Server GUI Setup 1.0.0.exe
+# Output: electron-app/release/Minecraft Local Server GUI Setup 1.1.0.exe
 ```
 
 ---
@@ -166,6 +181,12 @@ The app automatically downloads the correct Java version for your Minecraft serv
 
 For **LAN**: Share the Local IP shown in the dashboard.  
 For **Internet**: Use a tunneling service like [playit.gg](https://playit.gg) (recommended) or configure port forwarding on your router.
+</details>
+
+<details>
+<summary><strong>Is the UI available in English?</strong></summary>
+
+Yes — the app UI and system messages are in **English**.
 </details>
 
 <details>

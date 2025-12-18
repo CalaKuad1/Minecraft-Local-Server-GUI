@@ -66,6 +66,12 @@ class ServerDetector:
         if os.path.exists(os.path.join(server_path, ".fabric")):
              result["type"] = "fabric"
              result["detected"] = True # Partial detection
+        
+        # Forge detection: Look for libraries/net/minecraftforge folder
+        forge_lib_path = os.path.join(server_path, "libraries", "net", "minecraftforge")
+        if os.path.isdir(forge_lib_path):
+            result["type"] = "forge"
+            result["detected"] = True
 
         return result
 

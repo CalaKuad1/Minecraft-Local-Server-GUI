@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink } from 'lucide-react';
+import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 
 const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
@@ -26,13 +27,11 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
 import { Select } from './ui/Select';
 
 // Custom Modal Component
-const PublicServerModal = ({ isOpen, onClose }) => {
-    if (!isOpen) return null;
-
+const PublicServerModal = ({ onClose }) => {
     const services = [
         {
             name: 'pinggy.io',
-            description: 'Experimental. Túnel rápido sin instalación ni configuración. Usa SSH.',
+            description: 'Experimental. Quick tunnel with no installation or configuration. Uses SSH.',
             color: 'from-purple-500 to-pink-600',
             url: 'https://pinggy.io',
             recommended: true,
@@ -41,28 +40,34 @@ const PublicServerModal = ({ isOpen, onClose }) => {
     ];
 
     return (
-        <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={onClose}
-        >
-            <div
-                className="bg-[#0a0a0a] border border-white/10 rounded-2xl max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-300"
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Backdrop */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#0f0f0f] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative z-10 mx-4"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-primary/20 to-accent/20 p-6 rounded-t-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-6 relative overflow-hidden border-b border-white/5">
                     <div className="relative flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-3 bg-white/10 rounded-xl">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <line x1="2" x2="22" y1="12" y2="12" />
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                                </svg>
+                            <div className="p-3 bg-primary/20 rounded-xl text-primary">
+                                <Activity size={24} />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-white">Hacer Servidor Público</h2>
+                                <h2 className="text-xl font-bold text-white">Make Server Public</h2>
                                 <p className="text-sm text-gray-400">Experimental: Powered by Pinggy.io</p>
                             </div>
                         </div>
@@ -77,9 +82,9 @@ const PublicServerModal = ({ isOpen, onClose }) => {
 
                 {/* Content */}
                 <div className="p-6 space-y-4">
-                    <p className="text-gray-400 text-sm">
-                        Tu servidor será accesible desde Internet usando un túnel seguro.
-                        <strong>Esta función es experimental</strong> y la dirección cambiará cada vez que reinicies el túnel.
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                        Your server will be accessible from the Internet using a secure tunnel.
+                        <strong className="text-white"> This feature is experimental</strong> and the address will change every time you restart the tunnel.
                     </p>
 
                     {services.map((service, i) => (
@@ -88,7 +93,7 @@ const PublicServerModal = ({ isOpen, onClose }) => {
                             href={service.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="block p-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all group"
+                            className="block p-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 rounded-xl transition-all group"
                         >
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
@@ -114,85 +119,87 @@ const PublicServerModal = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 pb-6">
+                <div className="p-4 bg-white/5 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-300 font-medium transition-colors"
+                        className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold transition-all"
                     >
-                        Cerrar
+                        Close
                     </button>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 };
 
-export default function Dashboard() {
-    const [status, setStatus] = useState({ status: 'offline' });
+export default function Dashboard({ status: serverStatus }) {
+    // Use prop or fallback to offline
+    const status = serverStatus || { status: 'offline' };
+
+    const onlinePlayersLen = Array.isArray(status.online_players) ? status.online_players.length : 0;
+    const playersValue = (status.players !== undefined && status.players !== null) ? Number(status.players) : null;
+    const onlineCount = (Number.isFinite(playersValue) && playersValue > 0)
+        ? playersValue
+        : onlinePlayersLen;
+
+    // We can keep the tunnel status logic here as it is separate, but we should probably lift it up too eventually.
+    // For now, let's keep tunnel logic separate but remove the main status polling.
+
     const [loading, setLoading] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
     const [tunnelAddress, setTunnelAddress] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
 
+    // WebSocket for tunnel events
     useEffect(() => {
-        fetchStatus();
-        const interval = setInterval(fetchStatus, 2000);
+        const checkTunnel = async () => {
+            try {
+                const status = await api.getTunnelStatus();
+                if (status.active && status.address) {
+                    setTunnelAddress(status.address);
+                } else {
+                    setTunnelAddress(null);
+                }
+                setTunnelConnecting(false);
+            } catch (e) {
+                // Silent fail
+            }
+        };
+
+        checkTunnel();
+        const interval = setInterval(checkTunnel, 5000);
         return () => clearInterval(interval);
     }, []);
 
-    // WebSocket for tunnel events
-    useEffect(() => {
-        const ws = new WebSocket('ws://127.0.0.1:8000/ws/console');
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'tunnel_connected') {
-                    setTunnelAddress(data.address);
-                    setTunnelConnecting(false);
-                } else if (data.type === 'tunnel_disconnected') {
-                    setTunnelAddress(null);
-                    setTunnelConnecting(false);
-                }
-            } catch { }
-        };
+    // fetchStatus removed in favor of props
+    // Status prop now drives the UI directly.
 
-        // Check initial tunnel status
-        api.getTunnelStatus().then(status => {
-            if (status.active && status.address) {
-                setTunnelAddress(status.address);
-            }
-        }).catch(() => { });
-
-        return () => ws.close();
-    }, []);
-
-    const fetchStatus = async () => {
-        const data = await api.getStatus();
-        setStatus(data);
-    };
-
-    const pollFast = () => {
-        let count = 0;
-        const fInterval = setInterval(async () => {
-            await fetchStatus();
-            count++;
-            if (count > 10) clearInterval(fInterval);
-        }, 500);
-    };
+    // We still need a way to force update after actions?
+    // Start/Stop actions in App.jsx usually trigger updates.
+    // Ideally App.jsx detects state changes, but for now the polling in App.jsx handles it.
+    // To make it snappier, App.jsx could expose a `refreshStatus` prop, but let's rely on the 3s poll + action delay for now.
 
     const handleStart = async () => {
         setLoading(true);
         await api.start();
-        pollFast();
-        setTimeout(() => setLoading(false), 1000);
+        // App.jsx polls status, so it will update automatically
+        setTimeout(() => setLoading(false), 1500);
     };
 
     const handleStop = async () => {
         setLoading(true);
         await api.stop();
-        pollFast();
-        setTimeout(() => setLoading(false), 1000);
+        // App.jsx polls status, so it will update automatically
+        setTimeout(() => setLoading(false), 1500);
+    };
+
+    const handleOpenFolder = async () => {
+        try {
+            await api.openServerFolder();
+        } catch (error) {
+            console.error("Failed to open folder:", error);
+        }
     };
 
     const isOnline = status.status === 'online';
@@ -263,6 +270,15 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* Open Folder Button */}
+                <button
+                    onClick={handleOpenFolder}
+                    className="p-2.5 bg-surface hover:bg-white/5 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/5 hover:border-white/10"
+                    title="Open Server Folder"
+                >
+                    <FolderOpen size={20} />
+                </button>
+
                 {/* Region Selector */}
                 <div className="w-32 active:z-50">
                     <Select
@@ -321,9 +337,9 @@ export default function Dashboard() {
 
                     {/* Tooltip on hover */}
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-black/90 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl z-50">
-                        <div className="text-sm text-white font-medium mb-1">Otras opciones</div>
+                        <div className="text-sm text-white font-medium mb-1">Public Server</div>
                         <div className="text-xs text-gray-400">
-                            Haz clic para ver alternativas como playit.gg o port forwarding.
+                            Click to make your server accessible from the Internet.
                         </div>
                         <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-black/90 rotate-45 border-r border-b border-white/10"></div>
                     </div>
@@ -331,7 +347,14 @@ export default function Dashboard() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <StatCard
+                    icon={Users}
+                    label="Players"
+                    value={onlineCount !== undefined ? `${onlineCount}` : '-'}
+                    sublabel={`/ ${status.max_players || 20} Online`}
+                    color="accent"
+                />
                 <StatCard
                     icon={Cpu}
                     label="CPU Usage"
@@ -365,15 +388,25 @@ export default function Dashboard() {
                 </div>
                 <div className="p-4 font-mono text-xs h-48 overflow-y-auto space-y-1 text-gray-300 scrollbar-thin scrollbar-thumb-gray-700">
                     {status.recent_logs && status.recent_logs.length > 0 ? (
-                        status.recent_logs.map((log, i) => (
-                            <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
-                                log.level === 'warning' ? 'text-yellow-400' :
-                                    'text-gray-400'
-                                }`}>
-                                <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                                {log.message}
-                            </div>
-                        ))
+                        status.recent_logs
+                            .filter((log) => {
+                                if (!log) return false;
+                                // Ignore structured events (progress, etc.) that don't represent a console line
+                                if (log.type && log.message === undefined) return false;
+                                const msg = (log.message || '').toString();
+                                return msg.trim().length > 0;
+                            })
+                            .map((log, i) => (
+                                <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
+                                    log.level === 'warning' ? 'text-yellow-400' :
+                                        log.level === 'success' ? 'text-green-400' :
+                                            log.level === 'input' ? 'text-cyan-400' :
+                                                'text-gray-400'
+                                    }`}>
+                                    <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                                    {log.message}
+                                </div>
+                            ))
                     ) : (
                         <div className="h-full flex items-center justify-center text-gray-700 italic">
                             Waiting for logs...
@@ -407,10 +440,13 @@ export default function Dashboard() {
             </div>
 
             {/* Public Server Modal */}
-            <PublicServerModal
-                isOpen={showPublicModal}
-                onClose={() => setShowPublicModal(false)}
-            />
+            <AnimatePresence>
+                {showPublicModal && (
+                    <PublicServerModal
+                        onClose={() => setShowPublicModal(false)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }

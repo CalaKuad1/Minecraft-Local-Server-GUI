@@ -7,6 +7,7 @@ export default function Settings() {
     const [activeTab, setActiveTab] = useState('server');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
 
     // State for Server Properties
     const [serverProps, setServerProps] = useState({});
@@ -25,6 +26,7 @@ export default function Settings() {
 
     const loadSettings = async () => {
         setLoading(true);
+        setError(null);
         try {
             const props = await api.getServerProperties();
             const app = await api.getAppSettings();
@@ -32,12 +34,14 @@ export default function Settings() {
             setAppSettings(app);
         } catch (e) {
             console.error("Failed to load settings", e);
+            setError(e?.message || 'Failed to load settings');
         }
         setLoading(false);
     };
 
     const handleSave = async () => {
         setSaving(true);
+        setError(null);
         try {
             if (activeTab === 'server') {
                 await api.updateServerProperties(serverProps);
@@ -46,6 +50,7 @@ export default function Settings() {
             }
         } catch (e) {
             console.error("Failed to save", e);
+            setError(e?.message || 'Failed to save');
         }
         setSaving(false);
         // Reload to ensure consistency
@@ -61,6 +66,21 @@ export default function Settings() {
     };
 
     if (loading) return <div className="p-8 text-center text-gray-500">Loading settings...</div>;
+
+    if (error) {
+        return (
+            <div className="p-8 text-center">
+                <div className="text-red-400 font-medium mb-2">Error loading Settings</div>
+                <div className="text-gray-500 text-sm mb-4">{error}</div>
+                <button
+                    onClick={loadSettings}
+                    className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg transition-colors border border-white/10"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="animate-in fade-in zoom-in duration-500 max-w-4xl mx-auto">

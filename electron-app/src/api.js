@@ -1,19 +1,55 @@
+const API_URL = "http://127.0.0.1:8000";
+
+const fetchJson = async (url, options, timeoutMs = 8000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const mergedOptions = {
+        ...(options || {}),
+        signal: controller.signal
+    };
+
+    try {
+        const res = await fetch(url, mergedOptions);
+        const text = await res.text();
+        let data = null;
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch {
+            data = text;
+        }
+
+        if (!res.ok) {
+            const detail = (data && typeof data === 'object' && data.detail) ? data.detail : (typeof data === 'string' ? data : 'Request failed');
+            throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+        }
+        return data;
+    } catch (e) {
+        if (e && (e.name === 'AbortError' || String(e).includes('AbortError'))) {
+            throw new Error('Request timed out');
+        }
+        throw e;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
 export const api = {
+    // --- System ---
     // ... existing ... 
     getStatus: async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/status');
-            return await res.json();
+            return await fetchJson(`${API_URL}/status`);
         } catch (e) { return { status: 'offline' }; }
     },
     start: async () => {
-        await fetch('http://127.0.0.1:8000/start', { method: 'POST' });
+        await fetchJson(`${API_URL}/start`, { method: 'POST' });
     },
     stop: async () => {
-        await fetch('http://127.0.0.1:8000/stop', { method: 'POST' });
+        await fetchJson(`${API_URL}/stop`, { method: 'POST' });
     },
     sendCommand: async (command) => {
-        await fetch('http://127.0.0.1:8000/command', {
+        await fetchJson(`${API_URL}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command })
@@ -71,53 +107,52 @@ export const api = {
 
     // --- Player Management ---
     getPlayers: async () => {
-        const res = await fetch('http://127.0.0.1:8000/players/lists');
-        return await res.json();
+        return await fetchJson(`${API_URL}/players/lists`);
     },
     opPlayer: async (name) => {
-        await fetch('http://127.0.0.1:8000/players/op', {
+        await fetchJson(`${API_URL}/players/op`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
     },
     deopPlayer: async (name) => {
-        await fetch('http://127.0.0.1:8000/players/deop', {
+        await fetchJson(`${API_URL}/players/deop`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
     },
     whitelistAdd: async (name) => {
-        await fetch('http://127.0.0.1:8000/players/whitelist/add', {
+        await fetchJson(`${API_URL}/players/whitelist/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
     },
     whitelistRemove: async (name) => {
-        await fetch('http://127.0.0.1:8000/players/whitelist/remove', {
+        await fetchJson(`${API_URL}/players/whitelist/remove`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
     },
     kickPlayer: async (name, reason = "Kicked") => {
-        await fetch('http://127.0.0.1:8000/players/kick', {
+        await fetchJson(`${API_URL}/players/kick`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, reason })
         });
     },
     banPlayer: async (name, reason = "Banned") => {
-        await fetch('http://127.0.0.1:8000/players/ban', {
+        await fetchJson(`${API_URL}/players/ban`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, reason })
         });
     },
     unbanPlayer: async (name) => {
-        await fetch('http://127.0.0.1:8000/players/pardon', {
+        await fetchJson(`${API_URL}/players/pardon`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
@@ -126,25 +161,20 @@ export const api = {
 
     // --- Settings ---
     getServerProperties: async () => {
-        const res = await fetch('http://127.0.0.1:8000/settings/properties');
-        return await res.json();
+        return await fetchJson(`${API_URL}/settings/properties`);
     },
     updateServerProperties: async (props) => {
-        await fetch('http://127.0.0.1:8000/settings/properties', {
+        await fetchJson(`${API_URL}/settings/properties`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(props)
         });
     },
     getAppSettings: async () => {
-        const res = await fetch('http://127.0.0.1:8000/settings/app');
-        return await res.json();
-    },
-    openServerFolder: async () => {
-        await fetch('http://127.0.0.1:8000/system/open-folder', { method: 'POST' });
+        return await fetchJson(`${API_URL}/settings/app`);
     },
     updateAppSettings: async (settings) => {
-        await fetch('http://127.0.0.1:8000/settings/app', {
+        await fetchJson(`${API_URL}/settings/app`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
@@ -153,39 +183,43 @@ export const api = {
 
     // --- Worlds ---
     getWorlds: async () => {
-        const res = await fetch('http://127.0.0.1:8000/worlds');
-        return await res.json();
+        return await fetchJson(`${API_URL}/worlds`);
+    },
+
+    getWorldBackups: async (world = null) => {
+        const url = world ? `${API_URL}/worlds/backups?world=${encodeURIComponent(world)}` : `${API_URL}/worlds/backups`;
+        return await fetchJson(url);
+    },
+
+    createWorldBackup: async (world = null) => {
+        return await fetchJson(`${API_URL}/worlds/backups/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ world })
+        });
     },
 
     // --- Multi-Server Management ---
     getServers: async () => {
-        const res = await fetch('http://127.0.0.1:8000/servers');
-        return await res.json();
+        return await fetchJson(`${API_URL}/servers`);
     },
     addServer: async (serverConfig) => {
-        const res = await fetch('http://127.0.0.1:8000/servers', {
+        return await fetchJson(`${API_URL}/servers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(serverConfig)
         });
-        return await res.json();
     },
     selectServer: async (serverId) => {
-        const res = await fetch('http://127.0.0.1:8000/servers/select', {
+        return await fetchJson(`${API_URL}/servers/select`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ server_id: serverId })
         });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Failed to select server');
-        }
-        return await res.json();
     },
-    deleteServer: async (serverId) => {
-        await fetch(`http://127.0.0.1:8000/servers/${serverId}`, {
-            method: 'DELETE'
-        });
+    deleteServer: async (serverId, deleteFiles = false) => {
+        const url = `${API_URL}/servers/${serverId}${deleteFiles ? '?delete_files=true' : ''}`;
+        await fetchJson(url, { method: 'DELETE' });
     },
 
     // --- System ---
@@ -195,18 +229,50 @@ export const api = {
         }
         return null;
     },
+    openServerFolder: async () => {
+        return await fetchJson(`${API_URL}/server/open-folder`, { method: 'POST' });
+    },
 
     // --- Tunnel (Public Server) ---
     getTunnelStatus: async () => {
-        const res = await fetch('http://127.0.0.1:8000/tunnel/status');
-        return await res.json();
+        return await fetchJson(`${API_URL}/tunnel/status`);
     },
     startTunnel: async (region = "eu") => {
-        const res = await fetch(`http://127.0.0.1:8000/tunnel/start?region=${region}`, { method: 'POST' });
-        return await res.json();
+        return await fetchJson(`${API_URL}/tunnel/start?region=${region}`, { method: 'POST' });
     },
     stopTunnel: async () => {
-        const res = await fetch('http://127.0.0.1:8000/tunnel/stop', { method: 'POST' });
-        return await res.json();
+        return await fetchJson(`${API_URL}/tunnel/stop`, { method: 'POST' });
+    },
+
+    // --- Mods ---
+    searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod') => {
+        let url = `${API_URL}/mods/search?q=${encodeURIComponent(query)}&loader=${loader}&project_type=${projectType}`;
+        if (version) url += `&version=${version}`;
+        return await fetchJson(url);
+    },
+    getModVersions: async (slug, loader = 'fabric', version = null) => {
+        let url = `${API_URL}/mods/versions/${slug}?loader=${loader}`;
+        if (version) url += `&version=${version}`;
+        return await fetchJson(url);
+    },
+    getInstalledMods: async () => {
+        return await fetchJson(`${API_URL}/mods/installed`);
+    },
+    installMod: async (versionId) => {
+        return await fetchJson(`${API_URL}/mods/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version_id: versionId })
+        });
+    },
+    deleteMod: async (filename) => {
+        return await fetchJson(`${API_URL}/mods/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename })
+        });
+    },
+    openModsFolder: async () => {
+        return await fetchJson(`${API_URL}/mods/open-folder`, { method: 'POST' });
     }
 };

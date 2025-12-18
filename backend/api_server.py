@@ -9,6 +9,8 @@ import sys
 import json
 import logging
 from queue import Queue
+import zipfile
+from datetime import datetime
 
 # --- CRITICAL: DEBUG LOGGING FOR PROD ---
 # Log to AppData so we can see why it crashes in .exe
@@ -41,6 +43,7 @@ from server.config_manager import ConfigManager
 from utils.java_manager import JavaManager
 from utils.server_detector import ServerDetector
 from utils.api_client import get_server_versions, get_forge_versions, download_server_jar
+from utils.mods_manager import ModsManager
 
 app = FastAPI()
 
@@ -91,40 +94,141 @@ class AppState:
         # Java Runtimes in AppData
         self.java_runtimes_dir = os.path.join(self.app_data_dir, "java_runtimes")
         self.java_manager = JavaManager(self.java_runtimes_dir)
+        self.mods_manager = ModsManager()
         
-        self.server_handler: Optional[ServerHandler] = None
         self.active_websockets: List[WebSocket] = []
-        self.log_history: List[dict] = []
         self.loop = asyncio.get_running_loop()
         self.selected_server_id = None
+
+        # Log broadcasting control (prevents WS flood from starving the API)
+        self._log_queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+        self._log_broadcaster_task: Optional[asyncio.Task] = None
         
         # Tunnel management
         self.tunnel_process = None
         self.tunnel_address = None
+
+        self.world_size_cache = {}
+        self.world_size_inflight = set()
+        self.world_size_lock = threading.Lock()
         
-        # Do not initialize handler automatically on startup anymore
-        # self.initialize_handler() 
+        # Multi-server management
+        self.active_handlers = {} # server_id -> ServerHandler
+        
+        # App-level log history for Dashboard mini-console
+        self.app_log_history = []
+
+    def start_background_tasks(self):
+        if self._log_broadcaster_task is None:
+            self._log_broadcaster_task = asyncio.create_task(self._log_broadcaster())
+
+    def _enqueue_log_from_loop(self, msg_obj: dict):
+        """Must be called from the asyncio loop thread."""
+        try:
+            if self._log_queue.full() and msg_obj.get("level") in ("normal", "info"):
+                return
+            self._log_queue.put_nowait(msg_obj)
+        except asyncio.QueueFull:
+            try:
+                _ = self._log_queue.get_nowait()
+            except Exception:
+                return
+            try:
+                self._log_queue.put_nowait(msg_obj)
+            except Exception:
+                return
+
+    async def _log_broadcaster(self):
+        """Batches log messages and streams them to WebSocket clients.
+
+        This avoids scheduling thousands of per-line tasks during server startup.
+        """
+        while True:
+            msg = await self._log_queue.get()
+
+            batch = [msg]
+            start = self.loop.time()
+            # Drain up to 200 messages or 50ms worth of logs
+            while len(batch) < 200:
+                remaining = 0.05 - (self.loop.time() - start)
+                if remaining <= 0:
+                    break
+                try:
+                    nxt = await asyncio.wait_for(self._log_queue.get(), timeout=remaining)
+                    batch.append(nxt)
+                except asyncio.TimeoutError:
+                    break
+
+            if not self.active_websockets:
+                continue
+
+            filtered_batch = []
+            for item in batch:
+                msg_server_id = item.get("server_id")
+                if msg_server_id and msg_server_id != self.selected_server_id:
+                    continue
+                filtered_batch.append(item)
+
+            if not filtered_batch:
+                continue
+
+            payload = {"type": "batch", "items": filtered_batch}
+            dead = []
+            for ws in list(self.active_websockets):
+                try:
+                    await asyncio.wait_for(ws.send_json(payload), timeout=0.5)
+                except Exception:
+                    dead.append(ws)
+
+            for ws in dead:
+                if ws in self.active_websockets:
+                    self.active_websockets.remove(ws)
+
+    @property
+    def server_handler(self):
+        """Returns the handler for the currently selected server, or None."""
+        if self.selected_server_id:
+            return self.active_handlers.get(self.selected_server_id)
+        return None
+    
+    @server_handler.setter
+    def server_handler(self, handler):
+        """Sets the handler for the current server."""
+        if self.selected_server_id:
+            if handler is None:
+                if self.selected_server_id in self.active_handlers:
+                    del self.active_handlers[self.selected_server_id]
+            else:
+                self.active_handlers[self.selected_server_id] = handler
+
+    @property
+    def log_history(self):
+        """Returns log history of current handler or app-level history."""
+        if self.server_handler and self.server_handler.log_history:
+            return self.server_handler.log_history
+        return self.app_log_history
 
     def load_server(self, server_id):
         server_config = self.config_manager.get_server(server_id)
         if not server_config:
             raise ValueError("Server not found")
+
+        self.selected_server_id = server_id
+
+        # If we already have a handler for this server, use it
+        if server_id in self.active_handlers:
+            self.broadcast_log_sync(f"Reconnected to server: {server_config.get('name', server_id)}", "info")
+            return server_config
             
         server_path = server_config.get("path")
         if not server_path or not os.path.exists(server_path):
             raise ValueError(f"Server path invalid: {server_path}")
             
-        self.selected_server_id = server_id
-        
-        # Clear log history when switching servers
-        self.log_history.clear()
         self.broadcast_log_sync(f"Switched to server: {server_config.get('name', server_id)}", "info")
         
-        # If a handler is already running, we might want to stop it? 
-        # For now, we assume user stops server before switching.
-        # TODO: Enforce stop before switch?
-        
-        self.server_handler = ServerHandler(
+        # Create new handler
+        new_handler = ServerHandler(
+            server_id=server_id,
             server_path=server_path,
             server_type=server_config.get("type") or server_config.get("server_type") or "vanilla",
             ram_min=server_config.get("ram_min", "2"),
@@ -133,36 +237,50 @@ class AppState:
             output_callback=self.broadcast_log_sync,
             minecraft_version=server_config.get("version") or server_config.get("minecraft_version")
         )
+        self.active_handlers[server_id] = new_handler
+        
         self.config_manager.config["last_selected_id"] = server_id
         self.config_manager.save()
         return server_config
 
-    def broadcast_log_sync(self, message, level="normal"):
+    def broadcast_log_sync(self, message, level="normal", server_id=None):
         """Thread-safe wrapper to broadcast logs from synchronous code."""
         try:
             if isinstance(message, dict):
                  msg_obj = message
+                 if server_id and "server_id" not in msg_obj:
+                     msg_obj["server_id"] = server_id
             else:
-                 msg_obj = {"message": message, "level": level}
-            asyncio.run_coroutine_threadsafe(self.broadcast_log(msg_obj), self.loop)
+                 if isinstance(message, str):
+                     message = message.replace("\r", "")
+                 msg_obj = {"message": message, "level": level, "server_id": server_id}
+            
+            # Store in app-level history for Dashboard polling
+            self.app_log_history.append(msg_obj)
+            if len(self.app_log_history) > 500:
+                self.app_log_history.pop(0)
+
+            # Thread-safe enqueue into the asyncio queue
+            try:
+                self.loop.call_soon_threadsafe(self._enqueue_log_from_loop, msg_obj)
+            except Exception:
+                return
         except Exception as e:
             print(f"Error logging: {e}")
 
     async def broadcast_log(self, message: dict):
-        # Debug print to verify python is receiving logs
-        print(f"DEBUG: Broadcasting log: {message.get('message', '')[:50]}...", flush=True)
+        # Filter logs: Only send to WS if they belong to the CURRENT server or are global (no server_id)
+        msg_server_id = message.get("server_id")
         
-        # Store in history (keep last 500 lines)
-        self.log_history.append(message)
-        if len(self.log_history) > 500:
-            self.log_history.pop(0)
-
-        for websocket in self.active_websockets[:]:
+        # If message belongs to a specific server, and it's NOT the selected one, don't stream it to console
+        if msg_server_id and msg_server_id != self.selected_server_id:
+            return 
+            
+        for ws in self.active_websockets:
             try:
-                await websocket.send_json(message)
-            except:
-                if websocket in self.active_websockets:
-                    self.active_websockets.remove(websocket)
+                await ws.send_json(message)
+            except Exception:
+                pass
 
 state: Optional[AppState] = None
 
@@ -170,6 +288,7 @@ state: Optional[AppState] = None
 async def startup_event():
     global state
     state = AppState()
+    state.start_background_tasks()
 
 # --- Models ---
 class ServerConfig(BaseModel):
@@ -196,6 +315,12 @@ class ValidatePathRequest(BaseModel):
 
 class SelectServerRequest(BaseModel):
     server_id: str
+
+class ModInstallRequest(BaseModel):
+    version_id: str
+
+class ModDeleteRequest(BaseModel):
+    filename: str
 
 # --- Core Endpoints ---
 
@@ -228,12 +353,27 @@ async def select_server(req: SelectServerRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/servers/{server_id}")
-async def delete_server(server_id: str):
+async def delete_server(server_id: str, delete_files: bool = False):
+    # Get server info before deleting profile
+    server_info = state.config_manager.get_server(server_id)
+    server_path = server_info.get("path") if server_info else None
+    
+    # Delete the profile
     state.config_manager.delete_server(server_id)
     if state.selected_server_id == server_id:
         state.server_handler = None
         state.selected_server_id = None
-    return {"status": "deleted"}
+    
+    # Optionally delete files
+    if delete_files and server_path and os.path.exists(server_path):
+        import shutil
+        try:
+            shutil.rmtree(server_path)
+        except Exception as e:
+            return {"status": "deleted", "files_deleted": False, "error": str(e)}
+        return {"status": "deleted", "files_deleted": True}
+    
+    return {"status": "deleted", "files_deleted": False}
 
 @app.get("/status")
 def get_status():
@@ -241,6 +381,9 @@ def get_status():
         return {"status": "not_configured"}
     
     stats = state.server_handler.get_stats()
+
+    online_players = state.server_handler.get_active_players_list(trigger_refresh=False)
+    players_count = len(online_players) if online_players is not None else 0
     return {
         "status": "online" if state.server_handler.is_running() else "starting" if state.server_handler.is_starting() else "offline",
         "pid": state.server_handler.get_pid(),
@@ -248,9 +391,22 @@ def get_status():
         "minecraft_version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],
         "ram": stats["ram"],
+        "players": players_count,
+        "max_players": state.server_handler.get_max_players(),
+        "online_players": online_players,
         "uptime": stats["uptime"],
         "recent_logs": state.log_history[-15:] # Return last 15 lines for the mini console
     }
+
+@app.post("/server/open-folder")
+def open_server_folder():
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not initialized")
+    
+    success = state.server_handler.open_folder()
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to open folder")
+    return {"status": "success"}
 
 @app.post("/start")
 def start_server():
@@ -408,8 +564,19 @@ def install_server(req: InstallRequest):
                 # Wrap the progress to match our format
                 def forge_progress(p):
                     send_progress(p, "Installing Forge...")
-                    
-                temp_handler.install_forge_server(req.forge_version, req.version, forge_progress)
+                
+                forge_ver = req.forge_version
+                if not forge_ver:
+                    send_progress(10, f"Fetching latest Forge version for {req.version}...")
+                    from utils.api_client import get_forge_versions
+                    versions = get_forge_versions()
+                    if req.version in versions and versions[req.version]:
+                        forge_ver = versions[req.version][0]
+                        state.broadcast_log_sync(f"Auto-selected Forge version: {forge_ver}", "info")
+                    else:
+                        raise Exception(f"No Forge version found for Minecraft {req.version}")
+
+                temp_handler.install_forge_server(forge_ver, req.version, forge_progress)
             else:
                 jar_path = os.path.join(install_path, "server.jar")
                 success = download_server_jar(req.server_type, req.version, jar_path, progress_callback)
@@ -452,17 +619,35 @@ def install_server(req: InstallRequest):
 @app.websocket("/ws/console")
 async def websocket_console(websocket: WebSocket):
     await websocket.accept()
+    # logging.info("WebSocket connected")
     if state:
         state.active_websockets.append(websocket)
         # Replay history
-        for msg in state.log_history:
-            await websocket.send_json(msg)
+        try:
+            history = state.log_history[-200:]
+            if history:
+                await websocket.send_json({"type": "batch", "items": history})
+        except Exception as e:
+            # Client disconnected during replay
+            if websocket in state.active_websockets:
+                state.active_websockets.remove(websocket)
+            return
+    else:
+        logging.error("WebSocket rejected: App State is None")
+        await websocket.close()
+        return
+
     try:
         while True:
             data = await websocket.receive_text()
             if state and state.server_handler:
                 state.server_handler.send_command(data)
     except WebSocketDisconnect:
+        # logging.info("WebSocket disconnected")
+        if state and websocket in state.active_websockets:
+            state.active_websockets.remove(websocket)
+    except Exception as e:
+        logging.error(f"WebSocket error: {e}")
         if state and websocket in state.active_websockets:
             state.active_websockets.remove(websocket)
 
@@ -512,22 +697,16 @@ def get_player_lists():
     banned = load_json("banned-players.json")
     whitelist = load_json("whitelist.json")
     
-    # Get Online Players via mcstatus
+    # Get Online Players via ServerHandler (uses status_query)
     online_players = []
-    try:
-        # Read port from server.properties
-        props = state.server_handler.get_server_properties()
-        port = int(props.get('server-port', 25565))
-        
-        server = JavaServer.lookup(f"127.0.0.1:{port}")
-        query = server.status()
-        
-        if query.players.sample:
-            for p in query.players.sample:
-                online_players.append({"name": p.name, "uuid": p.id})
-    except Exception as e:
-        print(f"Failed to query server status: {e}")
-        # online_players remains empty if offline or query fails
+    if state.server_handler:
+        raw_sample = state.server_handler.get_active_players_list()
+        # Convert SLP format {name, id} to frontend expected {name, uuid}
+        for player in raw_sample:
+            online_players.append({
+                "name": player.get("name", "Unknown"),
+                "uuid": player.get("id", "")
+            })
 
     return {
         "online": online_players,
@@ -827,19 +1006,48 @@ def get_worlds():
             if os.path.isdir(item_path):
                 # Check for level.dat to confirm it's a world
                 if os.path.exists(os.path.join(item_path, "level.dat")):
-                    # Get size
-                    total_size = 0
-                    for dirpath, dirnames, filenames in os.walk(item_path):
-                        for f in filenames:
-                            fp = os.path.join(dirpath, f)
-                            total_size += os.path.getsize(fp)
-                    
-                    size_mb = round(total_size / (1024 * 1024), 2)
+                    level_dat = os.path.join(item_path, "level.dat")
+                    level_mtime = os.path.getmtime(level_dat)
+                    folder_mtime = os.path.getmtime(item_path)
+
+                    cached = state.world_size_cache.get(item_path)
+                    size_str = None
+                    if cached and cached.get("folder_mtime") == folder_mtime:
+                        size_str = cached.get("size")
+                    else:
+                        size_str = cached.get("size") if cached and cached.get("size") else "..."
+
+                        with state.world_size_lock:
+                            if item_path not in state.world_size_inflight:
+                                state.world_size_inflight.add(item_path)
+
+                                def _compute_world_size(path_to_size: str, expected_folder_mtime: float):
+                                    try:
+                                        total_size = 0
+                                        for dirpath, dirnames, filenames in os.walk(path_to_size):
+                                            for f in filenames:
+                                                fp = os.path.join(dirpath, f)
+                                                try:
+                                                    total_size += os.path.getsize(fp)
+                                                except Exception:
+                                                    pass
+                                        size_mb = round(total_size / (1024 * 1024), 2)
+                                        if state:
+                                            state.world_size_cache[path_to_size] = {
+                                                "size": f"{size_mb} MB",
+                                                "folder_mtime": expected_folder_mtime,
+                                            }
+                                    finally:
+                                        if state:
+                                            with state.world_size_lock:
+                                                state.world_size_inflight.discard(path_to_size)
+
+                                threading.Thread(target=_compute_world_size, args=(item_path, folder_mtime), daemon=True).start()
                     
                     worlds.append({
                         "name": item,
-                        "size": f"{size_mb} MB",
-                        "last_modified": os.path.getmtime(os.path.join(item_path, "level.dat"))
+                        "size": size_str or "...",
+                        "last_modified": level_mtime
                     })
     
     return worlds
@@ -848,6 +1056,107 @@ def get_worlds():
 def create_world(request: Request):
     # Basic stub. Minecraft creates world automatically if level-name changes to non-existent folder.
     pass
+
+
+class WorldBackupRequest(BaseModel):
+    world: Optional[str] = None
+
+
+@app.get("/worlds/backups")
+def list_world_backups(world: Optional[str] = None):
+    if not state or not state.server_handler:
+        return []
+
+    server_path = state.server_handler.server_path
+    backups_dir = os.path.join(server_path, "world_backups")
+    if not os.path.exists(backups_dir):
+        return []
+
+    items = []
+    try:
+        for name in sorted(os.listdir(backups_dir), reverse=True):
+            if not name.lower().endswith(".zip"):
+                continue
+            if world and not name.startswith(f"{world}-"):
+                continue
+            fp = os.path.join(backups_dir, name)
+            if not os.path.isfile(fp):
+                continue
+
+            size_mb = round(os.path.getsize(fp) / (1024 * 1024), 2)
+            items.append({
+                "name": name,
+                "size": f"{size_mb} MB",
+                "created": os.path.getmtime(fp)
+            })
+    except Exception:
+        return items
+
+    return items
+
+
+@app.post("/worlds/backups/create")
+def create_world_backup(req: WorldBackupRequest):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+
+    server_path = state.server_handler.server_path
+
+    world_name = (req.world or "").strip() or None
+    if not world_name:
+        props_path = os.path.join(server_path, "server.properties")
+        try:
+            if os.path.exists(props_path):
+                with open(props_path, 'r', encoding='utf-8', errors='replace') as f:
+                    for line in f:
+                        if line.startswith("level-name="):
+                            world_name = line.split("=", 1)[1].strip() or None
+                            break
+        except Exception:
+            world_name = None
+
+    if not world_name:
+        world_name = "world"
+
+    world_path = os.path.join(server_path, world_name)
+    if not os.path.isdir(world_path):
+        raise HTTPException(status_code=404, detail=f"World not found: {world_name}")
+
+    backups_dir = os.path.join(server_path, "world_backups")
+    os.makedirs(backups_dir, exist_ok=True)
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_name = f"{world_name}-{ts}.zip"
+    backup_path = os.path.join(backups_dir, backup_name)
+
+    def run_backup():
+        try:
+            if state:
+                state.broadcast_log_sync(f"📦 Creating backup: {backup_name}", "info")
+
+            with zipfile.ZipFile(backup_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                for dirpath, dirnames, filenames in os.walk(world_path):
+                    for filename in filenames:
+                        full_path = os.path.join(dirpath, filename)
+                        try:
+                            arcname = os.path.relpath(full_path, server_path)
+                            zf.write(full_path, arcname=arcname)
+                        except Exception:
+                            pass
+
+            if state:
+                state.broadcast_log_sync(f"✅ Backup created: {backup_name}", "success")
+        except Exception as e:
+            try:
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+            except Exception:
+                pass
+            if state:
+                state.broadcast_log_sync(f"❌ Error creating backup: {e}", "error")
+
+    threading.Thread(target=run_backup, daemon=True).start()
+    return {"status": "started", "name": backup_name}
 
 # --- Tunnel Management Endpoints (Pinggy) ---
 
@@ -866,9 +1175,20 @@ def start_tunnel(request: Request, region: str = "eu"):
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
     
-    # If tunnel already running, return existing address
+    # Stop any existing tunnel before starting a new one
     if state.tunnel_process and state.tunnel_process.poll() is None:
-        return {"message": "Tunnel already running", "address": state.tunnel_address}
+        logging.info("Stopping existing tunnel before starting a new one...")
+        state.broadcast_log_sync("🔄 Closing previous tunnel...", "info")
+        try:
+            state.tunnel_process.terminate()
+            state.tunnel_process.wait(timeout=3)
+        except:
+            try:
+                state.tunnel_process.kill()
+            except:
+                pass
+        state.tunnel_process = None
+        state.tunnel_address = None
     
     # Get server port (default 25565)
     port = "25565"
@@ -912,13 +1232,14 @@ def start_tunnel(request: Request, region: str = "eu"):
     def run_tunnel():
         import subprocess
         import re
+        connected_emitted = False
         try:
             # Construct host based on region
             # regions: eu, us, ap, sa
             host = f"{region}.free.pinggy.io"
             
             logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
-            state.broadcast_log_sync(f"🌐 Iniciando túnel público ({region.upper()}) para puerto {port}...", "info")
+            state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
             
             # Ensure we have a key
             key_path = _ensure_ssh_key()
@@ -963,28 +1284,33 @@ def start_tunnel(request: Request, region: str = "eu"):
                 # Match tcp:// format
                 tcp_match = re.search(r'tcp://([a-zA-Z0-9\.\-]+:\d+)', line)
                 if tcp_match:
-                    state.tunnel_address = tcp_match.group(1)
+                    new_addr = tcp_match.group(1)
+                    if new_addr and new_addr != state.tunnel_address:
+                        state.tunnel_address = new_addr
                     
                 # Match raw address format (free.pinggy.io:12345)
                 # Broader match: something.pinggy.io:digits
                 if not state.tunnel_address:
                     addr_match = re.search(r'([a-zA-Z0-9\.\-]+\.pinggy\.io:\d+)', line)
                     if addr_match:
-                        state.tunnel_address = addr_match.group(1)
+                        new_addr = addr_match.group(1)
+                        if new_addr and new_addr != state.tunnel_address:
+                            state.tunnel_address = new_addr
                 
-                if state.tunnel_address:
+                if state.tunnel_address and not connected_emitted:
                     logging.info(f"Tunnel established: {state.tunnel_address}")
-                    state.broadcast_log_sync(f"✅ ¡Servidor público activo! Dirección: {state.tunnel_address}", "success")
+                    state.broadcast_log_sync(f"✅ Public server active! Address: {state.tunnel_address}", "success")
                     state.broadcast_log_sync({"type": "tunnel_connected", "address": state.tunnel_address})
+                    connected_emitted = True
             
             # If we exit the loop, tunnel has closed
-            state.broadcast_log_sync("🔴 Túnel cerrado", "warning")
+            state.broadcast_log_sync("🔴 Tunnel closed", "warning")
             state.broadcast_log_sync({"type": "tunnel_disconnected"})
             state.tunnel_address = None
             
         except Exception as e:
             logging.exception(f"Tunnel error: {e}")
-            state.broadcast_log_sync(f"❌ Error en túnel: {e}", "error")
+            state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
             state.tunnel_address = None
     
     threading.Thread(target=run_tunnel, daemon=True).start()
@@ -1004,10 +1330,99 @@ def stop_tunnel():
         
         state.tunnel_process = None
         state.tunnel_address = None
-        state.broadcast_log_sync("🔴 Túnel detenido", "info")
+        state.broadcast_log_sync("🔴 Tunnel stopped", "info")
         state.broadcast_log_sync({"type": "tunnel_disconnected"})
     
     return {"message": "Tunnel stopped"}
+
+# --- Mods Endpoints ---
+@app.get("/mods/search")
+def search_mods(q: str, loader: str = "fabric", version: str = None, project_type: str = "mod"):
+    if not state: raise HTTPException(status_code=500, detail="State not initialized")
+    
+    # If version not provided, try to use server's version
+    if not version and state.server_handler:
+        version = state.server_handler.minecraft_version
+        
+    return state.mods_manager.search_mods(q, loader, version, project_type)
+
+@app.get("/mods/versions/{slug}")
+def get_mod_versions(slug: str, loader: str = "fabric", version: str = None):
+    if not state: raise HTTPException(status_code=500, detail="State not initialized")
+    
+    # If version not provided, use server's version
+    if not version and state.server_handler:
+        version = state.server_handler.minecraft_version
+        
+    return state.mods_manager.get_mod_versions(slug, loader, version)
+
+@app.get("/mods/installed")
+def get_installed_mods():
+    if not state or not state.server_handler: return []
+    return state.mods_manager.get_installed_mods(state.server_handler.server_path)
+
+@app.post("/mods/install")
+def install_mod(req: ModInstallRequest):
+    if not state or not state.server_handler: 
+        raise HTTPException(status_code=400, detail="Server not configured")
+        
+    result = state.mods_manager.install_mod(req.version_id, state.server_handler.server_path)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+        
+    return result
+
+@app.post("/mods/delete")
+def delete_mod(req: ModDeleteRequest):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+        
+    success = state.mods_manager.delete_mod(req.filename, state.server_handler.server_path)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to delete mod")
+        
+    return {"status": "success"}
+
+@app.post("/mods/open-folder")
+def open_mods_folder():
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+        
+    mods_path = os.path.join(state.server_handler.server_path, "mods")
+    if not os.path.exists(mods_path):
+        os.makedirs(mods_path)
+        
+    open_file_explorer(mods_path)
+    return {"message": "Folder opened"}
+
+@app.post("/system/shutdown")
+def shutdown_app():
+    logging.info("Shutdown request received")
+    
+    # Stop any running tunnel
+    if state and state.tunnel_process and state.tunnel_process.poll() is None:
+        logging.info("Stopping tunnel process...")
+        try:
+            state.tunnel_process.terminate()
+            state.tunnel_process.wait(timeout=3)
+        except:
+            try:
+                state.tunnel_process.kill()
+            except:
+                pass
+        state.tunnel_process = None
+        state.tunnel_address = None
+    
+    # Stop servers
+    if state and state.active_handlers:
+        for server_id, handler in state.active_handlers.items():
+            if handler.is_running() or handler.is_starting():
+                logging.info(f"Stopping server {server_id}...")
+                handler.stop(silent=True)
+    
+    # Schedule process exit
+    threading.Timer(1.0, lambda: os._exit(0)).start()
+    return {"message": "Shutting down"}
 
 if __name__ == "__main__":
     import uvicorn

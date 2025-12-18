@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Plus, Server, Trash2, Play, Settings } from 'lucide-react';
 import logo from '../assets/logo2.png';
+import { useDialog } from './ui/DialogContext';
+import { motion } from 'framer-motion';
 
 export default function ServerSelector({ onSelect, onAdd }) {
     const [servers, setServers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const dialog = useDialog();
 
     useEffect(() => {
         loadServers();
@@ -29,24 +32,37 @@ export default function ServerSelector({ onSelect, onAdd }) {
             onSelect(); // Callback to App.jsx to switch view
         } catch (err) {
             console.error("Failed to select server", err);
-            alert(`Failed to load server: ${err.message}`);
+            await dialog.alert(`Failed to load server: ${err.message}`, "Error", "destructive");
             setLoading(false);
         }
     };
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (!confirm("Are you sure you want to delete this server profile?")) return;
+
+        // First confirmation
+        if (!await dialog.confirm("Are you sure you want to delete this server profile?", "Delete Server?", "destructive")) return;
+
+        // Second confirmation for file deletion
+        const deleteFiles = await dialog.confirm("Do you also want to delete all server files?\n\n⚠️ This will permanently delete the world, config, and all server data!", "Delete Files?", "destructive");
+
         try {
-            await api.deleteServer(id);
+            await api.deleteServer(id, deleteFiles);
             loadServers();
         } catch (err) {
             console.error("Failed to delete server", err);
+            dialog.alert("Failed to delete server via API.", "Error", "destructive");
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col p-10 font-sans selection:bg-primary/30 relative overflow-hidden animate-in fade-in zoom-in duration-500">
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="min-h-screen bg-[#050505] text-white flex flex-col p-10 font-sans selection:bg-primary/30 relative overflow-hidden"
+        >
 
             {/* Background Effects */}
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse"></div>
@@ -99,7 +115,11 @@ export default function ServerSelector({ onSelect, onAdd }) {
                         {/* Content */}
                         <div className="p-5 flex flex-col flex-1">
                             <h3 className="text-xl font-bold text-white mb-1 truncate">{server.name || "Minecraft Server"}</h3>
-                            <p className="text-sm text-gray-500 mb-4">{server.server_type} • {server.ram_min}-{server.ram_max}{server.ram_unit}</p>
+                            <p className="text-sm text-gray-500 mb-4">
+                                <span className="capitalize">{server.type || server.server_type || 'Unknown'}</span>
+                                {' • '}
+                                {server.version || server.minecraft_version || 'Unknown'}
+                            </p>
 
                             <div className="mt-auto flex gap-3">
                                 <button
@@ -125,6 +145,6 @@ export default function ServerSelector({ onSelect, onAdd }) {
                     Made by <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="text-white hover:text-primary transition-colors font-medium">CalaKuad1</a>
                 </span>
             </div>
-        </div>
+        </motion.div>
     );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { User, Shield, Ban, CheckCircle, Search, Plus, Trash2, ShieldOff, MoreVertical } from 'lucide-react';
 
@@ -55,48 +55,88 @@ const PlayerCard = ({ player, type, onAction }) => {
     );
 };
 
+const StatCard = ({ icon: Icon, label, value, color }) => (
+    <div className="bg-surface/50 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-white/10 transition-colors shadow-lg">
+        <div className={`p-3 rounded-xl ${color === 'blue' ? 'bg-blue-500/10 text-blue-400' :
+            color === 'green' ? 'bg-green-500/10 text-green-400' :
+                color === 'red' ? 'bg-red-500/10 text-red-400' :
+                    color === 'purple' ? 'bg-purple-500/10 text-purple-400' :
+                        'bg-gray-500/10 text-gray-400'}`}>
+            <Icon size={24} />
+        </div>
+        <div>
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">{label}</h3>
+            <div className="text-2xl font-bold text-white leading-none mt-1">{value}</div>
+        </div>
+    </div>
+);
+
 export default function Players() {
     const [activeTab, setActiveTab] = useState('online');
     const [data, setData] = useState({ ops: [], whitelist: [], banned: [] });
-    const [onlinePlayers, setOnlinePlayers] = useState([]); // Placeholder for now, ideally fetched from query
+    const [onlinePlayers, setOnlinePlayers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const inFlightRef = useRef(false);
+    const hasLoadedRef = useRef(false);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newPlayerName, setNewPlayerName] = useState('');
 
-    const fetchData = async () => {
-        setLoading(true);
-        const lists = await api.getPlayers();
-        setData(lists);
-        // TODO: In a real scenario, we'd also query the server for online players separately
-        // For now, we'll fake online players or if available from a future status endpoint
-        setLoading(false);
+    const fetchData = async ({ background = false } = {}) => {
+        if (inFlightRef.current) return;
+        inFlightRef.current = true;
+        if (!background) {
+            setLoading(true);
+            setError(null);
+        }
+        try {
+            const lists = await api.getPlayers();
+            setData(lists);
+            setOnlinePlayers(lists.online || []);
+            hasLoadedRef.current = true;
+        } catch (e) {
+            console.error("Failed to load players", e);
+            setError(e?.message || 'Failed to load players');
+            if (!hasLoadedRef.current) {
+                setData({ ops: [], whitelist: [], banned: [] });
+                setOnlinePlayers([]);
+            }
+        } finally {
+            if (!background) setLoading(false);
+            inFlightRef.current = false;
+        }
     };
 
     useEffect(() => {
-        fetchData();
-        const interval = setInterval(fetchData, 5000);
+        fetchData({ background: false });
+        const interval = setInterval(() => fetchData({ background: true }), 5000);
         return () => clearInterval(interval);
     }, []);
 
     const handleAction = async (action, name) => {
         if (!name) return;
-
-        switch (action) {
-            case 'op': await api.opPlayer(name); break;
-            case 'deop': await api.deopPlayer(name); break;
-            case 'ban': await api.banPlayer(name); break;
-            case 'pardon': await api.unbanPlayer(name); break;
-            case 'kick': await api.kickPlayer(name); break;
-            // case 'whitelist': await api.whitelistAdd(name); break; 
-            // case 'unwhitelist': await api.whitelistRemove(name); break; 
+        setError(null);
+        try {
+            switch (action) {
+                case 'op': await api.opPlayer(name); break;
+                case 'deop': await api.deopPlayer(name); break;
+                case 'ban': await api.banPlayer(name); break;
+                case 'pardon': await api.unbanPlayer(name); break;
+                case 'kick': await api.kickPlayer(name); break;
+                case 'unwhitelist': await api.whitelistRemove(name); break;
+                default:
+                    throw new Error(`Unknown action: ${action}`);
+            }
+            setTimeout(fetchData, 500);
+        } catch (e) {
+            console.error("Player action failed", e);
+            setError(e?.message || 'Action failed');
         }
-        setTimeout(fetchData, 500); // quick refresh
     };
 
-    // Filter displayed list based on tab
     const getList = () => {
         switch (activeTab) {
-            case 'online': return onlinePlayers; // Currently empty until we verify query
+            case 'online': return onlinePlayers;
             case 'ops': return data.ops;
             case 'whitelist': return data.whitelist;
             case 'banned': return data.banned;
@@ -106,43 +146,95 @@ export default function Players() {
 
     const currentList = getList();
 
+    if (loading && !hasLoadedRef.current) {
+        return <div className="p-8 text-center text-gray-500">Loading players...</div>;
+    }
+
+    if (error) {
+        return (
+            <div className="p-8 text-center">
+                <div className="text-red-400 font-medium mb-2">Error loading Players</div>
+                <div className="text-gray-500 text-sm mb-4">{error}</div>
+                <button
+                    onClick={fetchData}
+                    className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg transition-colors border border-white/10"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-6 animate-in fade-in zoom-in duration-500">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold text-white mb-2">Players</h2>
-                    <p className="text-gray-400">Manage server operators, access, and bans.</p>
+        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+            {/* Header & Stats */}
+            <div>
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Players</h2>
+                        <p className="text-gray-400">Manage server operators, access, and bans.</p>
+                    </div>
                 </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <StatCard
+                        icon={User}
+                        label="Online"
+                        value={onlinePlayers.length || 0}
+                        color="green"
+                    />
+                    <StatCard
+                        icon={Shield}
+                        label="Operators"
+                        value={data.ops?.length || 0}
+                        color="blue"
+                    />
+                    <StatCard
+                        icon={CheckCircle}
+                        label="Whitelisted"
+                        value={data.whitelist?.length || 0}
+                        color="purple"
+                    />
+                    <StatCard
+                        icon={Ban}
+                        label="Banned"
+                        value={data.banned?.length || 0}
+                        color="red"
+                    />
+                </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-between">
+                {/* Tabs */}
+                <div className="flex gap-2 border-b border-white/5 pb-1 flex-1">
+                    {['online', 'ops', 'whitelist', 'banned'].map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`px-6 py-3 rounded-t-xl font-medium transition-colors relative ${activeTab === tab
+                                ? 'text-white bg-white/5'
+                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                }`}
+                        >
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            {activeTab === tab && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary"></div>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Add Button */}
                 {activeTab !== 'online' && (
                     <button
                         onClick={() => setShowAddModal(true)}
-                        className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-colors"
+                        className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-colors shadow-lg hover:shadow-primary/20 shrink-0 ml-4"
                     >
                         <Plus size={18} />
                         Add to {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
                     </button>
                 )}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-2 border-b border-white/5 pb-1">
-                {['online', 'ops', 'whitelist', 'banned'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-6 py-3 rounded-t-xl font-medium transition-colors relative ${activeTab === tab
-                            ? 'text-white bg-white/5'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                            }`}
-                    >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        {/* Active line */}
-                        {activeTab === tab && (
-                            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary"></div>
-                        )}
-                    </button>
-                ))}
             </div>
 
             {/* List */}

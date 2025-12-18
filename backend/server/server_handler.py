@@ -8,11 +8,13 @@ import re
 
 from utils.api_client import download_file_from_url, download_and_extract_zip
 from utils.java_manager import JavaManager
+from utils.status_query import get_server_status
 import psutil
 import time
 
 class ServerHandler:
-    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None):
+    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None, server_id=None):
+        self.server_id = server_id
         self.server_path = server_path
         self.server_type = server_type
         self.ram_min = ram_min
@@ -39,23 +41,59 @@ class ServerHandler:
         # It will run lazily in start() -> _get_start_command()
         # if minecraft_version:
         #     self._setup_java_for_minecraft(minecraft_version)
-    
+        
+        self.log_history = [] 
+        
+        # Track players from log messages
+        self.tracked_players = set() 
+        self._expecting_player_list_next_line = False
+        self._last_list_request_time = 0.0
+        self._list_request_cooldown = 4.0
+        
+        # Status Cache
+        self.cached_status = None
+        self.last_status_time = 0
+        self.cache_duration = 4.0 # seconds 
+        self._status_lock = threading.Lock()
+        self._status_in_flight = False
+
+    def _log(self, message, level="normal"):
+        """Internal log method that stores history and calls callback."""
+        # Clean message if string
+        if isinstance(message, str):
+            message = message.rstrip()
+            if not message: return
+            msg_obj = {"message": message, "level": level, "server_id": self.server_id}
+        else:
+            msg_obj = message
+            if self.server_id and "server_id" not in msg_obj:
+                msg_obj["server_id"] = self.server_id
+            
+        # Store in local history
+        self.log_history.append(msg_obj)
+        if len(self.log_history) > 1000:
+            self.log_history.pop(0)
+            
+        # Broadcast via callback
+        if self.output_callback:
+            self.output_callback(msg_obj)
+
     def _setup_java_for_minecraft(self, minecraft_version):
         """Configura automáticamente la versión correcta de Java para Minecraft."""
         try:
-            self.output_callback(f"Configurando Java para Minecraft {minecraft_version}...\n", "info")
+            self._log(f"Configuring Java for Minecraft {minecraft_version}...\n", "info")
             
             # Obtener el Java apropiado - NO descargar durante el start, solo usar lo que ya existe
             java_path = self.java_manager.get_java_for_server(self.server_path, minecraft_version, skip_download=True)
             
             if java_path:
                 self.java_path = java_path
-                self.output_callback(f"Java configurado: {java_path}\n", "info")
+                self._log(f"Java configured: {java_path}\n", "info")
             else:
-                self.output_callback("Java no encontrado. Por favor instala Java desde el Setup Wizard antes de iniciar.\n", "warning")
+                self._log("Java not found. Please install Java from the Setup Wizard before starting.\n", "warning")
                 
         except Exception as e:
-            self.output_callback(f"Error configurando Java: {e}\n", "error")
+            self._log(f"Error configuring Java: {e}\n", "error")
     
     def set_minecraft_version(self, minecraft_version):
         """Establece la versión de Minecraft y reconfigura Java si es necesario."""
@@ -65,7 +103,7 @@ class ServerHandler:
     def get_java_status(self):
         """Obtiene el estado actual de Java para este servidor."""
         if not self.minecraft_version:
-            return {"status_message": "Versión de Minecraft no especificada", "status_color": "orange"}
+            return {"status_message": "Minecraft version not specified", "status_color": "orange"}
         
         return self.java_manager.get_java_status(self.minecraft_version)
     
@@ -83,7 +121,23 @@ class ServerHandler:
                 print(f"[DEBUG] Java Check Failed. Path: {java_path}, RC: {result.returncode}, Stderr: {result.stderr}")
             return result.returncode == 0
         except Exception as e:
+            return False
+        except Exception as e:
             print(f"[DEBUG] Java Check Exception. Path: {java_path}, Error: {e}")
+            return False
+
+    def open_folder(self):
+        """Abre la carpeta del servidor en el explorador de archivos."""
+        try:
+            if sys.platform == "win32":
+                os.startfile(self.server_path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", self.server_path])
+            else:
+                subprocess.Popen(["xdg-open", self.server_path])
+            return True
+        except Exception as e:
+            self.output_callback(f"Error opening folder: {e}\n", "error")
             return False
 
 
@@ -193,22 +247,22 @@ class ServerHandler:
         
         # Verificar que Java existe y funciona
         if not self._verify_java_installation(java_path):
-            self.output_callback(f"Error: Java no funciona en: {java_path}. Intentando reparar...\n", "warning")
+            self.output_callback(f"Error: Java is not working at: {java_path}. Attempting to repair...\n", "warning")
             
             # Intentar reparar buscando de nuevo
             new_path = self.ensure_java_compatibility(self.minecraft_version)
             if new_path and new_path != java_path and self._verify_java_installation(new_path):
-                self.output_callback(f"Reparado: Usando nueva ruta de Java: {new_path}\n", "success")
+                self.output_callback(f"Fixed: Using new Java path: {new_path}\n", "success")
                 java_path = new_path
                 self.java_path = new_path
             else:
                 # Último intento: usar simplemente "java" del sistema
                 if self._verify_java_installation("java"):
-                     self.output_callback("Reparado: Usando 'java' del sistema (PATH).\n", "success")
+                     self.output_callback("Fixed: Using system 'java' (PATH).\n", "success")
                      java_path = "java"
                      self.java_path = "java"
                 else:
-                    self.output_callback(f"Error Crítico: No se encontró ningún Java funcional. Por favor instala Java.\n", "error")
+                    self.output_callback("Critical error: No working Java installation was found. Please install Java.\n", "error")
                     return None, None
         
         run_script = None
@@ -262,8 +316,15 @@ class ServerHandler:
         min_ram_str = f"-Xms{self.ram_min}{self.ram_unit}"
         max_ram_str = f"-Xmx{self.ram_max}{self.ram_unit}"
         
-        # Base command
-        command = [java_path, max_ram_str, min_ram_str]
+        # Base command with suppression flags
+        command = [
+            java_path, 
+            max_ram_str, 
+            min_ram_str,
+            "--add-modules=jdk.incubator.vector", 
+            "--enable-native-access=ALL-UNNAMED",
+            "-XX:+UnlockExperimentalVMOptions"
+        ]
         
         # Add any server-type specific arguments before the -jar flag
         # Example for future use:
@@ -285,24 +346,97 @@ class ServerHandler:
 
             self.server_process.wait()
         except FileNotFoundError:
-            self.output_callback("Error: 'java' command not found. Is Java installed and in your PATH?\n", "error")
+            self._log("Error: 'java' command not found. Is Java installed and in your PATH?\n", "error")
         except Exception as e:
-            self.output_callback(f"Server start failed: {e}\n", "error")
+            self._log(f"Server start failed: {e}\n", "error")
         finally:
             self.server_fully_started = False
             self.server_process = None
             self.server_running = False
             if not self.server_stopping:
-                self.output_callback("Server stopped unexpectedly.\n", "error")
+                self._log("Server stopped unexpectedly.\n", "error")
 
     def _read_output(self, pipe, level):
+        import re
+        join_pattern = re.compile(r'\b([A-Za-z0-9_]{1,16})\b\s+joined the game', re.IGNORECASE)
+        leave_pattern = re.compile(r'\b([A-Za-z0-9_]{1,16})\b\s+left the game', re.IGNORECASE)
+        # Allow any prefix (timestamp/logger) before the message
+        list_inline_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*(.*)", re.IGNORECASE)
+        list_header_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$", re.IGNORECASE)
+
         try:
             for line in iter(pipe.readline, ''):
-                if 'Done' in line and 'For help, type "help"' in line:
+                line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
+                if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
                     self.server_fully_started = True
-                self.output_callback(line, level)
+                
+                # Detect player join/leave
+                join_match = join_pattern.search(line_no_ansi)
+                if join_match:
+                    player_name = join_match.group(1)
+                    self.tracked_players.add(player_name)
+                    
+                leave_match = leave_pattern.search(line_no_ansi)
+                if leave_match:
+                    player_name = leave_match.group(1)
+                    self.tracked_players.discard(player_name)
+
+                clean_line = line_no_ansi.strip()
+                suppress_from_console = False
+                if clean_line:
+                    if self._expecting_player_list_next_line:
+                        # Only accept the expected next line if it actually contains a players list.
+                        # Some servers output only the header line when there are 0 players.
+                        if "players online:" not in clean_line.lower():
+                            self._expecting_player_list_next_line = False
+                        else:
+                            # Parse the content after 'players online:' (avoid issues with timestamp prefixes)
+                            names_line = clean_line.split("players online:", 1)[1].strip()
+                            if names_line:
+                                self.tracked_players = {p.strip() for p in names_line.split(",") if p.strip()}
+                            else:
+                                self.tracked_players = set()
+                            self._expecting_player_list_next_line = False
+
+                            # Hide list output from console, but keep parsed data
+                            suppress_from_console = True
+
+                    elif "there are no players online" in clean_line.lower():
+                        self.tracked_players = set()
+                        self._expecting_player_list_next_line = False
+
+                        # Hide list output from console
+                        suppress_from_console = True
+
+                    else:
+                        inline_match = list_inline_pattern.search(clean_line)
+                        if inline_match is not None:
+                            names_part = (inline_match.group(1) or "").strip()
+                            if names_part:
+                                self.tracked_players = {p.strip() for p in names_part.split(",") if p.strip()}
+                            else:
+                                self._expecting_player_list_next_line = True
+
+                            # Hide list output from console
+                            suppress_from_console = True
+                        elif list_header_pattern.search(clean_line) is not None:
+                            self._expecting_player_list_next_line = True
+
+                            # Hide list output from console
+                            suppress_from_console = True
+                
+                if not suppress_from_console:
+                    self._log(line_no_ansi, level)
         finally:
             pipe.close()
+
+    def request_player_list_refresh(self, force: bool = False):
+        if not self.is_running():
+            return
+        now = time.time()
+        if force or (now - self._last_list_request_time) >= self._list_request_cooldown:
+            self._last_list_request_time = now
+            self.send_command("list", silent=True)
 
     def stop(self, silent=False):
         if not self.is_running() and not self.is_starting():
@@ -310,6 +444,7 @@ class ServerHandler:
 
         self.server_stopping = True
         self.server_running = False
+        self.tracked_players.clear()  # Clear player list on stop
         if self.server_process:
             if not silent:
                 self.output_callback("Attempting graceful stop...\n", "info")
@@ -317,9 +452,12 @@ class ServerHandler:
         
         # The process will terminate on its own, and the _run_server finally block will clean up.
 
-    def send_command(self, command):
+    def send_command(self, command, silent: bool = False):
         if self.is_running() and self.server_process and self.server_process.stdin:
             try:
+                # Echo command to log history so Dashboard can see it
+                if not silent:
+                    self._log(f"> {command}", "input")
                 self.server_process.stdin.write(f"{command}\n")
                 self.server_process.stdin.flush()
             except (IOError, ValueError) as e:
@@ -354,19 +492,20 @@ class ServerHandler:
                 old_java = self.java_path
                 self.java_path = compatible_java
                 if old_java != compatible_java:
-                    self.output_callback(f"Java actualizado automáticamente: {compatible_java}\n", "info")
+                    self.output_callback(f"Java updated automatically: {compatible_java}\n", "info")
                 return compatible_java
             else:
-                self.output_callback(f"Advertencia: No se pudo obtener Java compatible para Minecraft {minecraft_version}\n", "warning")
+                self.output_callback(f"Warning: Could not obtain compatible Java for Minecraft {minecraft_version}\n", "warning")
                 return self.java_path
                 
         except Exception as e:
-            self.output_callback(f"Error al verificar compatibilidad de Java: {e}\n", "warning")
+            self.output_callback(f"Error checking Java compatibility: {e}\n", "error")
             return self.java_path
 
     def get_pid(self):
         if self.server_process:
             return self.server_process.pid
+# ... (rest of the code remains the same)
         return None
 
     def get_server_properties(self):
@@ -605,3 +744,64 @@ class ServerHandler:
     def is_tunnel_running(self):
         """Checks if the tunnel process is running."""
         return self.tunnel_thread and self.tunnel_thread.is_alive()
+
+    def _update_status_cache(self):
+        """Updates the status cache if enough time has passed."""
+        if not self.is_running():
+            self.cached_status = None
+            return
+
+        current_time = time.time()
+        if current_time - self.last_status_time <= self.cache_duration:
+            return
+
+        # Prevent overlapping status queries (can stall the API during startup)
+        with self._status_lock:
+            if self._status_in_flight:
+                return
+            self._status_in_flight = True
+
+        try:
+            props = self.get_server_properties()
+            port = int(props.get("server-port", 25565))
+            try:
+                self.cached_status = get_server_status(port=port, timeout=0.6)
+            except Exception:
+                self.cached_status = None
+            self.last_status_time = time.time()
+        finally:
+            with self._status_lock:
+                self._status_in_flight = False
+
+    def get_player_count(self):
+        """Returns the current number of online players."""
+        self._update_status_cache()
+        if self.cached_status and self.cached_status.get("online"):
+            return self.cached_status["players"]["online"]
+        return 0
+
+    def get_max_players(self):
+        """Returns the maximum number of players allowed."""
+        self._update_status_cache()
+        if self.cached_status and self.cached_status.get("online"):
+            return self.cached_status["players"]["max"]
+        
+        # Fallback to properties if server is offline or query fails
+        props = self.get_server_properties()
+        return int(props.get("max-players", 20))
+
+    def get_active_players_list(self, trigger_refresh: bool = True):
+        """Returns a list of active players from log tracking or SLP sample."""
+        # Don't spam the server with 'list' while it is still starting.
+        if trigger_refresh and self.server_fully_started:
+            self.request_player_list_refresh()
+
+        # Primary: Use tracked_players from log parsing (more reliable)
+        if self.tracked_players:
+            return [{"name": name, "id": ""} for name in self.tracked_players]
+        
+        # Fallback: Use SLP sample (may be empty)
+        self._update_status_cache()
+        if self.cached_status and self.cached_status.get("online"):
+            return self.cached_status["players"]["sample"] or []
+        return []
