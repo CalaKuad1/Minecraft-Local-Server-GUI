@@ -150,7 +150,7 @@ npm run dev
 ```bash
 cd electron-app
 npm run electron:build
-# Output: electron-app/release/Minecraft Local Server GUI Setup 1.1.1.exe
+# Output: electron-app/release/Minecraft.Local.Server.GUI.Setup.1.1.1.exe
 ```
 
 ---
