@@ -45,8 +45,8 @@ export const api = {
     start: async () => {
         await fetchJson(`${API_URL}/start`, { method: 'POST' });
     },
-    stop: async () => {
-        await fetchJson(`${API_URL}/stop`, { method: 'POST' });
+    stop: async (force = false) => {
+        await fetchJson(`${API_URL}/stop?force=${force}`, { method: 'POST' });
     },
     sendCommand: async (command) => {
         await fetchJson(`${API_URL}/command`, {
@@ -245,9 +245,10 @@ export const api = {
     },
 
     // --- Mods ---
-    searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod') => {
-        let url = `${API_URL}/mods/search?q=${encodeURIComponent(query)}&loader=${loader}&project_type=${projectType}`;
+    searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod', sort = 'downloads', category = null) => {
+        let url = `${API_URL}/mods/search?q=${encodeURIComponent(query)}&loader=${loader}&project_type=${projectType}&sort=${sort}`;
         if (version) url += `&version=${version}`;
+        if (category && category !== 'all') url += `&category=${category}`;
         return await fetchJson(url);
     },
     getModVersions: async (slug, loader = 'fabric', version = null) => {

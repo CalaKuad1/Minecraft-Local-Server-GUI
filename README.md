@@ -31,7 +31,7 @@
 
 | Platform | Download |
 |:--------:|:---------|
-| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.0/Minecraft.Local.Server.GUI.Setup.1.1.0.exe) |
+| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest/download/Minecraft%20Local%20Server%20GUI%20Setup%201.1.1.exe) |
 
 > **Note:** The app automatically downloads and manages Java for you. Just install and play!
 
@@ -48,6 +48,7 @@
 - **Multiple server profiles** — Switch between servers instantly
 - **Live console** with real-time logs and command input
 - **Start/Stop controls** with visual status indicators
+- **Server Conflict Guard** — Prevents running multiple servers simultaneously with an integrated stop-and-switch flow
 
 </td>
 <td width="50%">
@@ -149,7 +150,7 @@ npm run dev
 ```bash
 cd electron-app
 npm run electron:build
-# Output: electron-app/release/Minecraft Local Server GUI Setup 1.1.0.exe
+# Output: electron-app/release/Minecraft Local Server GUI Setup 1.1.1.exe
 ```
 
 ---

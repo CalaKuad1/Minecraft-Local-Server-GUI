@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
+import { Select } from './ui/Select';
 
 const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
     const colors = {
@@ -24,9 +25,7 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
     );
 };
 
-import { Select } from './ui/Select';
-
-// Custom Modal Component
+// Custom Modal Component (Public Server)
 const PublicServerModal = ({ onClose }) => {
     const services = [
         {
@@ -41,7 +40,6 @@ const PublicServerModal = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -49,8 +47,6 @@ const PublicServerModal = ({ onClose }) => {
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                 onClick={onClose}
             />
-
-            {/* Modal */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -59,7 +55,6 @@ const PublicServerModal = ({ onClose }) => {
                 className="bg-[#0f0f0f] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative z-10 mx-4"
                 onClick={e => e.stopPropagation()}
             >
-                {/* Header */}
                 <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-6 relative overflow-hidden border-b border-white/5">
                     <div className="relative flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -71,30 +66,18 @@ const PublicServerModal = ({ onClose }) => {
                                 <p className="text-sm text-gray-400">Experimental: Powered by Pinggy.io</p>
                             </div>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-                        >
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
                             <X size={20} />
                         </button>
                     </div>
                 </div>
-
-                {/* Content */}
                 <div className="p-6 space-y-4">
                     <p className="text-gray-400 text-sm leading-relaxed">
                         Your server will be accessible from the Internet using a secure tunnel.
                         <strong className="text-white"> This feature is experimental</strong> and the address will change every time you restart the tunnel.
                     </p>
-
                     {services.map((service, i) => (
-                        <a
-                            key={i}
-                            href={service.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block p-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 rounded-xl transition-all group"
-                        >
+                        <a key={i} href={service.url} target="_blank" rel="noreferrer" className="block p-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 rounded-xl transition-all group">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${service.color} flex items-center justify-center text-white font-bold text-lg`}>
@@ -103,11 +86,7 @@ const PublicServerModal = ({ onClose }) => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-white">{service.name}</span>
-                                            {service.recommended && (
-                                                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full font-medium">
-                                                    {service.badge || 'Recomendado'}
-                                                </span>
-                                            )}
+                                            {service.recommended && <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full font-medium">{service.badge || 'Recomendado'}</span>}
                                         </div>
                                         <p className="text-sm text-gray-500 mt-0.5">{service.description}</p>
                                     </div>
@@ -117,33 +96,53 @@ const PublicServerModal = ({ onClose }) => {
                         </a>
                     ))}
                 </div>
-
-                {/* Footer */}
                 <div className="p-4 bg-white/5 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold transition-all"
-                    >
-                        Close
-                    </button>
+                    <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold transition-all">Close</button>
                 </div>
             </motion.div>
         </div>
     );
 };
 
-export default function Dashboard({ status: serverStatus }) {
-    // Use prop or fallback to offline
+export default function Dashboard({ status: serverStatus, onRefresh }) {
+    // Local state for immediate UI feedback
+    const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
+    const [localLogs, setLocalLogs] = useState([]);
+
+    // Referencia para evitar que el polling sobrescriba el estado 'offline' recién adquirido
+    const isStoppingRef = useRef(serverStatus?.status === 'stopping');
+
+    // Derived values
     const status = serverStatus || { status: 'offline' };
+
+    // Sync with polling props
+    useEffect(() => {
+        // Solo sincronizar si NO estamos en medio de un proceso de detención controlado localmente
+        // o si el nuevo estado confirma que ya está offline.
+        if (serverStatus?.status) {
+            if (isStoppingRef.current && serverStatus.status !== 'offline') {
+                return; // Ignorar actualizaciones de polling mientras esperamos el apagado final
+            }
+            setLocalStatus(serverStatus.status);
+            if (serverStatus.status === 'offline' || serverStatus.status === 'online') {
+                setLoading(false);
+                if (serverStatus.status === 'offline') {
+                    isStoppingRef.current = false;
+                }
+            }
+        }
+    }, [serverStatus?.status]);
+
+    // Reset logs ONLY when the server ID changes (Persist logs after stop)
+    useEffect(() => {
+        setLocalLogs([]);
+        setLocalStatus(serverStatus?.status || 'offline');
+    }, [serverStatus?.server_id]);
+
 
     const onlinePlayersLen = Array.isArray(status.online_players) ? status.online_players.length : 0;
     const playersValue = (status.players !== undefined && status.players !== null) ? Number(status.players) : null;
-    const onlineCount = (Number.isFinite(playersValue) && playersValue > 0)
-        ? playersValue
-        : onlinePlayersLen;
-
-    // We can keep the tunnel status logic here as it is separate, but we should probably lift it up too eventually.
-    // For now, let's keep tunnel logic separate but remove the main status polling.
+    const onlineCount = (Number.isFinite(playersValue) && playersValue > 0) ? playersValue : onlinePlayersLen;
 
     const [loading, setLoading] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
@@ -151,7 +150,88 @@ export default function Dashboard({ status: serverStatus }) {
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
 
-    // WebSocket for tunnel events
+    const ws = useRef(null);
+    const logsEndRef = useRef(null);
+
+    // --- WebSocket for Real-time Logs & Status Updates ---
+    useEffect(() => {
+        // Clear previous logs on mount or server switch
+        setLocalLogs([]);
+
+        ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
+
+        ws.current.onopen = () => {
+            // console.log("Dashboard WS Connected");
+        };
+
+        ws.current.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                const processItem = (item, isHistory = false) => {
+                    // 1. Handle explicit status change events from Backend (Fixes stuck on Stopping)
+                    if (item.type === 'status_change') {
+                        setLocalStatus(item.status);
+                        setLoading(false);
+                        if (item.status === 'offline') {
+                            isStoppingRef.current = false;
+                            if (onRefresh) onRefresh();
+                        } else if (item.status === 'online') {
+                            if (onRefresh) onRefresh();
+                        }
+                        return;
+                    }
+
+                    // 2. Handle Logs
+                    if (item.message !== undefined) {
+                        setLocalLogs(prev => {
+                            const newLogs = [...prev, item];
+                            return newLogs.slice(-100); // Increased buffer to 100
+                        });
+
+                        // Fallback: Detect status from log text (Skip for historical logs)
+                        if (isHistory) return;
+
+                        const msg = (item.message || "").toString();
+                        if (msg.includes("Done") && msg.includes("For help")) {
+                            setLocalStatus('online');
+                            setLoading(false);
+                            isStoppingRef.current = false;
+                            if (onRefresh) onRefresh();
+                        } else if (msg.includes("Stopping server") || msg.includes("Stopping the server")) {
+                            setLocalStatus('stopping');
+                            isStoppingRef.current = true;
+                        }
+                    }
+                };
+
+                if (data.type === 'batch' && Array.isArray(data.items)) {
+                    data.items.forEach(item => processItem(item, true));
+                } else {
+                    processItem(data, false);
+                }
+            } catch (e) { }
+        };
+
+        return () => {
+            if (ws.current) ws.current.close();
+        };
+    }, []); // Empty dependency array ensures this runs once per mount (which happens on server switch due to App.jsx key)
+
+    // Robust Auto-scroll logs
+    useEffect(() => {
+        if (logsEndRef.current) {
+            const container = logsEndRef.current.parentElement;
+            if (container) {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [localLogs]);
+
+    // Tunnel Polling
     useEffect(() => {
         const checkTunnel = async () => {
             try {
@@ -162,51 +242,59 @@ export default function Dashboard({ status: serverStatus }) {
                     setTunnelAddress(null);
                 }
                 setTunnelConnecting(false);
-            } catch (e) {
-                // Silent fail
-            }
+            } catch (e) { }
         };
-
         checkTunnel();
         const interval = setInterval(checkTunnel, 5000);
         return () => clearInterval(interval);
     }, []);
 
-    // fetchStatus removed in favor of props
-    // Status prop now drives the UI directly.
-
-    // We still need a way to force update after actions?
-    // Start/Stop actions in App.jsx usually trigger updates.
-    // Ideally App.jsx detects state changes, but for now the polling in App.jsx handles it.
-    // To make it snappier, App.jsx could expose a `refreshStatus` prop, but let's rely on the 3s poll + action delay for now.
-
     const handleStart = async () => {
         setLoading(true);
-        await api.start();
-        // App.jsx polls status, so it will update automatically
-        setTimeout(() => setLoading(false), 1500);
-    };
-
-    const handleStop = async () => {
-        setLoading(true);
-        await api.stop();
-        // App.jsx polls status, so it will update automatically
-        setTimeout(() => setLoading(false), 1500);
-    };
-
-    const handleOpenFolder = async () => {
+        setLocalStatus('starting'); // Immediate visual feedback
         try {
-            await api.openServerFolder();
-        } catch (error) {
-            console.error("Failed to open folder:", error);
+            await api.start();
+            if (onRefresh) onRefresh();
+        } catch (e) {
+            setLocalStatus('offline');
+            setLoading(false);
         }
     };
 
-    const isOnline = status.status === 'online';
-    const isStarting = status.status === 'starting';
+    const handleStop = async () => {
+        // Si ya se está deteniendo, la segunda pulsación es un Force Kill
+        if (isStopping) {
+            if (confirm("¿El servidor no responde? ¿Quieres forzar el cierre inmediatemente? (Podría perderse el progreso no guardado)")) {
+                setLoading(true);
+                try {
+                    await api.stop(true); // force = true
+                } catch (e) { }
+                setLoading(false);
+            }
+            return;
+        }
+
+        setLoading(true);
+        setLocalStatus('stopping');
+        isStoppingRef.current = true;
+        try {
+            await api.stop(false); // Normal stop
+        } catch (e) {
+            setLoading(false);
+            isStoppingRef.current = false;
+        }
+    };
+
+    const handleOpenFolder = async () => {
+        try { await api.openServerFolder(); } catch (error) { }
+    };
+
+    const isOnline = localStatus === 'online';
+    const isStarting = localStatus === 'starting';
+    const isStopping = localStatus === 'stopping';
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in zoom-in duration-500 pb-10">
             {/* Header & Controls */}
             <div className="flex items-center justify-between p-8 bg-surface/50 backdrop-blur-md border border-white/5 rounded-3xl shadow-xl relative overflow-hidden">
 
@@ -215,8 +303,10 @@ export default function Dashboard({ status: serverStatus }) {
 
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : isStarting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
-                        <span className={`text-sm font-bold tracking-wider uppercase ${isOnline ? 'text-green-500' : isStarting ? 'text-yellow-500' : 'text-gray-400'}`}>{status.status}</span>
+                        <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : (isStarting || isStopping) ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        <span className={`text-sm font-bold tracking-wider uppercase ${isOnline ? 'text-green-500' : (isStarting || isStopping) ? 'text-yellow-500' : 'text-gray-400'}`}>
+                            {isStopping ? "STOPPING..." : localStatus}
+                        </span>
                     </div>
                     <h2 className="text-4xl font-bold text-white mb-2">Minecraft Server</h2>
                     <p className="text-gray-400 max-w-md">
@@ -225,7 +315,7 @@ export default function Dashboard({ status: serverStatus }) {
                 </div>
 
                 <div className="flex gap-4 relative z-10">
-                    {!isOnline && !isStarting && (
+                    {!isOnline && !isStarting && !isStopping && (
                         <button
                             onClick={handleStart}
                             disabled={loading}
@@ -236,14 +326,18 @@ export default function Dashboard({ status: serverStatus }) {
                         </button>
                     )}
 
-                    {(isOnline || isStarting) && (
+                    {(isOnline || isStarting || isStopping) && (
                         <button
                             onClick={handleStop}
-                            disabled={loading}
-                            className="px-8 py-4 bg-surface hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500 rounded-xl font-bold flex items-center gap-2 transition-all duration-200 active:scale-95 disabled:opacity-50"
+                            disabled={loading || (!isOnline && !isStarting && !isStopping)}
+                            className={`px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition-all duration-200 active:scale-95 disabled:opacity-50 
+                                ${isStopping
+                                    ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse border border-red-400'
+                                    : 'bg-surface hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500'
+                                }`}
                         >
                             <Square size={20} fill="currentColor" />
-                            STOP SERVER
+                            {isStopping ? 'FORCE KILL' : 'STOP SERVER'}
                         </button>
                     )}
                 </div>
@@ -264,36 +358,20 @@ export default function Dashboard({ status: serverStatus }) {
                         <div className="text-xs text-gray-500 uppercase tracking-wider">
                             {tunnelAddress ? '🌐 Public Address' : 'Local IP Address'}
                         </div>
-                        <div className="text-lg font-mono text-white font-bold">
+                        <div className="text-lg font-mono text-white font-bold select-all">
                             {tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
                         </div>
                     </div>
                 </div>
 
-                {/* Open Folder Button */}
-                <button
-                    onClick={handleOpenFolder}
-                    className="p-2.5 bg-surface hover:bg-white/5 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/5 hover:border-white/10"
-                    title="Open Server Folder"
-                >
+                <button onClick={handleOpenFolder} className="p-2.5 bg-surface hover:bg-white/5 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/5 hover:border-white/10" title="Open Server Folder">
                     <FolderOpen size={20} />
                 </button>
 
-                {/* Region Selector */}
                 <div className="w-32 active:z-50">
-                    <Select
-                        value={tunnelRegion}
-                        onChange={setTunnelRegion}
-                        disabled={!!tunnelAddress || tunnelConnecting}
-                        options={[
-                            { value: 'eu', label: 'EU 🇪🇺' },
-                            { value: 'us', label: 'US 🇺🇸' },
-                            { value: 'ap', label: 'Asia 🌏' },
-                        ]}
-                    />
+                    <Select value={tunnelRegion} onChange={setTunnelRegion} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'eu', label: 'EU 🇪🇺' }, { value: 'us', label: 'US 🇺🇸' }, { value: 'ap', label: 'Asia 🌏' }]} />
                 </div>
 
-                {/* Make Public Button */}
                 <button
                     onClick={async () => {
                         if (tunnelAddress) {
@@ -306,33 +384,14 @@ export default function Dashboard({ status: serverStatus }) {
                         }
                     }}
                     disabled={tunnelConnecting && !tunnelAddress}
-                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${tunnelAddress
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                        : tunnelConnecting
-                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                            : 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
-                        }`}
+                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all ${tunnelAddress ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' : tunnelConnecting ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'}`}
                 >
-                    {tunnelAddress ? (
-                        <><Square size={14} /> Stop Public</>
-                    ) : tunnelConnecting ? (
-                        <><div className="w-4 h-4 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>
-                    ) : (
-                        <><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" x2="22" y1="12" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg> Make Public</>
-                    )}
+                    {tunnelAddress ? (<><Square size={14} /> Stop Public</>) : tunnelConnecting ? (<><div className="w-4 h-4 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>) : (<><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" x2="22" y1="12" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg> Make Public</>)}
                 </button>
 
-                {/* Help Button with Tooltip */}
                 <div className="relative group">
-                    <button
-                        onClick={() => setShowPublicModal(true)}
-                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                            <path d="M12 17h.01" />
-                        </svg>
+                    <button onClick={() => setShowPublicModal(true)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
                     </button>
 
                     {/* Tooltip on hover */}
@@ -348,70 +407,40 @@ export default function Dashboard({ status: serverStatus }) {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard
-                    icon={Users}
-                    label="Players"
-                    value={onlineCount !== undefined ? `${onlineCount}` : '-'}
-                    sublabel={`/ ${status.max_players || 20} Online`}
-                    color="accent"
-                />
-                <StatCard
-                    icon={Cpu}
-                    label="CPU Usage"
-                    value={status.cpu !== undefined ? `${status.cpu}%` : '--'}
-                    sublabel="System Total"
-                    color="primary"
-                />
-                <StatCard
-                    icon={HardDrive}
-                    label="RAM Usage"
-                    value={status.ram || '--'}
-                    sublabel="Usage / Allocated"
-                    color="secondary"
-                />
-                <StatCard
-                    icon={Activity}
-                    label="Uptime"
-                    value={status.uptime || '--'}
-                    sublabel="Since last restart"
-                    color="accent"
-                />
+                <StatCard icon={Users} label="Players" value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} Online`} color="accent" />
+                <StatCard icon={Cpu} label="CPU Usage" value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel="System Total" color="primary" />
+                <StatCard icon={HardDrive} label="RAM Usage" value={status.ram || '--'} sublabel="Usage / Allocated" color="secondary" />
+                <StatCard icon={Activity} label="Uptime" value={status.uptime || '--'} sublabel="Since last restart" color="accent" />
             </div>
 
-            {/* Mini Console */}
+            {/* Mini Console (Real-time via WS) */}
             <div className="bg-[#0f0f0f]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden flex flex-col shadow-xl">
                 <div className="bg-[#1a1a1a]/90 px-4 py-3 border-b border-white/5 flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary/50"></div>
-                        Server Activity
+                        <Terminal size={14} className="text-primary" />
+                        Live Server Activity
                     </span>
                 </div>
                 <div className="p-4 font-mono text-xs h-48 overflow-y-auto space-y-1 text-gray-300 scrollbar-thin scrollbar-thumb-gray-700">
-                    {status.recent_logs && status.recent_logs.length > 0 ? (
-                        status.recent_logs
-                            .filter((log) => {
-                                if (!log) return false;
-                                // Ignore structured events (progress, etc.) that don't represent a console line
-                                if (log.type && log.message === undefined) return false;
-                                const msg = (log.message || '').toString();
-                                return msg.trim().length > 0;
-                            })
-                            .map((log, i) => (
-                                <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
-                                    log.level === 'warning' ? 'text-yellow-400' :
-                                        log.level === 'success' ? 'text-green-400' :
-                                            log.level === 'input' ? 'text-cyan-400' :
-                                                'text-gray-400'
-                                    }`}>
-                                    <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                                    {log.message}
-                                </div>
-                            ))
+                    {localLogs.length > 0 ? (
+                        localLogs.map((log, i) => (
+                            <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
+                                log.level === 'warning' ? 'text-yellow-400' :
+                                    log.level === 'success' ? 'text-green-400' :
+                                        log.level === 'input' ? 'text-cyan-400 font-bold' :
+                                            'text-gray-300'
+                                }`}>
+                                {log.level !== 'input' && <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>}
+                                {log.message}
+                            </div>
+                        ))
                     ) : (
-                        <div className="h-full flex items-center justify-center text-gray-700 italic">
-                            Waiting for logs...
+                        <div className="h-full flex items-center justify-center text-gray-700 italic flex-col gap-2">
+                            <Activity size={24} className="opacity-20 animate-pulse" />
+                            <span>Waiting for server output...</span>
                         </div>
                     )}
+                    <div ref={logsEndRef} />
                 </div>
                 {/* Mini Console Input */}
                 <form
@@ -419,6 +448,10 @@ export default function Dashboard({ status: serverStatus }) {
                         e.preventDefault();
                         const input = e.target.elements.cmd.value;
                         if (!input.trim()) return;
+
+                        // Send locally to update UI instantly
+                        setLocalLogs(prev => [...prev, { message: `> ${input}`, level: 'input' }]);
+
                         try {
                             await api.sendCommand(input);
                             e.target.elements.cmd.value = '';

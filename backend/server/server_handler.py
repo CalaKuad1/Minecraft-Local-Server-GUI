@@ -175,6 +175,10 @@ class ServerHandler:
                 self.output_callback("Forge installation successful.\n", "info")
                 # On Windows, a run.bat is created. On Linux/macOS, a run.sh.
                 # The server can now be started with the standard start() method.
+                
+                # Auto-configure so server is ready to run immediately
+                self._accept_eula()
+                self._create_default_server_properties()
 
         except Exception as e:
             self.output_callback(f"An error occurred during Forge installation: {e}\n", "error")
@@ -189,11 +193,27 @@ class ServerHandler:
             except OSError as e:
                 self.output_callback(f"Error during cleanup: {e}\n", "warning")
 
+    def get_status(self):
+        """
+        Unified status check. Prioritizes the actual process state.
+        Returns: 'offline', 'starting', 'online', or 'stopping'.
+        """
+        if self.server_process is None or self.server_process.poll() is not None:
+            return 'offline'
+        
+        if self.server_stopping:
+            return 'stopping'
+            
+        if self.server_fully_started:
+            return 'online'
+            
+        return 'starting'
+
     def is_starting(self):
-        return self.server_process is not None and self.server_process.poll() is None and not self.server_fully_started
+        return self.get_status() == 'starting'
 
     def is_running(self):
-        return self.server_process is not None and self.server_process.poll() is None and self.server_fully_started
+        return self.get_status() == 'online'
 
     def _accept_eula(self):
         """Checks for eula.txt and sets eula=true if found or creates it."""
@@ -212,6 +232,30 @@ class ServerHandler:
                 self.output_callback("Created eula.txt and accepted EULA.\n", "info")
         except Exception as e:
             self.output_callback(f"Warning: Could not accept EULA automatically: {e}\n", "warning")
+
+    def _create_default_server_properties(self):
+        """Creates a default server.properties file if it doesn't exist."""
+        props_path = os.path.join(self.server_path, 'server.properties')
+        try:
+            if not os.path.exists(props_path):
+                default_props = """#Minecraft server properties
+motd=A Minecraft Server
+max-players=20
+online-mode=true
+enable-command-block=false
+spawn-protection=16
+view-distance=10
+simulation-distance=10
+difficulty=easy
+gamemode=survival
+pvp=true
+allow-flight=false
+"""
+                with open(props_path, 'w') as f:
+                    f.write(default_props)
+                self.output_callback("Created default server.properties.\n", "info")
+        except Exception as e:
+            self.output_callback(f"Warning: Could not create server.properties: {e}\n", "warning")
 
     def start(self):
         if self.is_running() or self.is_starting():
@@ -323,7 +367,20 @@ class ServerHandler:
             min_ram_str,
             "--add-modules=jdk.incubator.vector", 
             "--enable-native-access=ALL-UNNAMED",
-            "-XX:+UnlockExperimentalVMOptions"
+            "-XX:+UnlockExperimentalVMOptions",
+            # Forge/ModLauncher Java 16+ compatibility args
+            "--add-exports=java.base/sun.security.util=ALL-UNNAMED",
+            "--add-opens=java.base/java.util.jar=ALL-UNNAMED",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "--add-opens=java.base/java.util=ALL-UNNAMED",
+            "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+            "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+            "--add-opens=java.base/java.text=ALL-UNNAMED",
+            "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+            "--add-opens=java.base/java.nio=ALL-UNNAMED",
+            "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+            "--add-opens=java.management/sun.management=ALL-UNNAMED",
+            "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED"
         ]
         
         # Add any server-type specific arguments before the -jar flag
@@ -350,11 +407,38 @@ class ServerHandler:
         except Exception as e:
             self._log(f"Server start failed: {e}\n", "error")
         finally:
+            # Esperar a que los hilos de salida terminen de procesar los últimos logs
+            # Esto evita que el estado se quede en 'stopping' si el log llega justo al final.
+            try:
+                if stdout_thread: stdout_thread.join(timeout=2)
+                if stderr_thread: stderr_thread.join(timeout=2)
+            except: pass
+
+            # --- CRITICAL FIX: ACTUALIZAR ESTADO INTERNO PRIMERO ---
+            # Guardamos el estado previo para el log
+            was_stopping = self.server_stopping
+            
+            # 1. Marcar inmediatamente como detenido para que cualquier consulta a /status
+            # devuelva "offline" y no "stopping" o "online".
             self.server_fully_started = False
             self.server_process = None
             self.server_running = False
-            if not self.server_stopping:
+            self.server_stopping = False
+
+            # 2. Enviar mensaje de log final
+            if not was_stopping:
                 self._log("Server stopped unexpectedly.\n", "error")
+            else:
+                self._log("Server stopped.\n", "info")
+
+            # 3. NOTIFICAR AL FRONTEND VIA WEBSOCKET (Explicit event)
+            # Esto asegura que el frontend limpie cualquier estado 'stopping' residual.
+            if self.output_callback:
+                self.output_callback({
+                    "type": "status_change",
+                    "status": "offline",
+                    "server_id": self.server_id
+                })
 
     def _read_output(self, pipe, level):
         import re
@@ -369,6 +453,27 @@ class ServerHandler:
                 line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
                 if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
                     self.server_fully_started = True
+                    self.server_stopping = False
+                    # Broadcast explicit status change to online
+                    if self.output_callback:
+                        self.output_callback({
+                            "type": "status_change",
+                            "status": "online",
+                            "server_id": self.server_id
+                        })
+                elif 'Stopping the server' in line_no_ansi or 'Stopping server' in line_no_ansi:
+                    self.server_stopping = True
+                elif 'All dimensions are saved' in line_no_ansi or 'All chunks are saved' in line_no_ansi:
+                    self.server_stopping = True
+                    # Detect that the server HAS saved everything.
+                    # If it doesn't close in 7 seconds, we force it.
+                    def delayed_kill():
+                        time.sleep(7)
+                        if self.get_status() == 'stopping':
+                            self._log("Server finished saving but hung. Forcing termination.\n", "warning")
+                            self._kill_process_tree()
+                    
+                    threading.Thread(target=delayed_kill, daemon=True).start()
                 
                 # Detect player join/leave
                 join_match = join_pattern.search(line_no_ansi)
@@ -438,22 +543,92 @@ class ServerHandler:
             self._last_list_request_time = now
             self.send_command("list", silent=True)
 
-    def stop(self, silent=False):
+    def stop(self, silent=False, force=False):
+        """Detiene el servidor. Si force=True, mata el proceso inmediatamente."""
         if not self.is_running() and not self.is_starting():
             return
 
         self.server_stopping = True
-        self.server_running = False
+        
+        if force:
+            if not silent:
+                self._log("Force killing server process tree...\n", "warning")
+            self._kill_process_tree()
+            return
+
         self.tracked_players.clear()  # Clear player list on stop
+        
         if self.server_process:
             if not silent:
-                self.output_callback("Attempting graceful stop...\n", "info")
+                self._log("Attempting graceful stop...\n", "info")
             self.send_command("stop")
-        
-        # The process will terminate on its own, and the _run_server finally block will clean up.
+            
+            # Cerrar stdin para señalar EOF (Fin de Archivo). 
+            # Esto ayuda a que Java sepa que la consola se ha cerrado y termine antes.
+            try:
+                if self.server_process and self.server_process.stdin:
+                    self.server_process.stdin.close()
+            except Exception as e:
+                self._log(f"Warning closing stdin: {e}\n", "warning")
+            
+            # Lanzar un hilo para vigilar si se cuelga
+            threading.Thread(target=self._watchdog_stop, daemon=True).start()
+
+    def _watchdog_stop(self):
+        """Vigila si el servidor tarda demasiado en cerrarse y avisa."""
+        time.sleep(30)
+        if self.is_running():
+            self._log("Server is taking a long time to stop. You can force stop it now.\n", "warning")
+
+    def _kill_process_tree(self):
+        """Mata el proceso del servidor y todos sus hijos."""
+        if not self.server_process:
+            return
+            
+        pid = self.server_process.pid
+        try:
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try: 
+                    child.kill()
+                except: 
+                    pass
+            parent.kill()
+        except psutil.NoSuchProcess:
+            pass
+        finally:
+            self.force_stop_state()
+            self._log("Server process killed.\n", "error")
+            if self.output_callback:
+                self.output_callback({
+                    "type": "status_change",
+                    "status": "offline",
+                    "server_id": self.server_id
+                })
+
+    def wait_for_stop(self, timeout=30):
+        """Blocks until the server process has exited or the timeout is reached."""
+        if not self.server_process:
+            return True
+            
+        try:
+            # Wait for the process to exit
+            self.server_process.wait(timeout=timeout)
+            return True
+        except subprocess.TimeoutExpired:
+            self._log(f"Warning: Server did not stop within {timeout}s. Forcing termination.\n", "warning")
+            try:
+                self.server_process.kill()
+            except:
+                pass
+            return False
+        except Exception as e:
+            self._log(f"Error while waiting for server to stop: {e}\n", "error")
+            return False
 
     def send_command(self, command, silent: bool = False):
-        if self.is_running() and self.server_process and self.server_process.stdin:
+        if self.server_process and self.server_process.poll() is None and self.server_process.stdin:
             try:
                 # Echo command to log history so Dashboard can see it
                 if not silent:

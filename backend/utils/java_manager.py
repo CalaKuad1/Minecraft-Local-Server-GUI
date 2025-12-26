@@ -459,12 +459,27 @@ class JavaManager:
             # 3. Verificar Java del sistema (si no forzamos descarga)
             if not force_download:
                 system_java = self.detect_system_java()
-                if system_java and system_java[0] >= required_version:
-                    path = system_java[1]
-                    logger.info(f"Checking system Java: {path}")
-                    if self._validate_java_install(path):
-                        self._link_java_to_server(server_path, minecraft_version, path)
-                        return path
+                if system_java:
+                    sys_ver = system_java[0]
+                    # Strict check for Java 8 (Legacy Minecraft)
+                    # Newer versions of Java (16+) break Forge for 1.16.5 and older
+                    is_valid = False
+                    
+                    if required_version == 8:
+                        is_valid = (sys_ver == 8)
+                    else:
+                        # For newer versions (1.17+), usually newer Java is fine, 
+                        # but let's warn or be careful about bleeding edge (e.g. Java 24)
+                        is_valid = (sys_ver >= required_version)
+                        
+                    if is_valid:
+                        path = system_java[1]
+                        logger.info(f"Checking system Java: {path}")
+                        if self._validate_java_install(path):
+                            self._link_java_to_server(server_path, minecraft_version, path)
+                            return path
+                    else:
+                        logger.info(f"System Java {sys_ver} is not compatible with required Java {required_version}. Ignoring.")
             
             # 4. Skip download if requested (during server start)
             if skip_download:

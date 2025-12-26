@@ -133,6 +133,11 @@ def download_file_from_url(download_url, save_path, progress_callback):
                     if total_size > 0:
                         progress = (bytes_downloaded / total_size) * 100
                         progress_callback(progress)
+                    else:
+                        # Fallback for unknown size: just show we are working
+                        # We won't call progress_callback with a % because it might confuse the bar
+                        pass
+                        
         progress_callback(100)
         return True
     except requests.RequestException as e:

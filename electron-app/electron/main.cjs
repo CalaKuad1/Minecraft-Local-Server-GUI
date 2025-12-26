@@ -15,10 +15,10 @@ const API_PORT = 8000;
 // (must match electron-builder appId)
 try {
   app.setAppUserModelId('com.minecraft.localservergui');
-} catch (_) {}
+} catch (_) { }
 try {
   app.setName('Minecraft Local Server GUI');
-} catch (_) {}
+} catch (_) { }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -146,8 +146,10 @@ const shutdownBackend = () => {
       method: 'POST'
     }, (res) => {
       console.log(`Backend stop request status: ${res.statusCode}`);
-      // Give it a moment to save data
-      setTimeout(resolve, 2000);
+      // The backend now waits for servers in a thread. 
+      // We will wait up to 30s for the process to exit naturally.
+      // But we'll give it a head start here.
+      setTimeout(resolve, 3000);
     });
 
     req.on('error', (e) => {
@@ -155,7 +157,7 @@ const shutdownBackend = () => {
       resolve();
     });
 
-    req.setTimeout(2000, () => {
+    req.setTimeout(35000, () => {
       req.destroy();
       resolve();
     });

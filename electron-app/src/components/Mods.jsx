@@ -15,6 +15,10 @@ export default function Mods({ status, onOpenWizard }) {
     const [installing, setInstalling] = useState({}); // { versionId: boolean }
     const [error, setError] = useState(null);
 
+    // Filters
+    const [sortBy, setSortBy] = useState('downloads'); // relevance, downloads, newest, updated
+    const [category, setCategory] = useState('all'); // all, technology, magic, adventure, decoration, optimization
+
     // Initial load
     useEffect(() => {
         loadInstalledMods();
@@ -48,6 +52,7 @@ export default function Mods({ status, onOpenWizard }) {
     }, [serverType, serverVersion]);
 
     // Initial load & Debounced Search
+    // Initial load & Debounced Search
     useEffect(() => {
         if (activeTab === 'browse' || activeTab === 'modpacks') {
             const timer = setTimeout(() => {
@@ -55,14 +60,14 @@ export default function Mods({ status, onOpenWizard }) {
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [searchQuery, activeTab, activeLoader, activeVersion]);
+    }, [searchQuery, activeTab, activeLoader, activeVersion, sortBy, category]);
 
     const performSearch = async (query) => {
         setLoading(true);
         setError(null);
         try {
             const projectType = activeTab === 'modpacks' ? 'modpack' : 'mod';
-            const results = await api.searchMods(query, activeLoader, activeVersion, projectType);
+            const results = await api.searchMods(query, activeLoader, activeVersion, projectType, sortBy, category);
             setSearchResults(results);
         } catch (err) {
             setError(err?.message || "Failed to search mods. Please try again.");
@@ -79,62 +84,75 @@ export default function Mods({ status, onOpenWizard }) {
     };
 
     const handleInstall = async (mod) => {
-        // We typically install the latest compatible version
-        // To do this right, we should query mod versions first.
-        // For simplicity/MVP, we'll try to find the version ID from search result if available,
-        // OR we might need a separate API call "getModVersions" in backend. 
-        // 
-        // CORRECT APPROACH: Modrinth search result doesn't give the file download URL directly.
-        // We implemented 'get_mod_versions' in backend but didn't expose it yet directly for UI selection.
-        // Ideally we pick the first compatible version.
+        // Find best version if we can, or just install what we have? 
+        // NOTE: 'mod' here is a search result. It has 'project_id' or 'slug'.
+        // We actually need a SPECIFIC FILE VERSION ID. 
+        // The search result usually contains `latest_version` string or we should hit `getModVersions`.
+        //
+        // FOR NOW: Let's assume we fetch versions first to be safe, OR if the search result allows direct install (unlikely).
+        // Modrinth Search Result -> slug.
 
-        // Let's assume we want to open a "Versions" modal in a robust app.
-        // For this MVP, let's auto-select the best version.
-        // BUT wait, search result item has 'slug'. We need to call another endpoint.
-        // Actually, let's just use the logic: "Install latest compatible".
-        // I will implement a quick 'auto-install' helper on backend or just pick here. 
-        // Oops, I didn't verify if search result has version_id. It usually has `project_id`.
-        // I should have checked Modrinth API response structure!
-        // 
-        // Search Hit: { "slug": "...", "title": "...", "icon_url": "...", "project_id": "..." }
-        // 
-        // Plan: We need a way to install. 
-        // I will update the install logic to:
-        // 1. Fetch versions for this project (using backend API if exposed, or add one).
-        // 2. Pick top one.
-        // 3. Install it.
-        // 
-        // Since I haven't exposed `get_mod_versions` in `api_server` explicitly as a route,
-        // I should probably add it or do a "smart install" endpoint.
-        // Let's try to add `GET /mods/versions` to `api_server.py` quickly? 
-        // OR client-side fetching? No, CORS using direct Modrinth API might be fine 
-        // but backend is safer.
-        // 
-        // Pivot: I'll assume I can add `getModVersions` to `api.js` if I add the endpoint.
-        // Wait, I missed adding `get_mod_versions` route in `api_server.py`.
-        // I will add it in the next step. For now, I'll code this component to use it.
+        // 1. Fetch versions
+        // 2. Install latest compatible
 
         try {
-            setInstalling(prev => ({ ...prev, [mod.slug]: true }));
+            setInstalling(prev => ({ ...prev, [mod.slug]: true })); // Use slug as key
 
+            // Fetch versions
             const versions = await api.getModVersions(mod.slug, activeLoader, activeVersion);
-
-            if (versions && versions.length > 0) {
-                // Pick first
-                const targetVersion = versions[0];
-                await api.installMod(targetVersion.id);
-                loadInstalledMods(); // Refresh installed
-                loadInstalledMods(); // Refresh installed
-            } else {
-                dialog.alert(`No compatible version found for ${activeLoader} ${activeVersion}.`, "Version Error", "warning");
+            if (!versions || versions.length === 0) {
+                // Try fetching "any" version just in case filters were too strict
+                // Or just error
+                throw new Error("No compatible versions found for this server.");
             }
-        } catch (e) {
-            dialog.alert("Install failed: " + e.message, "Error", "destructive");
-            setError(e?.message || 'Install failed');
-        } finally {
+
+            const targetVersion = versions[0]; // First one is usually latest
+
+            // Trigger install
+            // The backend now runs async and sends WS progress
+            await api.installMod(targetVersion.id);
+
+            // We don't await completion here anymore, we watch WS.
+            // But we can keep state 'installing' until we get a completion event?
+            // For now, let's rely on standard WS logs or optimistically say "Started".
+
+        } catch (err) {
+            console.error(err);
+            setError(err.message);
             setInstalling(prev => ({ ...prev, [mod.slug]: false }));
         }
     };
+
+    // Listen for install completion events
+    useEffect(() => {
+        const handleMessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'mod_install_complete') {
+                    // Refresh installed list
+                    loadInstalledMods();
+                    // We can't easily know WHICH mod finished without more data from backend,
+                    // but we can just clear all installing spinners or be smarter.
+                    // For MVP simplicity:
+                    setInstalling({});
+                }
+            } catch (e) { }
+        };
+
+        // We need access to the WebSocket. Ideally this component should receive the WS instance 
+        // or we attach a global listener. 
+        // Given 'status' prop might come from parent who holds WS.
+        // Assuming there is a global WS or we reuse one?
+        // 'SetupWizard' used a specific WS connection. The main Dashboard usually has one too.
+        // If we don't have direct access here, we can rely on `loadInstalledMods` poll or just user manual refresh.
+        // BUT, we want better UX.
+
+        // Let's create a temp listener if we can't access global.
+        const ws = new WebSocket('ws://127.0.0.1:8000/ws/console');
+        ws.onmessage = handleMessage;
+
+        return () => ws.close();
+    }, []);
 
     const handleDelete = async (filename) => {
         if (!await dialog.confirm(`Delete ${filename}?`, "Delete Mod", "destructive")) return;
@@ -220,11 +238,39 @@ export default function Mods({ status, onOpenWizard }) {
                             placeholder="Version"
                             value={activeVersion}
                             onChange={(e) => setActiveVersion(e.target.value)}
-                            className="w-32 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50"
+                            className="w-24 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50 text-sm"
                         />
+
+                        {/* Sort Dropdown */}
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50 text-sm"
+                        >
+                            <option value="relevance">Relevance</option>
+                            <option value="downloads">Downloads</option>
+                            <option value="newest">Newest</option>
+                            <option value="updated">Updated</option>
+                        </select>
+
+                        {/* Category Dropdown */}
+                        <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50 text-sm"
+                        >
+                            <option value="all">All Categories</option>
+                            <option value="technology">Tech</option>
+                            <option value="magic">Magic</option>
+                            <option value="adventure">Adventure</option>
+                            <option value="decoration">Decor</option>
+                            <option value="optimization">Optimization</option>
+                            <option value="library">Library</option>
+                        </select>
+
                         <input
                             type="text"
-                            placeholder={activeTab === 'modpacks' ? "Search modpacks..." : "Search mods..."}
+                            placeholder={activeTab === 'modpacks' ? "Search..." : "Search..."}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary/50 transition-colors"
@@ -245,10 +291,10 @@ export default function Mods({ status, onOpenWizard }) {
                                         <button
                                             onClick={() => handleInstall(mod)}
                                             disabled={installing[mod.slug]}
-                                            className="px-3 py-1.5 bg-white/5 hover:bg-primary hover:text-white text-gray-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                                            className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
+                                            title="Install Latest"
                                         >
-                                            {installing[mod.slug] ? <RefreshCw className="animate-spin" size={14} /> : <Download size={14} />}
-                                            Install
+                                            <Download className={`w-5 h-5 ${installing[mod.slug] ? 'text-yellow-500 animate-pulse' : 'text-gray-400 group-hover:text-white'}`} />
                                         </button>
                                     </div>
                                     <p className="text-gray-400 text-sm line-clamp-2 mt-1">{mod.description}</p>

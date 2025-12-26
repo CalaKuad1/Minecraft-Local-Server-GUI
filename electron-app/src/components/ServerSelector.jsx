@@ -12,6 +12,8 @@ export default function ServerSelector({ onSelect, onAdd }) {
 
     useEffect(() => {
         loadServers();
+        const interval = setInterval(loadServers, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     const loadServers = async () => {
@@ -25,11 +27,42 @@ export default function ServerSelector({ onSelect, onAdd }) {
         }
     };
 
+    const checkConflict = async () => {
+        const activeServer = servers.find(s => s.status && s.status !== 'offline');
+        if (activeServer) {
+            const result = await dialog.confirm(
+                `The server "${activeServer.name}" is currently ${activeServer.status}.\n\nYou must stop it before switching or creating a new server.`,
+                "Server Conflict",
+                {
+                    variant: "warning",
+                    confirmLabel: "Stop Server",
+                    cancelLabel: "Go Back"
+                }
+            );
+            if (result) {
+                try {
+                    setLoading(true);
+                    // Ensure the active one is selected in backend so stop() works on it
+                    await api.selectServer(activeServer.id);
+                    await api.stop();
+                    dialog.alert(`Stopping "${activeServer.name}"... Please wait for it to turn offline.`, "Stopping", "info");
+                } catch (e) {
+                    console.error("Stop error", e);
+                }
+                setLoading(false);
+            }
+            return true; // Conflict exists
+        }
+        return false;
+    };
+
     const handleSelect = async (id) => {
+        if (await checkConflict()) return;
+
         try {
             setLoading(true);
             await api.selectServer(id);
-            onSelect(); // Callback to App.jsx to switch view
+            onSelect(id); // Callback to App.jsx to switch view
         } catch (err) {
             console.error("Failed to select server", err);
             await dialog.alert(`Failed to load server: ${err.message}`, "Error", "destructive");
@@ -86,7 +119,10 @@ export default function ServerSelector({ onSelect, onAdd }) {
 
                 {/* Add New Card */}
                 <button
-                    onClick={onAdd}
+                    onClick={async () => {
+                        if (await checkConflict()) return;
+                        onAdd();
+                    }}
                     className="group relative h-64 rounded-2xl border-2 border-dashed border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all duration-300 flex flex-col items-center justify-center gap-4 cursor-pointer"
                 >
                     <div className="p-4 rounded-full bg-white/5 group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-300 text-gray-400 group-hover:text-primary">
@@ -99,12 +135,26 @@ export default function ServerSelector({ onSelect, onAdd }) {
                 {servers.map((server) => (
                     <div
                         key={server.id}
-                        className="group relative h-64 bg-surface/40 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden hover:border-primary/30 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)] transition-all duration-300 flex flex-col"
+                        className={`group relative h-64 bg-surface/40 backdrop-blur-md border rounded-2xl overflow-hidden transition-all duration-300 flex flex-col
+                            ${server.status && server.status !== 'offline'
+                                ? 'border-primary shadow-[0_0_30px_rgba(99,102,241,0.15)]'
+                                : 'border-white/5 hover:border-primary/30 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]'}`}
                     >
                         {/* Banner Image Placeholder */}
                         <div className="h-32 w-full bg-gradient-to-br from-gray-800 to-black relative overflow-hidden">
                             <div className="absolute inset-0 bg-primary/10 group-hover:bg-primary/20 transition-colors duration-300"></div>
-                            {/* Minecraft Pattern/Texture Overlay could go here */}
+
+                            {/* Running Badge */}
+                            {server.status && server.status !== 'offline' && (
+                                <div className="absolute top-4 left-4 z-20">
+                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-lg
+                                        ${server.status === 'online' ? 'bg-green-500 text-black' : 'bg-yellow-500 text-black animate-pulse'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${server.status === 'online' ? 'bg-black' : 'bg-black/50'}`}></span>
+                                        {server.status}
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="absolute top-4 right-4">
                                 <span className="px-2 py-1 rounded bg-black/50 backdrop-blur text-xs font-mono text-gray-300 border border-white/10">
                                     {server.minecraft_version || 'Latest'}
@@ -124,9 +174,13 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             <div className="mt-auto flex gap-3">
                                 <button
                                     onClick={() => handleSelect(server.id)}
-                                    className="flex-1 bg-white text-black font-bold py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                                    className={`flex-1 font-bold py-2 rounded-lg transition-all flex items-center justify-center gap-2
+                                        ${server.status && server.status !== 'offline'
+                                            ? 'bg-primary text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:scale-105'
+                                            : 'bg-white text-black hover:bg-gray-200'}`}
                                 >
-                                    <Play size={16} fill="currentColor" /> Play
+                                    <Play size={16} fill="currentColor" />
+                                    {server.status && server.status !== 'offline' ? 'Manage' : 'Play'}
                                 </button>
                                 <button
                                     onClick={(e) => handleDelete(server.id, e)}

@@ -11,6 +11,8 @@ import logging
 from queue import Queue
 import zipfile
 from datetime import datetime
+import psutil
+import time
 
 # --- CRITICAL: DEBUG LOGGING FOR PROD ---
 # Log to AppData so we can see why it crashes in .exe
@@ -235,7 +237,8 @@ class AppState:
             ram_max=server_config.get("ram_max", "4"),
             ram_unit=server_config.get("ram_unit", "G"),
             output_callback=self.broadcast_log_sync,
-            minecraft_version=server_config.get("version") or server_config.get("minecraft_version")
+            minecraft_version=server_config.get("version") or server_config.get("minecraft_version"),
+            java_path=server_config.get("java_path") # Pass saved Java path
         )
         self.active_handlers[server_id] = new_handler
         
@@ -256,15 +259,33 @@ class AppState:
                  msg_obj = {"message": message, "level": level, "server_id": server_id}
             
             # Store in app-level history for Dashboard polling
-            self.app_log_history.append(msg_obj)
-            if len(self.app_log_history) > 500:
-                self.app_log_history.pop(0)
+            # Skip verbose installer logs (recipe files, etc.) to avoid spam
+            msg_text = msg_obj.get("message", "") if isinstance(msg_obj, dict) else str(msg_obj)
+            
+            # Robust filter for Forge/other installer verbose output
+            # Patterns: "[Installer]   " (extra spaces), ".json", ".jar", "data/minecraft/", etc.
+            is_verbose_installer = False
+            if "[Installer]" in msg_text:
+                lower_msg = msg_text.lower()
+                is_verbose_installer = (
+                    "   " in msg_text or  # File listings usually have extra indentation
+                    ".json" in lower_msg or 
+                    ".class" in lower_msg or
+                    "data/minecraft/" in lower_msg or
+                    "extracting " in lower_msg or
+                    "unpacking " in lower_msg
+                )
+            
+            if not is_verbose_installer:
+                self.app_log_history.append(msg_obj)
+                if len(self.app_log_history) > 500:
+                    self.app_log_history.pop(0)
 
-            # Thread-safe enqueue into the asyncio queue
-            try:
-                self.loop.call_soon_threadsafe(self._enqueue_log_from_loop, msg_obj)
-            except Exception:
-                return
+                # Thread-safe enqueue into the asyncio queue (only non-verbose logs)
+                try:
+                    self.loop.call_soon_threadsafe(self._enqueue_log_from_loop, msg_obj)
+                except Exception:
+                    return
         except Exception as e:
             print(f"Error logging: {e}")
 
@@ -326,7 +347,18 @@ class ModDeleteRequest(BaseModel):
 
 @app.get("/servers")
 async def list_servers():
-    return state.config_manager.get_all_servers()
+    if not state: return []
+    servers = state.config_manager.get_all_servers()
+    
+    # Enrich with runtime status
+    for s in servers:
+        s_id = s.get("id")
+        if s_id in state.active_handlers:
+            s["status"] = state.active_handlers[s_id].get_status()
+        else:
+            s["status"] = "offline"
+            
+    return servers
 
 @app.post("/servers")
 async def add_server(config: ServerConfig):
@@ -345,8 +377,15 @@ async def add_server(config: ServerConfig):
 @app.post("/servers/select")
 async def select_server(req: SelectServerRequest):
     try:
+        # Si cambiamos de servidor, limpiamos el historial de logs globales de la UI
+        if state.selected_server_id != req.server_id:
+            state.app_log_history = [] 
+            
         config = state.load_server(req.server_id)
-        return {"status": "success", "server": config}
+        
+        # Devolver estado inmediato para evitar lag visual
+        status_response = get_status() 
+        return {"status": "success", "server": config, "server_status": status_response}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -385,7 +424,7 @@ def get_status():
     online_players = state.server_handler.get_active_players_list(trigger_refresh=False)
     players_count = len(online_players) if online_players is not None else 0
     return {
-        "status": "online" if state.server_handler.is_running() else "starting" if state.server_handler.is_starting() else "offline",
+        "status": state.server_handler.get_status(),
         "pid": state.server_handler.get_pid(),
         "server_type": state.server_handler.server_type,
         "minecraft_version": state.server_handler.minecraft_version,
@@ -416,10 +455,10 @@ def start_server():
     return {"message": "Start command issued"}
 
 @app.post("/stop")
-def stop_server():
+def stop_server(force: bool = False):
     if not state or not state.server_handler:
          raise HTTPException(status_code=400, detail="Server not configured")
-    state.server_handler.stop()
+    state.server_handler.stop(force=force)
     return {"message": "Stop command issued"}
 
 @app.post("/command")
@@ -537,37 +576,66 @@ def install_server(req: InstallRequest):
     if not state: raise HTTPException(status_code=500, detail="App state not initialized")
     
     install_path = os.path.join(req.parent_path, req.folder_name)
-    os.makedirs(install_path, exist_ok=True)
     
     def run_install():
         try:
             # Helper to send structured progress
-            def send_progress(pct, msg):
-                state.broadcast_log_sync({
+            def send_progress(pct, msg, **kwargs):
+                data = {
                     "type": "progress", 
                     "value": pct, 
                     "message": msg
-                })
+                }
+                data.update(kwargs)
+                state.broadcast_log_sync(data)
 
-            send_progress(0, f"Starting installation of {req.server_type} {req.version}...")
+            # 1. Preparación del Directorio
+            send_progress(5, f"Preparing directory for {req.server_type} {req.version}...")
+            os.makedirs(install_path, exist_ok=True)
             state.broadcast_log_sync(f"Install location: {install_path}", "info")
+
+            # 2. GESTIÓN AUTOMÁTICA DE JAVA (Paso Crítico para Forge)
+            # Forge requiere ejecutar su instalador con la versión correcta de Java.
+            send_progress(10, "Checking Java compatibility...")
+            
+            # Esto descarga Java si es necesario y devuelve la ruta al ejecutable
+            java_path = state.java_manager.get_java_for_server(
+                install_path, 
+                req.version, 
+                force_download=False # Ya intenta descargar si falta
+            )
+            
+            if not java_path:
+                raise Exception(f"Could not setup a valid Java runtime for Minecraft {req.version}")
+                
+            state.broadcast_log_sync(f"Using Java: {java_path}", "success")
 
             # Progress wrapper for download functions
             def progress_callback(p):
-                send_progress(p, "Downloading server files...")
+                # Map download 0-100 to overall 20-50 range
+                scaled = 20 + (p * 0.3)
+                send_progress(scaled, "Downloading server files...")
 
+            # 3. Instalación del Servidor
             if req.server_type.lower() == "forge":
-                # Need to use ServerHandler's logic or extract it
-                # For now, we instantiate a temp handler just for installation
-                temp_handler = ServerHandler(install_path, "forge", "1", "2", "G", output_callback=lambda m, l: state.broadcast_log_sync(m, l), minecraft_version=req.version)
+                # Crear un handler temporal con la ruta de Java CORRECTA explícita
+                temp_handler = ServerHandler(
+                    install_path, 
+                    "forge", 
+                    "1", "2", "G", 
+                    output_callback=lambda m, l: state.broadcast_log_sync(m, l), 
+                    minecraft_version=req.version,
+                    java_path=java_path # IMPORTANTE: Usar el Java recién obtenido
+                )
                 
-                # Wrap the progress to match our format
+                # Wrap progress for forge installer (50-90 range)
                 def forge_progress(p):
-                    send_progress(p, "Installing Forge...")
+                    scaled = 50 + (p * 0.4)
+                    send_progress(scaled, "Running Forge Installer (this may take a while)...")
                 
                 forge_ver = req.forge_version
                 if not forge_ver:
-                    send_progress(10, f"Fetching latest Forge version for {req.version}...")
+                    send_progress(15, f"Fetching latest Forge version for {req.version}...")
                     from utils.api_client import get_forge_versions
                     versions = get_forge_versions()
                     if req.version in versions and versions[req.version]:
@@ -576,20 +644,18 @@ def install_server(req: InstallRequest):
                     else:
                         raise Exception(f"No Forge version found for Minecraft {req.version}")
 
+                # Ejecutar instalador
                 temp_handler.install_forge_server(forge_ver, req.version, forge_progress)
+                
             else:
+                # Vanilla / Paper / Fabric logic
                 jar_path = os.path.join(install_path, "server.jar")
                 success = download_server_jar(req.server_type, req.version, jar_path, progress_callback)
-                if success:
-                    send_progress(100, "Download complete.")
-                else:
-                    send_progress(0, "Download failed.")
-                    state.broadcast_log_sync("Failed to download Server JAR.", "error")
-                    return
+                if not success:
+                    raise Exception("Failed to download Server JAR.")
 
-            send_progress(100, "Configuring server...")
-            
-            send_progress(100, "Configuring server...")
+            # 4. Configuración Final
+            send_progress(95, "Finalizing configuration...")
             
             # Create new server profile
             new_server_data = {
@@ -599,18 +665,27 @@ def install_server(req: InstallRequest):
                 "version": req.version,
                 "ram_min": "2",
                 "ram_max": "4",
-                "ram_unit": "G"
+                "ram_unit": "G",
+                "java_path": java_path # Guardar la ruta de Java detectada en la config
             }
             
             saved_server = state.config_manager.add_server(new_server_data)
-            state.load_server(saved_server["id"]) # Auto-select so dashboard is ready
             
-            send_progress(100, "Installation complete!")
-            state.broadcast_log_sync("Installation complete! You can now start the server.", "success")
+            try:
+                state.load_server(saved_server["id"]) 
+                if state.server_handler:
+                    state.server_handler._accept_eula()
+                    state.server_handler._create_default_server_properties()
+                    # Asegurar que el handler cargado tenga la ruta de Java correcta
+                    state.server_handler.java_path = java_path 
+            except Exception as e:
+                state.broadcast_log_sync(f"Warning during final setup: {e}", "warning")
+            
+            send_progress(100, "Installation complete!", server_id=saved_server["id"])
+            state.broadcast_log_sync("Installation complete! Server is ready to start.", "success")
             
         except Exception as e:
             state.broadcast_log_sync(f"Installation failed: {e}", "error")
-            # Send error event so frontend stops spinning
             state.broadcast_log_sync({"type": "progress", "value": 0, "error": str(e)})
 
     threading.Thread(target=run_install, daemon=True).start()
@@ -1337,14 +1412,14 @@ def stop_tunnel():
 
 # --- Mods Endpoints ---
 @app.get("/mods/search")
-def search_mods(q: str, loader: str = "fabric", version: str = None, project_type: str = "mod"):
+def search_mods(q: str, loader: str = "fabric", version: str = None, project_type: str = "mod", sort: str = "downloads", category: str = None):
     if not state: raise HTTPException(status_code=500, detail="State not initialized")
     
     # If version not provided, try to use server's version
     if not version and state.server_handler:
         version = state.server_handler.minecraft_version
         
-    return state.mods_manager.search_mods(q, loader, version, project_type)
+    return state.mods_manager.search_mods(q, loader, version, project_type, sort, category)
 
 @app.get("/mods/versions/{slug}")
 def get_mod_versions(slug: str, loader: str = "fabric", version: str = None):
@@ -1366,11 +1441,32 @@ def install_mod(req: ModInstallRequest):
     if not state or not state.server_handler: 
         raise HTTPException(status_code=400, detail="Server not configured")
         
-    result = state.mods_manager.install_mod(req.version_id, state.server_handler.server_path)
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
-        
-    return result
+    def run_mod_install():
+        try:
+            def progress(pct, msg):
+                state.broadcast_log_sync({
+                    "type": "progress",
+                    "value": pct,
+                    "message": msg
+                })
+            
+            result = state.mods_manager.install_mod(req.version_id, state.server_handler.server_path, progress_callback=progress)
+            
+            if result.get("success"):
+                state.broadcast_log_sync(f"Installation success: {result.get('filename') or 'Modpack'}", "success")
+                state.broadcast_log_sync({"type": "mod_install_complete", "success": True})
+            else:
+                state.broadcast_log_sync(f"Installation failed: {result.get('error')}", "error")
+                state.broadcast_log_sync({"type": "mod_install_complete", "success": False})
+
+        except Exception as e:
+            state.broadcast_log_sync(f"Installation crashed: {e}", "error")
+            state.broadcast_log_sync({"type": "mod_install_complete", "success": False})
+
+    # Start in background
+    threading.Thread(target=run_mod_install, daemon=True).start()
+    
+    return {"status": "started", "message": "Installation started in background"}
 
 @app.post("/mods/delete")
 def delete_mod(req: ModDeleteRequest):
@@ -1399,31 +1495,72 @@ def open_mods_folder():
 def shutdown_app():
     logging.info("Shutdown request received")
     
-    # Stop any running tunnel
-    if state and state.tunnel_process and state.tunnel_process.poll() is None:
-        logging.info("Stopping tunnel process...")
-        try:
-            state.tunnel_process.terminate()
-            state.tunnel_process.wait(timeout=3)
-        except:
+    def perform_full_shutdown():
+        # Stop any running tunnel
+        if state and state.tunnel_process and state.tunnel_process.poll() is None:
+            logging.info("Stopping tunnel process...")
             try:
-                state.tunnel_process.kill()
+                state.tunnel_process.terminate()
+                state.tunnel_process.wait(timeout=3)
             except:
-                pass
-        state.tunnel_process = None
-        state.tunnel_address = None
-    
-    # Stop servers
-    if state and state.active_handlers:
-        for server_id, handler in state.active_handlers.items():
-            if handler.is_running() or handler.is_starting():
-                logging.info(f"Stopping server {server_id}...")
-                handler.stop(silent=True)
-    
-    # Schedule process exit
-    threading.Timer(1.0, lambda: os._exit(0)).start()
-    return {"message": "Shutting down"}
+                try:
+                    state.tunnel_process.kill()
+                except:
+                    pass
+            state.tunnel_process = None
+            state.tunnel_address = None
+        
+        # Stop servers
+        if state and state.active_handlers:
+            handlers_to_wait = []
+            for server_id, handler in state.active_handlers.items():
+                if handler.is_running() or handler.is_starting():
+                    logging.info(f"Stopping server {server_id}...")
+                    handler.stop(silent=True)
+                    handlers_to_wait.append((server_id, handler))
+            
+            # Wait for each server to stop
+            for server_id, handler in handlers_to_wait:
+                logging.info(f"Waiting for server {server_id} to stop...")
+                handler.wait_for_stop(timeout=25) # Slightly less than backend timeout
+        
+        logging.info("All servers stopped. Backend exiting.")
+        # Final exit
+        os._exit(0)
+
+    # Start shutdown in a separate thread so we can return the response immediately
+    threading.Thread(target=perform_full_shutdown, daemon=True).start()
+    return {"message": "Shutdown sequence started"}
+
+def start_parent_watchdog():
+    """Vigila si el proceso padre (Electron) sigue vivo. Si muere, cerramos todo."""
+    parent_pid = os.getppid()
+    if parent_pid <= 1: # No parent or init
+        return
+
+    def watch():
+        logging.info(f"Parent watchdog started for PID {parent_pid}")
+        while True:
+            try:
+                # Comprobar si el padre sigue existiendo
+                parent = psutil.Process(parent_pid)
+                if not parent.is_running() or parent.status() == psutil.STATUS_ZOMBIE:
+                    raise psutil.NoSuchProcess(parent_pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                logging.warning("Parent process lost. Shutting down backend and servers...")
+                # Intentar cerrar servidores limpiamente si es posible
+                if state and state.server_handler:
+                    try:
+                        state.server_handler.stop(force=True, silent=True)
+                    except:
+                        pass
+                os._exit(0)
+            time.sleep(2)
+
+    threading.Thread(target=watch, daemon=True).start()
 
 if __name__ == "__main__":
     import uvicorn
+    # Iniciar el watchdog antes de arrancar el servidor
+    start_parent_watchdog()
     uvicorn.run(app, host="127.0.0.1", port=8000)
