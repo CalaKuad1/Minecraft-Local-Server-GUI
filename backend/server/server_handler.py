@@ -56,6 +56,10 @@ class ServerHandler:
         self.cache_duration = 4.0 # seconds 
         self._status_lock = threading.Lock()
         self._status_in_flight = False
+        
+        # Scheduled Shutdown
+        self._shutdown_timer = None
+        self._shutdown_time_target = None # Epoch time when shutdown will occur
 
     def _log(self, message, level="normal"):
         """Internal log method that stores history and calls callback."""
@@ -208,6 +212,50 @@ class ServerHandler:
             return 'online'
             
         return 'starting'
+
+    def schedule_shutdown(self, minutes):
+        """Schedules a server shutdown in X minutes."""
+        if not self.is_running():
+            return False, "Server must be online to schedule a shutdown."
+            
+        self.cancel_shutdown() # Cancel any existing timer
+        
+        seconds = minutes * 60
+        self._shutdown_time_target = time.time() + seconds
+        
+        def _perform_shutdown():
+            self._log(f"Scheduled shutdown triggered after {minutes} minute(s).\n", "warning")
+            self.stop()
+            self._shutdown_timer = None
+            self._shutdown_time_target = None
+
+        self._shutdown_timer = threading.Timer(seconds, _perform_shutdown)
+        self._shutdown_timer.daemon = True
+        self._shutdown_timer.start()
+        
+        self._log(f"Server shutdown scheduled in {minutes} minute(s).\n", "info")
+        return True, f"Shutdown scheduled in {minutes} minutes."
+
+    def cancel_shutdown(self):
+        """Cancels any active shutdown timer."""
+        if self._shutdown_timer:
+            self._shutdown_timer.cancel()
+            self._shutdown_timer = None
+            self._shutdown_time_target = None
+            self._log("Scheduled shutdown cancelled.\n", "info")
+            return True, "Shutdown cancelled."
+        return False, "No shutdown scheduled."
+
+    def get_shutdown_info(self):
+        """Returns the remaining time for the scheduled shutdown."""
+        if self._shutdown_time_target:
+            remaining = int(max(0, self._shutdown_time_target - time.time()))
+            return {
+                "scheduled": True,
+                "remaining_seconds": remaining,
+                "target_time": self._shutdown_time_target
+            }
+        return {"scheduled": False}
 
     def is_starting(self):
         return self.get_status() == 'starting'
@@ -545,6 +593,12 @@ allow-flight=false
 
     def stop(self, silent=False, force=False):
         """Detiene el servidor. Si force=True, mata el proceso inmediatamente."""
+        # Cancel any scheduled shutdown if manual stop is called
+        if self._shutdown_timer:
+            self._shutdown_timer.cancel()
+            self._shutdown_timer = None
+            self._shutdown_time_target = None
+
         if not self.is_running() and not self.is_starting():
             return
 

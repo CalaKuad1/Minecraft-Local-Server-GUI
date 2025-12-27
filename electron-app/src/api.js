@@ -55,6 +55,16 @@ export const api = {
             body: JSON.stringify({ command })
         });
     },
+    scheduleStop: async (minutes) => {
+        return await fetchJson(`${API_URL}/server/schedule-stop`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes })
+        });
+    },
+    cancelStop: async () => {
+        return await fetchJson(`${API_URL}/server/cancel-stop`, { method: 'POST' });
+    },
     setup: async (serverType, version, path) => {
         // ... (placeholder if needed or remove if used differently)
     },
@@ -275,5 +285,65 @@ export const api = {
     },
     openModsFolder: async () => {
         return await fetchJson(`${API_URL}/mods/open-folder`, { method: 'POST' });
+    },
+
+    // --- Server Appearance ---
+    uploadServerIcon: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_URL}/server/icon`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Upload failed');
+        }
+        return await res.json();
+    },
+    getServerIconStatus: async () => {
+        // Just checking if it exists
+        return await fetchJson(`${API_URL}/server/icon`);
+    },
+
+    // --- Plugins ---
+    getPlugins: async () => {
+        return await fetchJson(`${API_URL}/server/plugins`);
+    },
+    uploadPlugin: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_URL}/server/plugins`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Upload failed');
+        }
+        return await res.json();
+    },
+    deletePlugin: async (filename) => {
+        return await fetchJson(`${API_URL}/server/plugins/${filename}`, { method: 'DELETE' });
+    },
+
+    // --- Plugin Browsing (Modrinth) ---
+    searchPlugins: async (query, version = null, sort = 'downloads', category = null) => {
+        let url = `${API_URL}/plugins/search?q=${encodeURIComponent(query)}&sort=${sort}`;
+        if (version) url += `&version=${version}`;
+        if (category && category !== 'all') url += `&category=${category}`;
+        return await fetchJson(url);
+    },
+    getPluginVersions: async (slug, version = null) => {
+        let url = `${API_URL}/plugins/versions/${slug}`;
+        if (version) url += `?version=${version}`;
+        return await fetchJson(url);
+    },
+    installPlugin: async (versionId) => {
+        return await fetchJson(`${API_URL}/plugins/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version_id: versionId })
+        });
     }
 };

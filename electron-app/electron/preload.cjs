@@ -8,5 +8,9 @@ contextBridge.exposeInMainWorld('electron', {
             // Do not return anything to avoid IPC race condition
         });
     },
-    confirmClose: () => ipcRenderer.send('app-close-confirmed')
+    confirmClose: () => ipcRenderer.send('app-close-confirmed'),
+    // Window Controls
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close')
 });

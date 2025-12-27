@@ -4,6 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Requ
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
+from fastapi import UploadFile, File
 import os
 import sys
 import json
@@ -13,6 +14,7 @@ import zipfile
 from datetime import datetime
 import psutil
 import time
+import requests
 
 # --- CRITICAL: DEBUG LOGGING FOR PROD ---
 # Log to AppData so we can see why it crashes in .exe
@@ -343,6 +345,9 @@ class ModInstallRequest(BaseModel):
 class ModDeleteRequest(BaseModel):
     filename: str
 
+class ScheduleStopRequest(BaseModel):
+    minutes: int
+
 # --- Core Endpoints ---
 
 @app.get("/servers")
@@ -434,7 +439,8 @@ def get_status():
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
         "uptime": stats["uptime"],
-        "recent_logs": state.log_history[-15:] # Return last 15 lines for the mini console
+        "recent_logs": state.log_history[-15:], # Return last 15 lines for the mini console
+        "shutdown_info": state.server_handler.get_shutdown_info()
     }
 
 @app.post("/server/open-folder")
@@ -460,6 +466,22 @@ def stop_server(force: bool = False):
          raise HTTPException(status_code=400, detail="Server not configured")
     state.server_handler.stop(force=force)
     return {"message": "Stop command issued"}
+
+@app.post("/server/schedule-stop")
+def schedule_stop_server(req: ScheduleStopRequest):
+    if not state or not state.server_handler:
+         raise HTTPException(status_code=400, detail="Server not configured")
+    success, message = state.server_handler.schedule_shutdown(req.minutes)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": message}
+
+@app.post("/server/cancel-stop")
+def cancel_stop_server():
+    if not state or not state.server_handler:
+         raise HTTPException(status_code=400, detail="Server not configured")
+    success, message = state.server_handler.cancel_shutdown()
+    return {"message": message}
 
 @app.post("/command")
 def send_console_command(cmd: CommandRequest):
@@ -1558,6 +1580,216 @@ def start_parent_watchdog():
             time.sleep(2)
 
     threading.Thread(target=watch, daemon=True).start()
+
+# --- Server Appearance ---
+
+@app.post("/server/icon")
+async def upload_server_icon(file: UploadFile = File(...)):
+    if not state.server_handler:
+        raise HTTPException(status_code=400, detail="No server selected")
+
+    try:
+        # Check if valid image extension
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+             raise HTTPException(status_code=400, detail="Only PNG or JPG images are allowed")
+
+        server_path = state.server_handler.server_path
+        icon_path = os.path.join(server_path, "server-icon.png")
+
+        # Try to use Pillow for resizing
+        try:
+            from PIL import Image
+            import io
+            
+            contents = await file.read()
+            img = Image.open(io.BytesIO(contents))
+            
+            # Resize to 64x64
+            img = img.resize((64, 64), Image.Resampling.LANCZOS)
+            
+            # Save as PNG
+            img.save(icon_path, format="PNG")
+            
+        except ImportError:
+            # Fallback: Just save the file (user must ensure it's 64x64)
+            # Or log warning.
+            logging.warning("Pillow not installed, saving icon directly. It might not work if not 64x64.")
+            contents = await file.read()
+            with open(icon_path, "wb") as f:
+                f.write(contents)
+        except Exception as e:
+            logging.error(f"Error processing image: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
+
+        return {"status": "success", "message": "Server icon updated"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/server/icon")
+async def get_server_icon():
+    if not state.server_handler:
+        return {"exists": False}
+        
+    icon_path = os.path.join(state.server_handler.server_path, "server-icon.png")
+    if os.path.exists(icon_path):
+        return {"exists": True, "ts": os.path.getmtime(icon_path)}
+    return {"exists": False}
+
+@app.get("/server/icon/image")
+async def get_server_icon_image():
+    if not state.server_handler:
+        raise HTTPException(status_code=404, detail="No server")
+    
+    icon_path = os.path.join(state.server_handler.server_path, "server-icon.png")
+    if os.path.exists(icon_path):
+        from fastapi.responses import FileResponse
+        return FileResponse(icon_path)
+        
+    raise HTTPException(status_code=404, detail="No icon")
+
+
+# --- Plugin Management (Paper/Spigot) ---
+
+@app.get("/server/plugins")
+def get_plugins():
+    if not state.server_handler:
+         raise HTTPException(status_code=400, detail="No server selected")
+         
+    plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
+    if not os.path.exists(plugins_dir):
+        return []
+        
+    plugins = []
+    try:
+        for f in os.listdir(plugins_dir):
+            if f.endswith(".jar"):
+                path = os.path.join(plugins_dir, f)
+                size_mb = round(os.path.getsize(path) / (1024 * 1024), 2)
+                plugins.append({
+                    "filename": f,
+                    "size": f"{size_mb} MB"
+                })
+    except Exception as e:
+        logging.error(f"Error listing plugins: {e}")
+        return []
+        
+    return plugins
+
+@app.post("/server/plugins")
+async def upload_plugin(file: UploadFile = File(...)):
+    if not state.server_handler:
+         raise HTTPException(status_code=400, detail="No server selected")
+         
+    plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
+    if not os.path.exists(plugins_dir):
+        os.makedirs(plugins_dir)
+        
+    file_path = os.path.join(plugins_dir, file.filename)
+    
+    try:
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        return {"status": "success", "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/server/plugins/{filename}")
+def delete_plugin(filename: str):
+    if not state.server_handler:
+         raise HTTPException(status_code=400, detail="No server selected")
+         
+    plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
+    file_path = os.path.join(plugins_dir, filename)
+    
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            return {"status": "success"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    else:
+        raise HTTPException(status_code=404, detail="Plugin not found")
+
+# --- Plugin Browsing (Modrinth) ---
+
+@app.get("/plugins/search")
+def search_plugins(q: str = "", version: str = None, sort: str = "downloads", category: str = None):
+    if not state: raise HTTPException(status_code=500, detail="State not initialized")
+    
+    # Use server version if not provided
+    if not version and state.server_handler:
+        version = state.server_handler.minecraft_version
+        
+    # Search with project_type="plugin" and loaders for bukkit/spigot/paper
+    return state.mods_manager.search_mods(q, loader="paper", version=version, project_type="plugin", sort=sort, category=category)
+
+@app.get("/plugins/versions/{slug}")
+def get_plugin_versions(slug: str, version: str = None):
+    if not state: raise HTTPException(status_code=500, detail="State not initialized")
+    
+    if not version and state.server_handler:
+        version = state.server_handler.minecraft_version
+        
+    return state.mods_manager.get_mod_versions(slug, loader="paper", version=version)
+
+class PluginInstallRequest(BaseModel):
+    version_id: str
+
+@app.post("/plugins/install")
+def install_plugin(req: PluginInstallRequest):
+    if not state or not state.server_handler: 
+        raise HTTPException(status_code=400, detail="Server not configured")
+        
+    def run_plugin_install():
+        try:
+            def progress(pct, msg):
+                state.broadcast_log_sync({
+                    "type": "progress",
+                    "value": pct,
+                    "message": msg
+                })
+            
+            # Get version info
+            response = requests.get(f"https://api.modrinth.com/v2/version/{req.version_id}", headers={"User-Agent": "MinecraftLocalServerGUI/1.0"})
+            response.raise_for_status()
+            version_data = response.json()
+            
+            files = version_data.get("files", [])
+            if not files:
+                state.broadcast_log_sync("No files found for plugin", "error")
+                return
+                
+            primary_file = next((f for f in files if f.get("primary")), files[0])
+            url = primary_file["url"]
+            filename = primary_file["filename"]
+            
+            plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
+            if not os.path.exists(plugins_dir):
+                os.makedirs(plugins_dir)
+                
+            file_path = os.path.join(plugins_dir, filename)
+            
+            progress(10, f"Downloading {filename}...")
+            
+            with requests.get(url, stream=True) as r:
+                r.raise_for_status()
+                with open(file_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            
+            progress(100, "Installed!")
+            state.broadcast_log_sync(f"Plugin installed: {filename}", "success")
+            state.broadcast_log_sync({"type": "plugin_install_complete", "success": True, "filename": filename})
+            
+        except Exception as e:
+            state.broadcast_log_sync(f"Plugin install error: {e}", "error")
+            state.broadcast_log_sync({"type": "plugin_install_complete", "success": False})
+    
+    threading.Thread(target=run_plugin_install, daemon=True).start()
+    return {"status": "started", "message": "Plugin installation started"}
 
 if __name__ == "__main__":
     import uvicorn

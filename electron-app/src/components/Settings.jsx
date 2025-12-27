@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive } from 'lucide-react';
+import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from 'lucide-react';
 import { Select } from './ui/Select';
+import AdvancedSettingsModal from './AdvancedSettingsModal';
+import MotdPreview from './MotdPreview';
+import { Palette, Upload } from 'lucide-react';
 
 export default function Settings() {
     const [activeTab, setActiveTab] = useState('server');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     // State for Server Properties
     const [serverProps, setServerProps] = useState({});
@@ -19,6 +23,9 @@ export default function Settings() {
         ram_unit: "G",
         java_path: "java"
     });
+
+    const [iconTs, setIconTs] = useState(Date.now());
+    const API_BASE = "http://127.0.0.1:8000"; // Should be imported or context
 
     useEffect(() => {
         loadSettings();
@@ -65,6 +72,36 @@ export default function Settings() {
         setAppSettings(prev => ({ ...prev, [key]: value }));
     };
 
+    const handleIconUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            await api.uploadServerIcon(file);
+            setIconTs(Date.now()); // Refresh image
+        } catch (err) {
+            setError("Failed to upload icon: " + err.message);
+        }
+    };
+
+    const insertColorCode = (code) => {
+        const textarea = document.getElementById('motd-input');
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = serverProps['motd'] || '';
+        const newText = text.substring(0, start) + '&' + code + text.substring(end);
+
+        handlePropChange('motd', newText);
+
+        // Restore focus and position (rough)
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(start + 2, start + 2);
+        }, 0);
+    };
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading settings...</div>;
 
     if (error) {
@@ -109,7 +146,7 @@ export default function Settings() {
             </div>
 
             <div className="flex gap-2 border-b border-white/5 mb-8">
-                {['server', 'system'].map(tab => (
+                {['server', 'appearance', 'system'].map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -119,6 +156,7 @@ export default function Settings() {
                             }`}
                     >
                         {tab === 'server' && <CircuitBoard size={18} />}
+                        {tab === 'appearance' && <Palette size={18} />}
                         {tab === 'system' && <Cpu size={18} />}
                         {tab.charAt(0).toUpperCase() + tab.slice(1)}
                         {activeTab === tab && (
@@ -310,35 +348,158 @@ export default function Settings() {
                             <HardDrive size={20} className="text-orange-400" />
                             Security & Advanced
                         </h3>
-                        <div className="space-y-2">
-                            <LabelToggle
-                                label="Online Mode"
-                                desc="Verify users with Mojang"
-                                checked={serverProps['online-mode'] === 'true'}
-                                onChange={(v) => handlePropChange('online-mode', v.toString())}
-                            />
-                            <LabelToggle
-                                label="Whitelist"
-                                desc="Only listed players can join"
-                                checked={serverProps['white-list'] === 'true'}
-                                onChange={(v) => handlePropChange('white-list', v.toString())}
-                            />
-                            <LabelToggle
-                                label="Enforce Whitelist"
-                                desc="Kick unlisted even if already on"
-                                checked={serverProps['enforce-whitelist'] === 'true'}
-                                onChange={(v) => handlePropChange('enforce-whitelist', v.toString())}
-                            />
-                            <LabelToggle
-                                label="Force Gamemode"
-                                desc="Force default gamemode on join"
-                                checked={serverProps['force-gamemode'] === 'true'}
-                                onChange={(v) => handlePropChange('force-gamemode', v.toString())}
-                            />
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <LabelToggle
+                                    label="Online Mode"
+                                    desc="Verify users with Mojang"
+                                    checked={serverProps['online-mode'] === 'true'}
+                                    onChange={(v) => handlePropChange('online-mode', v.toString())}
+                                />
+                                <LabelToggle
+                                    label="Whitelist"
+                                    desc="Only listed players can join"
+                                    checked={serverProps['white-list'] === 'true'}
+                                    onChange={(v) => handlePropChange('white-list', v.toString())}
+                                />
+                                <LabelToggle
+                                    label="Enforce Whitelist"
+                                    desc="Kick unlisted even if already on"
+                                    checked={serverProps['enforce-whitelist'] === 'true'}
+                                    onChange={(v) => handlePropChange('enforce-whitelist', v.toString())}
+                                />
+                                <LabelToggle
+                                    label="Force Gamemode"
+                                    desc="Force default gamemode on join"
+                                    checked={serverProps['force-gamemode'] === 'true'}
+                                    onChange={(v) => handlePropChange('force-gamemode', v.toString())}
+                                />
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5">
+                                <button
+                                    onClick={() => setShowAdvanced(true)}
+                                    className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all border border-white/5 hover:border-white/10 flex items-center justify-center gap-2 group"
+                                >
+                                    <SettingsIcon size={18} className="group-hover:rotate-45 transition-transform duration-500" />
+                                    Open Advanced Configuration
+                                </button>
+                                <p className="text-center text-xs text-gray-500 mt-2">Access all server.properties</p>
+                            </div>
                         </div>
                     </div>
 
                 </div>
+            )}
+
+            {activeTab === 'appearance' && (
+                <div className="animate-in slide-in-from-left-4 duration-300 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Icon Editor */}
+                        <div className="bg-surface border border-white/5 p-6 rounded-2xl">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <Monitor size={20} className="text-blue-400" />
+                                Server Icon
+                            </h3>
+                            <div className="flex flex-col items-center justify-center p-6 bg-black/20 rounded-xl border border-white/5 border-dashed hover:border-primary/50 transition-colors group">
+                                <div className="w-[64px] h-[64px] mb-4 relative drop-shadow-2xl">
+                                    <img
+                                        src={`${API_BASE}/server/icon/image?t=${iconTs}`}
+                                        onError={(e) => e.target.src = "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png"}
+                                        className="w-full h-full object-contain pixelated rounded-sm"
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-400 mb-4 text-center">
+                                    Upload a 64x64 PNG image.<br />It will be resized automatically.
+                                </p>
+                                <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                                    <Upload size={16} />
+                                    <span>Choose File</span>
+                                    <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={handleIconUpload} />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Visual Preview */}
+                        <div className="bg-surface border border-white/5 p-6 rounded-2xl">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <Globe size={20} className="text-green-400" />
+                                LIVE Preview
+                            </h3>
+                            <div className="bg-[url('https://assets.mcmaster.net/bg-dirt-dark.png')] p-4 rounded-xl flex items-center justify-center min-h-[160px]">
+                                <MotdPreview
+                                    motd={serverProps['motd']}
+                                    iconUrl={`${API_BASE}/server/icon/image?t=${iconTs}`}
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2 text-center">This is how your server appears in the multiplayer list.</p>
+                        </div>
+                    </div>
+
+                    {/* MOTD Editor */}
+                    <div className="bg-surface border border-white/5 p-6 rounded-2xl">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                            <Zap size={20} className="text-yellow-400" />
+                            Message of the Day (MOTD)
+                        </h3>
+
+                        {/* Color Palette */}
+                        <div className="flex flex-wrap gap-2 mb-4 p-3 bg-black/20 rounded-lg">
+                            {[
+                                { c: '0', bg: '#000000', n: 'Black' }, { c: '1', bg: '#0000AA', n: 'Dark Blue' },
+                                { c: '2', bg: '#00AA00', n: 'Dark Green' }, { c: '3', bg: '#00AAAA', n: 'Dark Aqua' },
+                                { c: '4', bg: '#AA0000', n: 'Dark Red' }, { c: '5', bg: '#AA00AA', n: 'Dark Purple' },
+                                { c: '6', bg: '#FFAA00', n: 'Gold' }, { c: '7', bg: '#AAAAAA', n: 'Gray' },
+                                { c: '8', bg: '#555555', n: 'Dark Gray' }, { c: '9', bg: '#5555FF', n: 'Blue' },
+                                { c: 'a', bg: '#55FF55', n: 'Green' }, { c: 'b', bg: '#55FFFF', n: 'Aqua' },
+                                { c: 'c', bg: '#FF5555', n: 'Red' }, { c: 'd', bg: '#FF55FF', n: 'Light Purple' },
+                                { c: 'e', bg: '#FFFF55', n: 'Yellow' }, { c: 'f', bg: '#FFFFFF', n: 'White' }
+                            ].map(col => (
+                                <button
+                                    key={col.c}
+                                    onClick={() => insertColorCode(col.c)}
+                                    className="w-6 h-6 rounded hover:scale-110 transition-transform shadow-sm border border-white/10"
+                                    style={{ backgroundColor: col.bg }}
+                                    title={`&${col.c} - ${col.n}`}
+                                />
+                            ))}
+                            <div className="w-px h-6 bg-white/10 mx-1"></div>
+                            {[
+                                { c: 'l', l: 'B', s: 'font-bold' }, { c: 'o', l: 'I', s: 'italic' },
+                                { c: 'n', l: 'U', s: 'underline' }, { c: 'm', l: 'S', s: 'line-through' }
+                            ].map(style => (
+                                <button
+                                    key={style.c}
+                                    onClick={() => insertColorCode(style.c)}
+                                    className={`w-6 h-6 rounded bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:text-white transition-colors text-xs font-serif ${style.s} border border-white/5`}
+                                    title={`&${style.c}`}
+                                >
+                                    {style.l}
+                                </button>
+                            ))}
+                        </div>
+
+                        <textarea
+                            id="motd-input"
+                            value={serverProps['motd'] || ''}
+                            onChange={(e) => handlePropChange('motd', e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-colors font-mono text-lg h-32"
+                            placeholder="A Minecraft Server"
+                        />
+                        <p className="text-sm text-gray-500 mt-2">Use the color buttons above or type <code>&code</code> to add colors.</p>
+                    </div>
+                </div>
+            )}
+
+            {showAdvanced && (
+                <AdvancedSettingsModal
+                    onClose={() => setShowAdvanced(false)}
+                    properties={serverProps}
+                    onSave={(newProps) => {
+                        setServerProps(newProps);
+                        // Optional: Trigger auto-save or just rely on the main Save button
+                    }}
+                />
             )}
 
             {activeTab === 'system' && (

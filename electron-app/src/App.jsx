@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package } from 'lucide-react';
+import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package, Plug } from 'lucide-react';
 import { api } from './api';
 
 import logo from './assets/logo2.png';
@@ -14,8 +14,10 @@ import Players from './components/Players';
 import Settings from './components/Settings';
 import Worlds from './components/Worlds';
 import Mods from './components/Mods';
+import Plugins from './components/Plugins';
 
 import ServerSelector from './components/ServerSelector';
+import TitleBar from './components/TitleBar';
 
 // Sidebar component
 function Sidebar({ activeTab, setActiveTab, onBack }) {
@@ -25,12 +27,12 @@ function Sidebar({ activeTab, setActiveTab, onBack }) {
     { id: 'players', icon: Users, label: 'Players' },
     { id: 'worlds', icon: Globe, label: 'Worlds' },
     { id: 'mods', icon: Package, label: 'Mods' },
+    { id: 'plugins', icon: Plug, label: 'Plugins' },
     { id: 'settings', icon: SettingsIcon, label: 'Settings' },
   ];
 
   return (
-    <div className="w-64 bg-surface/60 backdrop-blur-xl h-screen flex flex-col border-r border-white/5 drag-region">
-      <div className="h-8 w-full bg-transparent" style={{ WebkitAppRegion: 'drag' }}></div>
+    <div className="w-64 bg-surface/60 backdrop-blur-xl h-screen flex flex-col border-r border-white/5 pt-8">
       <div className="p-6 flex justify-center mb-2">
         <img src={logo} alt="Server Manager" className="w-full max-h-24 object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]" />
       </div>
@@ -182,8 +184,8 @@ function App() {
 
   if (showWizard) {
     return (
-      <div className="h-screen w-screen bg-background text-white overflow-hidden flex flex-col">
-        <div className="h-8 w-full bg-background" style={{ WebkitAppRegion: 'drag' }}></div>
+      <div className="h-screen w-screen bg-background text-white overflow-hidden flex flex-col pt-8">
+        <TitleBar />
         <div className="flex-1 overflow-y-auto">
           <SetupWizard onComplete={(serverId) => { setShowWizard(false); handleServerSelected(serverId); }} onCancel={() => setShowWizard(false)} />
         </div>
@@ -193,18 +195,18 @@ function App() {
 
   if (!selectedServer) {
     return (
-      <>
-        <div className="h-8 w-full bg-[#050505] fixed top-0 left-0 z-50" style={{ WebkitAppRegion: 'drag' }}></div>
+      <div className="pt-8 bg-[#050505] min-h-screen">
+        <TitleBar />
         <ServerSelector onSelect={handleServerSelected} onAdd={() => setShowWizard(true)} />
-      </>
+      </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-transparent font-sans selection:bg-primary/30 text-white overflow-hidden">
+      <TitleBar />
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onBack={handleBackToLibrary} />
-      <main className="flex-1 overflow-hidden relative flex flex-col">
-        <div className="h-8 w-full shrink-0" style={{ WebkitAppRegion: 'drag' }}></div>
+      <main className="flex-1 overflow-hidden relative flex flex-col pt-8">
         <div className="flex-1 overflow-y-auto p-8 relative z-10">
           <div className="max-w-6xl mx-auto">
             <AnimatePresence mode="wait">
@@ -220,6 +222,7 @@ function App() {
                 {activeTab === 'players' && <Players status={serverStatus} />}
                 {activeTab === 'worlds' && <Worlds />}
                 {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
+                {activeTab === 'plugins' && <Plugins status={serverStatus} />}
                 {activeTab === 'settings' && <Settings />}
               </motion.div>
             </AnimatePresence>

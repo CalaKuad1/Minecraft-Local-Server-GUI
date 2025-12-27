@@ -33,12 +33,8 @@ function createWindow() {
       webSecurity: false, // Reverted to fix blank screen in dev mode
       preload: path.join(__dirname, 'preload.cjs')
     },
-    titleBarStyle: 'hidden', // Custom title bar
-    titleBarOverlay: {
-      color: '#000000',
-      symbolColor: '#ffffff'
-    },
-    backgroundColor: '#111111',
+    frame: false, // Custom frame
+    backgroundColor: '#0f0f0f',
     show: true // Force show immediately for debugging
   });
 
@@ -57,6 +53,22 @@ function createWindow() {
 }
 
 // IPC Handlers
+ipcMain.handle('window:minimize', () => {
+  mainWindow.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.handle('window:close', () => {
+  mainWindow.close();
+});
+
 ipcMain.handle('dialog:openDirectory', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']

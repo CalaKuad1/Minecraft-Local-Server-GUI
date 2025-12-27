@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal } from 'lucide-react';
+import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { Select } from './ui/Select';
@@ -104,6 +104,122 @@ const PublicServerModal = ({ onClose }) => {
     );
 };
 
+// Custom Modal Component (Shutdown Timer)
+const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer }) => {
+    const [minutes, setMinutes] = useState(60);
+    const presets = [10, 30, 60, 120, 240];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={onClose}
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#0f0f0f] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 p-6 border-b border-white/5 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(to_bottom,transparent,black)] pointer-events-none" />
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-xl text-orange-400 shadow-inner ring-1 ring-white/10">
+                                <Clock size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white tracking-tight">Schedule Shutdown</h2>
+                                <p className="text-xs text-gray-400 mt-0.5 font-medium">Auto-stop server timer</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
+                            <X size={20} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-6 space-y-6">
+                    <div>
+                        <label className="text-sm font-medium text-gray-400 mb-3 block">Set Timer Duration</label>
+                        <div className="flex items-center gap-4">
+                            <div className="flex-1 relative group">
+                                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
+                                <input
+                                    type="number"
+                                    value={minutes}
+                                    onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="relative w-full bg-[#141414] border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary/50 transition-colors text-2xl font-bold font-mono text-center tracking-wider"
+                                />
+                            </div>
+                            <span className="text-gray-500 font-bold text-lg select-none">minutes</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 block">Quick Presets</label>
+                        <div className="flex flex-wrap gap-2">
+                            {presets.map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setMinutes(p)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${minutes === p
+                                        ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)] scale-105'
+                                        : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/10'
+                                        }`}
+                                >
+                                    {p}m
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {activeTimer && activeTimer.scheduled && (
+                        <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse shadow-[0_0_10px_#f97316]"></div>
+                            <p className="text-sm text-orange-200">
+                                <span className="font-bold text-orange-400">Timer Active:</span> Shutdown scheduled in ~{Math.ceil(activeTimer.remaining_seconds / 60)} minutes.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 bg-white/5 border-t border-white/5 flex gap-4">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl font-bold transition-all border border-white/5 hover:border-white/10"
+                    >
+                        Cancel
+                    </button>
+                    {(activeTimer?.scheduled) ? (
+                        <button
+                            onClick={() => { onCancel(); onClose(); }}
+                            className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:shadow-[0_0_30px_rgba(239,68,68,0.4)]"
+                        >
+                            Cancel Timer
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => onSchedule(minutes)}
+                            className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:-translate-y-0.5 active:translate-y-0"
+                        >
+                            Start Timer
+                        </button>
+                    )}
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
 export default function Dashboard({ status: serverStatus, onRefresh }) {
     // Local state for immediate UI feedback
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
@@ -130,8 +246,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     isStoppingRef.current = false;
                 }
             }
+
+            // Sync shutdown info
+            if (serverStatus.shutdown_info) {
+                setShutdownInfo(serverStatus.shutdown_info);
+            } else {
+                setShutdownInfo({ scheduled: false });
+            }
         }
-    }, [serverStatus?.status]);
+    }, [serverStatus?.status, serverStatus?.shutdown_info]);
 
     // Reset logs ONLY when the server ID changes (Persist logs after stop)
     useEffect(() => {
@@ -146,6 +269,8 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     const [loading, setLoading] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
+    const [showShutdownModal, setShowShutdownModal] = useState(false);
+    const [shutdownInfo, setShutdownInfo] = useState({ scheduled: false });
     const [tunnelAddress, setTunnelAddress] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
@@ -289,6 +414,25 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
         try { await api.openServerFolder(); } catch (error) { }
     };
 
+    const handleScheduleShutdown = async (minutes) => {
+        try {
+            await api.scheduleStop(minutes);
+            setShowShutdownModal(false);
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            alert("Failed to schedule shutdown: " + error.message);
+        }
+    };
+
+    const handleCancelShutdown = async () => {
+        try {
+            await api.cancelStop();
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            alert("Failed to cancel shutdown: " + error.message);
+        }
+    };
+
     const isOnline = localStatus === 'online';
     const isStarting = localStatus === 'starting';
     const isStopping = localStatus === 'stopping';
@@ -339,6 +483,24 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             <Square size={20} fill="currentColor" />
                             {isStopping ? 'FORCE KILL' : 'STOP SERVER'}
                         </button>
+                    )}
+
+                    {/* Scheduled Shutdown Button/Badge */}
+                    {isOnline && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowShutdownModal(true)}
+                                className={`h-14 w-14 flex items-center justify-center rounded-xl bg-surface/50 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/5 hover:border-white/10 ${shutdownInfo.scheduled ? 'border-orange-500/50 text-orange-400 bg-orange-500/10' : ''}`}
+                                title="Schedule Shutdown"
+                            >
+                                <Clock size={20} className={shutdownInfo.scheduled ? 'animate-pulse' : ''} />
+                            </button>
+                            {shutdownInfo.scheduled && (
+                                <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#0f0f0f] shadow-sm pointer-events-none">
+                                    {Math.ceil(shutdownInfo.remaining_seconds / 60)}m
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -477,6 +639,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 {showPublicModal && (
                     <PublicServerModal
                         onClose={() => setShowPublicModal(false)}
+                    />
+                )}
+                {showShutdownModal && (
+                    <ShutdownTimerModal
+                        onClose={() => setShowShutdownModal(false)}
+                        onSchedule={handleScheduleShutdown}
+                        onCancel={handleCancelShutdown}
+                        activeTimer={shutdownInfo}
                     />
                 )}
             </AnimatePresence>
