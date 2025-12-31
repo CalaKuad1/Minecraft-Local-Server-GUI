@@ -1,7 +1,11 @@
 {
   "name": "minecraft-server-gui",
   "private": true,
-  "version": "1.1.3",
+  "version": "1.1.4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git"
+  },
   "description": "The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.",
   "author": "CalaKuad",
   "type": "module",
@@ -42,6 +46,13 @@
   "build": {
     "appId": "com.minecraft.localservergui",
     "productName": "Minecraft Local Server GUI",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "CalaKuad1",
+        "repo": "Minecraft-Local-Server-GUI"
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*"
