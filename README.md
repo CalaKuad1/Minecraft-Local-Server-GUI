@@ -7,7 +7,10 @@
   
   <p>
     <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
-      <img src="https://img.shields.io/badge/⬇️_Download-Windows_Installer-00d26a?style=for-the-badge&logo=windows" alt="Download">
+      <img src="https://img.shields.io/badge/⬇️_Download-Windows-00d26a?style=for-the-badge&logo=windows" alt="Download Windows">
+    </a>
+    <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
+      <img src="https://img.shields.io/badge/⬇️_Download-Linux-fcc624?style=for-the-badge&logo=linux&logoColor=black" alt="Download Linux">
     </a>
   </p>
   
@@ -119,7 +122,8 @@ Built with **React** and **Tailwind CSS**, featuring:
 | **Frontend** | Electron + React + Vite |
 | **Styling** | Tailwind CSS + Framer Motion |
 | **Backend** | Python + FastAPI + Uvicorn |
-| **Packaging** | electron-builder (NSIS installer) |
+| **Packaging** | electron-builder (GitHub Actions CI/CD) |
+| **Automation** | GitHub Actions (Auto-Release on Tag) |
 
 ---
 
@@ -146,13 +150,19 @@ npm install
 npm run dev
 ```
 
-### Building the Installer
+### Building the Installer (Production)
 
+Local build (Windows/macOS detects platform automatically):
 ```bash
 cd electron-app
 npm run electron:build
-# Output: electron-app/release/Minecraft.Local.Server.GUI.Setup.1.1.1.exe
 ```
+
+**Automated Multi-platform Release**:
+This project is configured with GitHub Actions. To trigger a new release with Windows and Linux binaries:
+1. Bump version in `package.json`
+2. Push a tag: `git tag v1.1.x && git push origin v1.1.x`
+3. GitHub will build and publish everything automatically!
 
 ---
 
@@ -160,6 +170,7 @@ npm run electron:build
 
 ### For Users (Installer)
 - **Windows 10/11** (64-bit)
+- **Linux** (Any disto supporting AppImage or `.deb`)
 - **Internet connection** (for initial Java download)
 - ~500MB disk space
 
