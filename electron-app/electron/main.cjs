@@ -85,7 +85,7 @@ ipcMain.handle('dialog:openDirectory', async () => {
 
 function startPythonBackend() {
   let scriptPath;
-  let pythonCmd = 'python'; // Or python3, or a bundled executable
+  let pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 
   if (isDev) {
     // In dev, backend is at ../../backend/api_server.py
@@ -100,7 +100,8 @@ function startPythonBackend() {
 
   pythonProcess = spawn(pythonCmd, [scriptPath], {
     cwd: path.dirname(scriptPath),
-    stdio: ['ignore', 'pipe', 'pipe'] // Capture stdout/stderr
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false
   });
 
   pythonProcess.stdout.on('data', (data) => {

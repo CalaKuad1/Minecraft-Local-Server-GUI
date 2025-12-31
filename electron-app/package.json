@@ -67,6 +67,14 @@
       "target": "nsis",
       "icon": "public/images/icon.ico"
     },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/images/logo2.png",
+      "category": "Game"
+    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
