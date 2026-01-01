@@ -411,7 +411,7 @@ class JavaManager:
             logger.error(f"Java validation error: {e}")
             return False
 
-    def get_java_for_server(self, server_path: str, minecraft_version: str, force_download: bool = False, skip_download: bool = False) -> Optional[str]:
+    def get_java_for_server(self, server_path: str, minecraft_version: str, force_download: bool = False, skip_download: bool = False, progress_callback: Callable[[float], None] = None) -> Optional[str]:
         """
         Obtiene la ruta de Java apropiada para un servidor específico.
         Descarga automáticamente si es necesario (unless skip_download=True).
@@ -488,7 +488,7 @@ class JavaManager:
             
             # 5. Descargar Java (Si llegamos aquí, no hay local ni system válido/suficiente)
             logger.info(f"Java {required_version} required for Minecraft {minecraft_version}, downloading...")
-            java_install_dir = self.download_java(required_version)
+            java_install_dir = self.download_java(required_version, progress_callback=progress_callback)
             
             if java_install_dir:
                 java_exe = self._get_java_executable_path(Path(java_install_dir))

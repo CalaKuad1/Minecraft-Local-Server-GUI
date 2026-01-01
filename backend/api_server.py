@@ -620,11 +620,17 @@ def install_server(req: InstallRequest):
             # Forge requiere ejecutar su instalador con la versión correcta de Java.
             send_progress(10, "Checking Java compatibility...")
             
+            def java_progress_callback(p):
+                # Map Java download (0-100) to 10-20% of overall installation
+                scaled = 10 + (p * 0.1)
+                send_progress(scaled, f"Setting up Java Runtime ({int(p)}%)...")
+
             # Esto descarga Java si es necesario y devuelve la ruta al ejecutable
             java_path = state.java_manager.get_java_for_server(
                 install_path, 
                 req.version, 
-                force_download=False # Ya intenta descargar si falta
+                force_download=False,
+                progress_callback=java_progress_callback
             )
             
             if not java_path:

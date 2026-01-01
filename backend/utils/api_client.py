@@ -124,23 +124,37 @@ def download_file_from_url(download_url, save_path, progress_callback):
     try:
         with requests.get(download_url, stream=True, timeout=30) as r:
             r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
+            total_size_raw = r.headers.get('content-length')
+            total_size = int(total_size_raw) if total_size_raw else 0
             bytes_downloaded = 0
+            last_reported_mb = 0
+            
+            logging.info(f"Downloading {download_url} - Total size: {total_size if total_size > 0 else 'unknown'}")
+            
             with open(save_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
+                for chunk in r.iter_content(chunk_size=65536): # 64KB chunks for better throughput
+                    if not chunk:
+                        continue
                     f.write(chunk)
                     bytes_downloaded += len(chunk)
+                    
                     if total_size > 0:
                         progress = (bytes_downloaded / total_size) * 100
                         progress_callback(progress)
                     else:
-                        # Fallback for unknown size: just show we are working
-                        # We won't call progress_callback with a % because it might confuse the bar
-                        pass
+                        # Fallback: Report "activity" every 1MB
+                        current_mb = bytes_downloaded // (1024 * 1024)
+                        if current_mb > last_reported_mb:
+                            last_reported_mb = current_mb
+                            # Send a small incremental progress or just trigger the callback
+                            # to keep the UI alive. We'll send a "mock" slow progress
+                            mock_progress = min(current_mb * 5, 95) # Caps at 95 until real finish
+                            progress_callback(mock_progress)
+                            logging.debug(f"Downloaded {current_mb}MB (unknown total size)")
                         
         progress_callback(100)
         return True
-    except requests.RequestException as e:
+    except Exception as e:
         logging.error(f"Failed to download file: {e}")
         return False
 
