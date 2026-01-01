@@ -441,8 +441,10 @@ def get_status():
         "players": players_count,
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
+        "online_players": online_players,
         "uptime": stats["uptime"],
-        "recent_logs": state.log_history[-15:], # Return last 15 lines for the mini console
+        # Return last 50 lines for the mini console polling fallback
+        "recent_logs": state.log_history[-50:] if state else [], 
         "shutdown_info": state.server_handler.get_shutdown_info()
     }
 

@@ -253,8 +253,27 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             } else {
                 setShutdownInfo({ scheduled: false });
             }
+
+            // Polling Fallback for Logs (If WS is dead/unstable)
+            // We only merge logs if we see new ones to avoid flicker
+            if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs)) {
+                setLocalLogs(prev => {
+                    // Simple merge: if polling has more logs or different last log, update
+                    // This is a basic heuristc. For robust chat, we'd need IDs, but for console text it's okay.
+                    if (serverStatus.recent_logs.length === 0) return prev;
+
+                    const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
+                    const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
+
+                    // Update if empty local or last message differs or count differs significantly
+                    if (!lastLocal || lastLocal.message !== lastPoll.message || serverStatus.recent_logs.length > prev.length) {
+                        return serverStatus.recent_logs;
+                    }
+                    return prev;
+                });
+            }
         }
-    }, [serverStatus?.status, serverStatus?.shutdown_info]);
+    }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs]);
 
     // Reset logs ONLY when the server ID changes (Persist logs after stop)
     useEffect(() => {
