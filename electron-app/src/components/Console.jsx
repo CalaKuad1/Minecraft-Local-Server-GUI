@@ -72,6 +72,38 @@ export default function Console() {
                 console.error('WS Error:', err);
                 // The onerror event usually precedes onclose, so we let onclose handle the retry
             };
+
+            // Polling Fallback (Every 1s)
+            // This ensures logs appear even if WS fails (common on Windows with Reset errors)
+            const intervalId = setInterval(async () => {
+                try {
+                    const status = await api.getStatus();
+                    if (status.recent_logs && Array.isArray(status.recent_logs)) {
+                        setLogs((prev) => {
+                            // Simple merge strategy to avoid flicker
+                            if (status.recent_logs.length === 0) return prev;
+
+                            const lastPoll = status.recent_logs[status.recent_logs.length - 1];
+                            const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
+
+                            // Update if local is empty OR last message differs OR poll has more logs
+                            if (!lastLocal || lastLocal.message !== lastPoll.message || status.recent_logs.length > prev.length) {
+                                return status.recent_logs;
+                            }
+                            return prev;
+                        });
+
+                        // Also update connection status heuristic
+                        if (status.status === 'online' || status.status === 'starting') {
+                            if (isMounted) setIsConnected(true);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore polling errors
+                }
+            }, 1000);
+
+            return () => clearInterval(intervalId);
         };
 
         connect();
@@ -102,29 +134,31 @@ export default function Console() {
         }
     }, [logs]);
 
-    const sendCommand = (e) => {
+    const sendCommand = async (e) => {
         e.preventDefault();
         if (!inputObj.trim()) return;
 
+        // Optimistic UI update
+        setLogs(prev => {
+            const next = [...prev, { message: `> ${inputObj}`, level: 'input' }];
+            if (next.length > MAX_LOGS) {
+                return next.slice(next.length - MAX_LOGS);
+            }
+            return next;
+        });
+
+        // Try WS first, fall back to API
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             ws.current.send(inputObj);
-            setLogs(prev => {
-                const next = [...prev, { message: `> ${inputObj}`, level: 'input' }];
-                if (next.length > MAX_LOGS) {
-                    return next.slice(next.length - MAX_LOGS);
-                }
-                return next;
-            });
-            setInputObj('');
         } else {
-            setLogs(prev => {
-                const next = [...prev, { message: `Error: Not connected to console.`, level: 'error' }];
-                if (next.length > MAX_LOGS) {
-                    return next.slice(next.length - MAX_LOGS);
-                }
-                return next;
-            });
+            // Fallback: Send via HTTP API
+            try {
+                await api.sendCommand(inputObj);
+            } catch (err) {
+                setLogs(prev => [...prev, { message: `Error sending command: ${err.message}`, level: 'error' }]);
+            }
         }
+        setInputObj('');
     };
 
     return (
@@ -138,9 +172,9 @@ export default function Console() {
                     </div>
                     <span>Terminal Output</span>
                 </div>
-                <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
-                    {isConnected ? 'Connected' : 'Disconnected'}
+                <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-gray-500'}`}>
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                    {isConnected ? 'Connected' : 'Syncing...'}
                 </div>
             </div>
 

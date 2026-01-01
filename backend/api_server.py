@@ -1415,11 +1415,14 @@ def start_tunnel(request: Request, region: str = "eu"):
             )
             
             # Read output to find the tunnel URL
-            for line in state.tunnel_process.stdout:
+            # Use iter to read line by line until process exits
+            for line in iter(state.tunnel_process.stdout.readline, ''):
+                if not line: break
+                
                 line = line.strip()
                 if not line: continue
                 
-                logging.debug(f"Pinggy output: {line}")
+                # logging.debug(f"Pinggy output: {line}") # Too noisy
                 
                 # Pinggy outputs something like: "tcp://xyz.a.pinggy.io:12345"
                 # Match tcp:// format
@@ -1438,11 +1441,22 @@ def start_tunnel(request: Request, region: str = "eu"):
                         if new_addr and new_addr != state.tunnel_address:
                             state.tunnel_address = new_addr
                 
+                # Check for "Permission denied" or other errors
+                if "Permission denied" in line or "Error" in line:
+                     state.broadcast_log_sync(f"Tunnel Error: {line}", "error")
+
                 if state.tunnel_address and not connected_emitted:
                     logging.info(f"Tunnel established: {state.tunnel_address}")
                     state.broadcast_log_sync(f"✅ Public server active! Address: {state.tunnel_address}", "success")
                     state.broadcast_log_sync({"type": "tunnel_connected", "address": state.tunnel_address})
                     connected_emitted = True
+            
+            # Additional check if process exited with error
+            if state.tunnel_process.poll() is not None and state.tunnel_process.returncode != 0:
+                 err_out = state.tunnel_process.stderr.read() if state.tunnel_process.stderr else ""
+                 if err_out:
+                     logging.error(f"Tunnel process error: {err_out}")
+                     state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
             
             # If we exit the loop, tunnel has closed
             state.broadcast_log_sync("🔴 Tunnel closed", "warning")

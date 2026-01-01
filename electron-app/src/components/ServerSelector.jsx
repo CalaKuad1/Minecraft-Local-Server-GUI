@@ -27,11 +27,17 @@ export default function ServerSelector({ onSelect, onAdd }) {
         }
     };
 
-    const checkConflict = async () => {
+    const checkConflict = async (targetId) => {
         const activeServer = servers.find(s => s.status && s.status !== 'offline');
+
+        // Fix: Allow selecting the already active server
+        if (activeServer && activeServer.id === targetId) {
+            return false;
+        }
+
         if (activeServer) {
             const result = await dialog.confirm(
-                `The server "${activeServer.name}" is currently ${activeServer.status}.\n\nYou must stop it before switching or creating a new server.`,
+                `The server "${activeServer.name}" is currently ${activeServer.status}.\n\nYou must stop it before switching to a different server.`,
                 "Server Conflict",
                 {
                     variant: "warning",
@@ -57,7 +63,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
     };
 
     const handleSelect = async (id) => {
-        if (await checkConflict()) return;
+        if (await checkConflict(id)) return;
 
         try {
             setLoading(true);
@@ -120,7 +126,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                 {/* Add New Card */}
                 <button
                     onClick={async () => {
-                        if (await checkConflict()) return;
+                        if (await checkConflict(null)) return;
                         onAdd();
                     }}
                     className="group relative h-64 rounded-2xl border-2 border-dashed border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all duration-300 flex flex-col items-center justify-center gap-4 cursor-pointer"
