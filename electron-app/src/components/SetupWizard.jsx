@@ -116,6 +116,9 @@ export default function SetupWizard({ onComplete, onCancel }) {
         setProgress(0);
         setStatusMessage("Starting engine...");
 
+        // Small delay to ensure WebSocket is established and ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         await api.installServer({
             server_type: serverType,
             version: version,

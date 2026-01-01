@@ -157,7 +157,6 @@ class JavaManager:
             return (major_version, full_path)
             
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
-            logger.debug(f"Error detecting Java: {e}")
             return None
     
     def get_platform_info(self) -> Tuple[str, str]:
