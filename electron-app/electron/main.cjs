@@ -85,24 +85,37 @@ ipcMain.handle('dialog:openDirectory', async () => {
 
 function startPythonBackend() {
   let scriptPath;
-  let pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+  let binaryPath;
+  const isWin = process.platform === 'win32';
+  let pythonCmd = isWin ? 'python' : 'python3';
 
   if (isDev) {
-    // In dev, backend is at ../../backend/api_server.py
     scriptPath = path.join(__dirname, '../../backend/api_server.py');
   } else {
-    // In prod, simple path logic or bundled executable
-    // TODO: Handle resource path in production
+    // Check for bundled binary in production
+    const binaryName = isWin ? 'api_server.exe' : 'api_server';
+    binaryPath = path.join(process.resourcesPath, 'backend', binaryName);
     scriptPath = path.join(process.resourcesPath, 'backend/api_server.py');
   }
 
-  console.log(`Starting Python backend: ${scriptPath}`);
+  // Use bundled binary if it exists
+  const useBinary = binaryPath && require('fs').existsSync(binaryPath);
 
-  pythonProcess = spawn(pythonCmd, [scriptPath], {
-    cwd: path.dirname(scriptPath),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false
-  });
+  if (useBinary) {
+    console.log(`Starting Bundled Backend: ${binaryPath}`);
+    pythonProcess = spawn(binaryPath, [], {
+      cwd: path.dirname(binaryPath),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false
+    });
+  } else {
+    console.log(`Starting Python Script: ${scriptPath}`);
+    pythonProcess = spawn(pythonCmd, [scriptPath], {
+      cwd: path.dirname(scriptPath),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false
+    });
+  }
 
   pythonProcess.stdout.on('data', (data) => {
     console.log(`[Python]: ${data}`);

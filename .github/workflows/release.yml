@@ -24,12 +24,35 @@ jobs:
         with:
           node-version: 20
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
       - name: Install dependencies
         run: |
           cd electron-app
           npm install
 
-      - name: Build and Publish
+      - name: Install Python dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pyinstaller
+
+      - name: Build Backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller --onefile --noconsole api_server.py
+          # Move binary to backend root so it's picked up by extraResources
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv dist/api_server.exe .
+          else
+            mv dist/api_server .
+          fi
+        shell: bash
+
+      - name: Build and Publish Electron
         run: |
           cd electron-app
           npm run electron:build
