@@ -87,6 +87,9 @@ export const api = {
             body: JSON.stringify(data)
         });
     },
+    getInstallProgress: async () => {
+        return await fetchJson('http://127.0.0.1:8000/setup/install/progress');
+    },
     detectServer: async (path) => {
         const res = await fetch('http://127.0.0.1:8000/setup/detect', {
             method: 'POST',

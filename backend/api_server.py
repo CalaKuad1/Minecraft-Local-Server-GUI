@@ -109,8 +109,11 @@ class AppState:
         self._log_broadcaster_task: Optional[asyncio.Task] = None
         
         # Tunnel management
-        self.tunnel_process = None
-        self.tunnel_address = None
+        # Install Progress Tracking
+        self.install_progress = 0
+        self.install_status_msg = ""
+        self.install_error = None
+        self.installed_server_id = None
 
         self.world_size_cache = {}
         self.world_size_inflight = set()
@@ -593,6 +596,16 @@ def validate_path(req: ValidatePathRequest):
         return {"valid": True, "has_jar": has_jar}
     return {"valid": False, "error": "Directory does not exist"}
 
+@app.get("/setup/install/progress")
+def get_install_progress():
+    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
+    return {
+        "value": state.install_progress,
+        "message": state.install_status_msg,
+        "error": state.install_error,
+        "server_id": state.installed_server_id
+    }
+
 @app.post("/setup/install")
 def install_server(req: InstallRequest):
     if not state: raise HTTPException(status_code=500, detail="App state not initialized")
@@ -603,6 +616,11 @@ def install_server(req: InstallRequest):
         try:
             # Helper to send structured progress
             def send_progress(pct, msg, **kwargs):
+                state.install_progress = pct
+                state.install_status_msg = msg
+                if "server_id" in kwargs:
+                    state.installed_server_id = kwargs["server_id"]
+                
                 data = {
                     "type": "progress", 
                     "value": pct, 
@@ -610,6 +628,12 @@ def install_server(req: InstallRequest):
                 }
                 data.update(kwargs)
                 state.broadcast_log_sync(data)
+
+            # Reset progress state at start
+            state.install_progress = 0
+            state.install_status_msg = "Preparing directory..."
+            state.install_error = None
+            state.installed_server_id = None
 
             # 1. Preparación del Directorio
             send_progress(5, f"Preparing directory for {req.server_type} {req.version}...")
@@ -724,6 +748,7 @@ def install_server(req: InstallRequest):
             state.broadcast_log_sync("Installation complete! Server is ready to start.", "success")
             
         except Exception as e:
+            state.install_error = str(e)
             state.broadcast_log_sync(f"Installation failed: {e}", "error")
             state.broadcast_log_sync({"type": "progress", "value": 0, "error": str(e)})
 

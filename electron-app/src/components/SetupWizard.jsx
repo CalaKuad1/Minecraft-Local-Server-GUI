@@ -68,44 +68,72 @@ export default function SetupWizard({ onComplete, onCancel }) {
         setFolderName(`${serverType}-${ver}`);
     };
 
-    // WebSocket logic for installation progress
+    // WebSocket + Polling logic for installation progress
     useEffect(() => {
         if (step === 4 && installing) {
-            // Close existing if open
+            // 1. WebSocket Connection (Real-time)
             if (ws.current) ws.current.close();
-
             ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
+
+            const handleData = (d) => {
+                if (d.type === 'progress') {
+                    setProgress(d.value);
+                    setStatusMessage(d.message);
+                    if (d.error) {
+                        setStatusMessage(`Error: ${d.error}`);
+                        setInstalling(false);
+                    }
+                    if (d.server_id) installedServerId.current = d.server_id;
+                    if (d.value >= 100 && !completedRef.current) {
+                        completedRef.current = true;
+                        setTimeout(() => onComplete && onComplete(installedServerId.current), 1000);
+                    }
+                }
+                if (d.type === 'java_progress') {
+                    setStatusMessage(d.message || "Setting up Java...");
+                }
+            };
 
             ws.current.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    const handle = (d) => {
-                        if (d.type === 'progress') {
-                            setProgress(d.value);
-                            setStatusMessage(d.message);
-                            if (d.error) {
-                                setStatusMessage(`Error: ${d.error}`);
-                                setInstalling(false);
-                            }
-                            if (d.server_id) installedServerId.current = d.server_id;
-                            if (d.value >= 100 && !completedRef.current) {
-                                completedRef.current = true;
-                                setTimeout(() => onComplete && onComplete(installedServerId.current), 1000);
-                            }
-                        }
-                        // Java progress is now part of the main progress flow from backend
-                        if (d.type === 'java_progress') {
-                            setStatusMessage(d.message || "Setting up Java...");
-                        }
-                    };
-
-                    if (data.type === 'batch') data.items.forEach(handle);
-                    else handle(data);
+                    if (data.type === 'batch') data.items.forEach(handleData);
+                    else handleData(data);
                 } catch (e) { }
             };
 
+            // 2. Polling Fallback (Every 1s) - Robustness for unstable WS
+            const intervalId = setInterval(async () => {
+                if (completedRef.current) return;
+                try {
+                    const data = await api.getInstallProgress();
+                    if (data && typeof data.value === 'number') {
+                        // Only update if value is meaningful to avoid jitter
+                        setProgress(prev => Math.max(prev, data.value));
+                        if (data.message) setStatusMessage(data.message);
+
+                        if (data.error) {
+                            setStatusMessage(`Error: ${data.error}`);
+                            setInstalling(false);
+                            clearInterval(intervalId);
+                        }
+
+                        if (data.server_id) installedServerId.current = data.server_id;
+
+                        if (data.value >= 100 && !completedRef.current) {
+                            completedRef.current = true;
+                            clearInterval(intervalId);
+                            setTimeout(() => onComplete && onComplete(installedServerId.current), 1000);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore polling errors, just wait for next tick
+                }
+            }, 1000);
+
             return () => {
                 if (ws.current) ws.current.close();
+                clearInterval(intervalId);
             };
         }
     }, [step, installing]);
