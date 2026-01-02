@@ -227,6 +227,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     // Referencia para evitar que el polling sobrescriba el estado 'offline' recién adquirido
     const isStoppingRef = useRef(serverStatus?.status === 'stopping');
+    const lastIdRef = useRef(serverStatus?.server_id);
 
     // Derived values
     const status = serverStatus || { status: 'offline' };
@@ -290,10 +291,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
     useEffect(() => {
-        if (serverStatus?.server_id && serverStatus.server_id !== selectedServer?.id) {
+        if (serverStatus?.server_id && serverStatus.server_id !== lastIdRef.current) {
             console.log('[Dashboard] Server ID changed, clearing logs');
             setLocalLogs([]);
             setLocalStatus(serverStatus?.status || 'offline');
+            lastIdRef.current = serverStatus.server_id;
         }
     }, [serverStatus?.server_id]);
 
