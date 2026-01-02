@@ -255,20 +255,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             }
 
             // Polling Fallback for Logs (If WS is dead/unstable)
-            // We only merge logs if we see new ones to avoid flicker
-            if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs)) {
+            // Only use polling logs if local logs are empty (WS not working)
+            // This avoids overwriting WS logs which are more real-time
+            if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
-                    // Simple merge: if polling has more logs or different last log, update
-                    // This is a basic heuristc. For robust chat, we'd need IDs, but for console text it's okay.
-                    if (serverStatus.recent_logs.length === 0) return prev;
-
-                    const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
-                    const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
-
-                    // Update if empty local or last message differs or count differs significantly
-                    if (!lastLocal || lastLocal.message !== lastPoll.message || serverStatus.recent_logs.length > prev.length) {
-                        return serverStatus.recent_logs;
+                    // Only replace if local is empty (WS never delivered anything)
+                    if (prev.length === 0) {
+                        return serverStatus.recent_logs.slice(-100);
                     }
+                    // Otherwise keep existing WS-driven logs
                     return prev;
                 });
             }
@@ -567,13 +562,23 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
                 <button
                     onClick={async () => {
-                        if (tunnelAddress) {
-                            await api.stopTunnel();
-                            setTunnelAddress(null);
+                        try {
+                            if (tunnelAddress) {
+                                await api.stopTunnel();
+                                setTunnelAddress(null);
+                                setTunnelConnecting(false);
+                            } else {
+                                setTunnelConnecting(true);
+                                console.log('[Dashboard] Starting tunnel with region:', tunnelRegion);
+                                const result = await api.startTunnel(tunnelRegion);
+                                console.log('[Dashboard] Tunnel start result:', result);
+                                // Note: tunnelConnecting will be set to false by polling or WS event
+                            }
+                        } catch (err) {
+                            console.error('[Dashboard] Tunnel error:', err);
                             setTunnelConnecting(false);
-                        } else {
-                            setTunnelConnecting(true);
-                            await api.startTunnel(tunnelRegion);
+                            // Show error in logs
+                            setLocalLogs(prev => [...prev, { message: `❌ Tunnel error: ${err.message}`, level: 'error' }]);
                         }
                     }}
                     disabled={tunnelConnecting && !tunnelAddress}
