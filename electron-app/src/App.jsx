@@ -114,8 +114,7 @@ function App() {
           if (!cancelled) {
             setServerStatus((prev) => (isSameStatus(prev, status) ? prev : status));
           }
-          const nextMs = status?.status === 'starting' || status?.status === 'stopping' ? 2000 : 4000;
-          timer = setTimeout(tick, nextMs);
+          timer = setTimeout(tick, 2000);
         } catch (e) {
           timer = setTimeout(tick, 5000);
         }

@@ -1,6 +1,6 @@
 import asyncio
 import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -1314,170 +1314,174 @@ def get_tunnel_status():
     }
 
 @app.post("/tunnel/start")
-def start_tunnel(request: Request, region: str = "eu"):
-    if not state:
-        raise HTTPException(status_code=500, detail="App state not initialized")
-    
-    # Stop any existing tunnel before starting a new one
-    if state.tunnel_process and state.tunnel_process.poll() is None:
-        logging.info("Stopping existing tunnel before starting a new one...")
-        state.broadcast_log_sync("🔄 Closing previous tunnel...", "info")
-        try:
-            state.tunnel_process.terminate()
-            state.tunnel_process.wait(timeout=3)
-        except:
+def start_tunnel(request: Request, region: str = Query("eu")):
+    try:
+        if not state:
+            raise HTTPException(status_code=500, detail="App state not initialized")
+        
+        # Stop any existing tunnel before starting a new one
+        if state.tunnel_process and state.tunnel_process.poll() is None:
+            logging.info("Stopping existing tunnel before starting a new one...")
+            state.broadcast_log_sync("🔄 Closing previous tunnel...", "info")
             try:
-                state.tunnel_process.kill()
+                state.tunnel_process.terminate()
+                state.tunnel_process.wait(timeout=3)
+            except:
+                try:
+                    state.tunnel_process.kill()
+                except:
+                    pass
+            state.tunnel_process = None
+            state.tunnel_address = None
+        
+        # Get server port (default 25565)
+        port = "25565"
+        if state.server_handler:
+            try:
+                props_path = os.path.join(state.server_handler.server_path, "server.properties")
+                if os.path.exists(props_path):
+                    with open(props_path, 'r', encoding='utf-8', errors='replace') as f:
+                        for line in f:
+                            if line.startswith("server-port="):
+                                port = line.split("=")[1].strip()
+                                break
             except:
                 pass
-        state.tunnel_process = None
-        state.tunnel_address = None
-    
-    # Get server port (default 25565)
-    port = "25565"
-    if state.server_handler:
-        try:
-            props_path = os.path.join(state.server_handler.server_path, "server.properties")
-            if os.path.exists(props_path):
-                with open(props_path, 'r') as f:
-                    for line in f:
-                        if line.startswith("server-port="):
-                            port = line.split("=")[1].strip()
-                            break
-        except:
-            pass
-    
-    def _ensure_ssh_key():
-        """Ensures a dedicated SSH key exists for the app to authenticate with Pinggy."""
-        try:
-            ssh_dir = os.path.join(state.app_data_dir, "ssh")
-            if not os.path.exists(ssh_dir):
-                os.makedirs(ssh_dir)
-            
-            key_path = os.path.join(ssh_dir, "id_rsa")
-            pub_path = f"{key_path}.pub"
-            
-            # If key doesn't exist, generate it
-            if not os.path.exists(key_path) or not os.path.exists(pub_path):
-                logging.info("Generating new SSH key for Pinggy...")
-                subprocess.run(
-                    ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+        
+        def _ensure_ssh_key():
+            """Ensures a dedicated SSH key exists for the app to authenticate with Pinggy."""
+            try:
+                ssh_dir = os.path.join(state.app_data_dir, "ssh")
+                if not os.path.exists(ssh_dir):
+                    os.makedirs(ssh_dir)
+                
+                key_path = os.path.join(ssh_dir, "id_rsa")
+                pub_path = f"{key_path}.pub"
+                
+                # If key doesn't exist, generate it
+                if not os.path.exists(key_path) or not os.path.exists(pub_path):
+                    logging.info("Generating new SSH key for Pinggy...")
+                    subprocess.run(
+                        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                    )
+                return key_path
+            except Exception as e:
+                logging.error(f"Failed to generate SSH key: {e}")
+                return None
+
+        def run_tunnel():
+            import subprocess
+            import re
+            connected_emitted = False
+            try:
+                # Construct host based on region
+                # regions: eu, us, ap, sa
+                host = f"{region}.free.pinggy.io"
+                
+                # Verify SSH is available
+                if not shutil.which("ssh"):
+                    logging.error("SSH not found in PATH")
+                    state.broadcast_log_sync("❌ Error: 'ssh' is not installed or not in PATH. Cannot start public tunnel.", "error")
+                    return
+
+                logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
+                state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
+                
+                # Ensure we have a key
+                key_path = _ensure_ssh_key()
+                
+                # Pinggy SSH command - optimized with identity
+                cmd = [
+                    "ssh",
+                    "-p", "443",
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "ServerAliveInterval=30",
+                    "-o", "BatchMode=yes",
+                    "-T", # Disable pseudo-terminal
+                ]
+                
+                if key_path and os.path.exists(key_path):
+                    cmd.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
+                
+                cmd.extend([
+                    "-R", f"0:127.0.0.1:{port}",
+                    f"tcp@{host}"
+                ])
+                
+                # Using bufsize=1 for line buffering
+                state.tunnel_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
                 )
-            return key_path
-        except Exception as e:
-            logging.error(f"Failed to generate SSH key: {e}")
-            return None
-
-    def run_tunnel():
-        import subprocess
-        import re
-        connected_emitted = False
-        try:
-            # Construct host based on region
-            # regions: eu, us, ap, sa
-            host = f"{region}.free.pinggy.io"
-            
-            # Verify SSH is available
-            if not shutil.which("ssh"):
-                logging.error("SSH not found in PATH")
-                state.broadcast_log_sync("❌ Error: 'ssh' is not installed or not in PATH. Cannot start public tunnel.", "error")
-                return
-
-            logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
-            state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
-            
-            # Ensure we have a key
-            key_path = _ensure_ssh_key()
-            
-            # Pinggy SSH command - optimized with identity
-            cmd = [
-                "ssh",
-                "-p", "443",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ServerAliveInterval=30",
-                "-o", "BatchMode=yes",
-                "-T", # Disable pseudo-terminal
-            ]
-            
-            if key_path and os.path.exists(key_path):
-                cmd.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
-            
-            cmd.extend([
-                "-R", f"0:127.0.0.1:{port}",
-                f"tcp@{host}"
-            ])
-            
-            # Using bufsize=1 for line buffering
-            state.tunnel_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-            )
-            
-            # Read output to find the tunnel URL
-            # Use iter to read line by line until process exits
-            for line in iter(state.tunnel_process.stdout.readline, ''):
-                if not line: break
                 
-                line = line.strip()
-                if not line: continue
-                
-                # logging.debug(f"Pinggy output: {line}") # Too noisy
-                
-                # Pinggy outputs something like: "tcp://xyz.a.pinggy.io:12345"
-                # Match tcp:// format
-                tcp_match = re.search(r'tcp://([a-zA-Z0-9\.\-]+:\d+)', line)
-                if tcp_match:
-                    new_addr = tcp_match.group(1)
-                    if new_addr and new_addr != state.tunnel_address:
-                        state.tunnel_address = new_addr
+                # Read output to find the tunnel URL
+                # Use iter to read line by line until process exits
+                for line in iter(state.tunnel_process.stdout.readline, ''):
+                    if not line: break
                     
-                # Match raw address format (free.pinggy.io:12345)
-                # Broader match: something.pinggy.io:digits
-                if not state.tunnel_address:
-                    addr_match = re.search(r'([a-zA-Z0-9\.\-]+\.pinggy\.io:\d+)', line)
-                    if addr_match:
-                        new_addr = addr_match.group(1)
+                    line = line.strip()
+                    if not line: continue
+                    
+                    # logging.debug(f"Pinggy output: {line}") # Too noisy
+                    
+                    # Pinggy outputs something like: "tcp://xyz.a.pinggy.io:12345"
+                    # Match tcp:// format
+                    tcp_match = re.search(r'tcp://([a-zA-Z0-9\.\-]+:\d+)', line)
+                    if tcp_match:
+                        new_addr = tcp_match.group(1)
                         if new_addr and new_addr != state.tunnel_address:
                             state.tunnel_address = new_addr
-                
-                # Check for "Permission denied" or other errors
-                if "Permission denied" in line or "Error" in line:
-                     state.broadcast_log_sync(f"Tunnel Error: {line}", "error")
+                        
+                    # Match raw address format (free.pinggy.io:12345)
+                    # Broader match: something.pinggy.io:digits
+                    if not state.tunnel_address:
+                        addr_match = re.search(r'([a-zA-Z0-9\.\-]+\.pinggy\.io:\d+)', line)
+                        if addr_match:
+                            new_addr = addr_match.group(1)
+                            if new_addr and new_addr != state.tunnel_address:
+                                state.tunnel_address = new_addr
+                    
+                    # Check for "Permission denied" or other errors
+                    if "Permission denied" in line or "Error" in line:
+                         state.broadcast_log_sync(f"Tunnel Error: {line}", "error")
 
-                if state.tunnel_address and not connected_emitted:
-                    logging.info(f"Tunnel established: {state.tunnel_address}")
-                    state.broadcast_log_sync(f"✅ Public server active! Address: {state.tunnel_address}", "success")
-                    state.broadcast_log_sync({"type": "tunnel_connected", "address": state.tunnel_address})
-                    connected_emitted = True
-            
-            # Additional check if process exited with error
-            if state.tunnel_process.poll() is not None and state.tunnel_process.returncode != 0:
-                 err_out = state.tunnel_process.stderr.read() if state.tunnel_process.stderr else ""
-                 if err_out:
-                     logging.error(f"Tunnel process error: {err_out}")
-                     state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
-            
-            # If we exit the loop, tunnel has closed
-            state.broadcast_log_sync("🔴 Tunnel closed", "warning")
-            state.broadcast_log_sync({"type": "tunnel_disconnected"})
-            state.tunnel_address = None
-            
-        except Exception as e:
-            logging.exception(f"Tunnel error: {e}")
-            state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
-            state.tunnel_address = None
-    
-    threading.Thread(target=run_tunnel, daemon=True).start()
-    return {"message": "Tunnel starting...", "status": "connecting"}
+                    if state.tunnel_address and not connected_emitted:
+                        logging.info(f"Tunnel established: {state.tunnel_address}")
+                        state.broadcast_log_sync(f"✅ Public server active! Address: {state.tunnel_address}", "success")
+                        state.broadcast_log_sync({"type": "tunnel_connected", "address": state.tunnel_address})
+                        connected_emitted = True
+                
+                # Additional check if process exited with error
+                if state.tunnel_process.poll() is not None and state.tunnel_process.returncode != 0:
+                     err_out = state.tunnel_process.stderr.read() if state.tunnel_process.stderr else ""
+                     if err_out:
+                         logging.error(f"Tunnel process error: {err_out}")
+                         state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
+                
+                # If we exit the loop, tunnel has closed
+                state.broadcast_log_sync("🔴 Tunnel closed", "warning")
+                state.broadcast_log_sync({"type": "tunnel_disconnected"})
+                state.tunnel_address = None
+                
+            except Exception as e:
+                logging.exception(f"Tunnel error: {e}")
+                state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
+                state.tunnel_address = None
+        
+        threading.Thread(target=run_tunnel, daemon=True).start()
+        return {"message": "Tunnel starting...", "status": "connecting"}
+    except Exception as e:
+        logging.exception(f"Error in start_tunnel endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/tunnel/stop")
 def stop_tunnel():

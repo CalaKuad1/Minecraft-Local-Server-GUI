@@ -255,15 +255,20 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             }
 
             // Polling Fallback for Logs (If WS is dead/unstable)
-            // Only use polling logs if local logs are empty (WS not working)
-            // This avoids overwriting WS logs which are more real-time
             if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
-                    // Only replace if local is empty (WS never delivered anything)
-                    if (prev.length === 0) {
+                    // Update if polling has more logs, or if local is empty
+                    if (prev.length === 0 || serverStatus.recent_logs.length > prev.length) {
                         return serverStatus.recent_logs.slice(-100);
                     }
-                    // Otherwise keep existing WS-driven logs
+
+                    // Simple check: if contents are different (even if same length), update
+                    const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
+                    const lastLocal = prev[prev.length - 1];
+                    if (lastPoll && lastLocal && lastPoll.message !== lastLocal.message) {
+                        return serverStatus.recent_logs.slice(-100);
+                    }
+
                     return prev;
                 });
             }
@@ -376,7 +381,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             if (container) {
                 container.scrollTo({
                     top: container.scrollHeight,
-                    behavior: 'smooth'
+                    behavior: 'auto'
                 });
             }
         }
