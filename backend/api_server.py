@@ -429,8 +429,20 @@ async def delete_server(server_id: str, delete_files: bool = False):
 
 @app.get("/status")
 def get_status():
-    if not state or not state.server_handler:
-        return {"status": "not_configured"}
+    if not state:
+        return {"status": "offline", "cpu": 0, "ram": 0, "players": 0}
+    
+    # If we are installing, return 'starting' so the UI knows we are busy
+    installing = getattr(state, 'install_progress', 0) > 0 and getattr(state, 'install_progress', 0) < 100
+    
+    if not state.server_handler:
+        return {
+            "status": "starting" if installing else "not_configured",
+            "cpu": 0,
+            "ram": 0,
+            "players": 0,
+            "recent_logs": state.log_history[-50:]
+        }
     
     stats = state.server_handler.get_stats()
 
@@ -439,6 +451,7 @@ def get_status():
     return {
         "status": state.server_handler.get_status(),
         "pid": state.server_handler.get_pid(),
+        "server_id": state.server_handler.server_id,
         "server_type": state.server_handler.server_type,
         "minecraft_version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],
@@ -446,11 +459,13 @@ def get_status():
         "players": players_count,
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
-        "online_players": online_players,
         "uptime": stats["uptime"],
-        # Return last 50 lines for the mini console polling fallback
-        "recent_logs": state.log_history[-50:] if state else [], 
-        "shutdown_info": state.server_handler.get_shutdown_info()
+        "recent_logs": state.log_history[-50:], 
+        "shutdown_info": state.server_handler.get_shutdown_info(),
+        "tunnel": {
+            "active": state.tunnel_process is not None and state.tunnel_process.poll() is None,
+            "address": state.tunnel_address
+        }
     }
 
 @app.post("/server/open-folder")
@@ -1337,6 +1352,40 @@ def start_tunnel(request: Request, region: str = Query("eu")):
             state.tunnel_process = None
             state.tunnel_address = None
         
+        # Verify SSH is available BEFORE starting the thread
+        ssh_executable = shutil.which("ssh")
+        if not ssh_executable and sys.platform == "win32":
+            # Fallback for Windows if not in PATH
+            common_paths = [
+                os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32\\OpenSSH\\ssh.exe"),
+                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "OpenSSH\\ssh.exe"),
+                os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "OpenSSH\\ssh.exe"),
+            ]
+            for p in common_paths:
+                if os.path.exists(p):
+                    ssh_executable = p
+                    logging.info(f"Found SSH at fallback path: {p}")
+                    break
+        
+        if not ssh_executable:
+            logging.error("SSH not found in PATH or common locations")
+            raise HTTPException(
+                status_code=400, 
+                detail="SSH no encontrado. Por favor, instala 'OpenSSH Client' en las características opcionales de Windows para usar 'Make Public'."
+            )
+        
+        # Discover ssh-keygen as well
+        ssh_keygen_executable = shutil.which("ssh-keygen")
+        if not ssh_keygen_executable and ssh_executable:
+            # If we found ssh.exe in a folder, its likely ssh-keygen is there too
+            potential_keygen = os.path.join(os.path.dirname(ssh_executable), "ssh-keygen.exe")
+            if os.path.exists(potential_keygen):
+                ssh_keygen_executable = potential_keygen
+        
+        if not ssh_keygen_executable:
+            ssh_keygen_executable = "ssh-keygen" # Fallback to PATH and hope for the best if we couldn't find it explicitly
+        
+        
         # Get server port (default 25565)
         port = "25565"
         if state.server_handler:
@@ -1365,7 +1414,7 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 if not os.path.exists(key_path) or not os.path.exists(pub_path):
                     logging.info("Generating new SSH key for Pinggy...")
                     subprocess.run(
-                        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
+                        [ssh_keygen_executable, "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
                         check=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -1385,12 +1434,6 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 # regions: eu, us, ap, sa
                 host = f"{region}.free.pinggy.io"
                 
-                # Verify SSH is available
-                if not shutil.which("ssh"):
-                    logging.error("SSH not found in PATH")
-                    state.broadcast_log_sync("❌ Error: 'ssh' is not installed or not in PATH. Cannot start public tunnel.", "error")
-                    return
-
                 logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
                 state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
                 
@@ -1399,7 +1442,7 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 
                 # Pinggy SSH command - optimized with identity
                 cmd = [
-                    "ssh",
+                    ssh_executable,
                     "-p", "443",
                     "-o", "StrictHostKeyChecking=no",
                     "-o", "ServerAliveInterval=30",

@@ -257,23 +257,36 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             // Polling Fallback for Logs (If WS is dead/unstable)
             if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
-                    // Update if polling has more logs, or if local is empty
-                    if (prev.length === 0 || serverStatus.recent_logs.length > prev.length) {
-                        return serverStatus.recent_logs.slice(-100);
-                    }
+                    // Update if local is empty
+                    if (prev.length === 0) return serverStatus.recent_logs.slice(-100);
 
-                    // Simple check: if contents are different (even if same length), update
+                    // If the last log from polling isn't in our local logs (or differs from our last log),
+                    // it means we missed something or are out of sync.
                     const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
                     const lastLocal = prev[prev.length - 1];
-                    if (lastPoll && lastLocal && lastPoll.message !== lastLocal.message) {
-                        return serverStatus.recent_logs.slice(-100);
+
+                    if (lastPoll && (!lastLocal || lastPoll.message !== lastLocal.message)) {
+                        // Check if it's really new (isn't already in the last few local logs)
+                        const isRepetition = prev.slice(-5).some(l => l.message === lastPoll.message && l.time === lastPoll.time);
+                        if (!isRepetition) {
+                            return serverStatus.recent_logs.slice(-100);
+                        }
                     }
 
                     return prev;
                 });
             }
+            // Sync tunnel info from polling too
+            if (serverStatus.tunnel) {
+                if (serverStatus.tunnel.active && serverStatus.tunnel.address) {
+                    setTunnelAddress(serverStatus.tunnel.address);
+                    setTunnelConnecting(false);
+                } else if (!tunnelConnecting && tunnelAddress) {
+                    setTunnelAddress(null);
+                }
+            }
         }
-    }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs]);
+    }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs, serverStatus?.tunnel]);
 
     // Reset logs ONLY when the server ID changes (Persist logs after stop)
     useEffect(() => {
@@ -585,8 +598,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         } catch (err) {
                             console.error('[Dashboard] Tunnel error:', err);
                             setTunnelConnecting(false);
+                            // Get the error message from the response if possible
+                            const errorMsg = err.response?.data?.detail || err.message || "Unknown error";
                             // Show error in logs
-                            setLocalLogs(prev => [...prev, { message: `❌ Tunnel error: ${err.message}`, level: 'error' }]);
+                            setLocalLogs(prev => [...prev, {
+                                message: `❌ Tunnel error: ${errorMsg}`,
+                                level: 'error',
+                                time: new Date().toISOString()
+                            }]);
+                            alert(`Error de túnel: ${errorMsg}`);
                         }
                     }}
                     disabled={tunnelConnecting && !tunnelAddress}

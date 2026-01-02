@@ -91,7 +91,9 @@ function App() {
       a.players === b.players &&
       a.cpu === b.cpu &&
       a.ram === b.ram &&
-      JSON.stringify(a.recent_logs?.[a.recent_logs?.length - 1]) === JSON.stringify(b.recent_logs?.[b.recent_logs?.length - 1])
+      a.recent_logs?.length === b.recent_logs?.length &&
+      JSON.stringify(a.recent_logs?.[a.recent_logs?.length - 1]) === JSON.stringify(b.recent_logs?.[b.recent_logs?.length - 1]) &&
+      JSON.stringify(a.tunnel) === JSON.stringify(b.tunnel)
     );
   };
 
