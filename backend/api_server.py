@@ -14,6 +14,7 @@ import zipfile
 from datetime import datetime
 import psutil
 import time
+import shutil
 import requests
 
 # --- CRITICAL: DEBUG LOGGING FOR PROD ---
@@ -213,6 +214,7 @@ class AppState:
         """Returns log history of current handler or app-level history."""
         if self.server_handler and self.server_handler.log_history:
             return self.server_handler.log_history
+        # Fallback to app log history if server logs are empty (e.g. startup/install logs)
         return self.app_log_history
 
     def load_server(self, server_id):
@@ -1379,6 +1381,12 @@ def start_tunnel(request: Request, region: str = "eu"):
             # regions: eu, us, ap, sa
             host = f"{region}.free.pinggy.io"
             
+            # Verify SSH is available
+            if not shutil.which("ssh"):
+                logging.error("SSH not found in PATH")
+                state.broadcast_log_sync("❌ Error: 'ssh' is not installed or not in PATH. Cannot start public tunnel.", "error")
+                return
+
             logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
             state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
             

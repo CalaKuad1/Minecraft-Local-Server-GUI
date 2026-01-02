@@ -30,6 +30,11 @@ export default function ServerSelector({ onSelect, onAdd }) {
     const checkConflict = async (targetId) => {
         const activeServer = servers.find(s => s.status && s.status !== 'offline');
 
+        // Debug logging for conflict resolution
+        if (activeServer) {
+            console.log(`[Conflict Check] Active: ${activeServer.id} (${activeServer.name}), Target: ${targetId}`);
+        }
+
         // Fix: Allow selecting the already active server
         if (activeServer && activeServer.id === targetId) {
             return false;
