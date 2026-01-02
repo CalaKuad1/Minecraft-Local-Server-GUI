@@ -438,6 +438,7 @@ def get_status():
     if not state.server_handler:
         return {
             "status": "starting" if installing else "not_configured",
+            "server_id": state.selected_server_id,
             "cpu": 0,
             "ram": 0,
             "players": 0,

@@ -288,10 +288,13 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
         }
     }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs, serverStatus?.tunnel]);
 
-    // Reset logs ONLY when the server ID changes (Persist logs after stop)
+    // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
     useEffect(() => {
-        setLocalLogs([]);
-        setLocalStatus(serverStatus?.status || 'offline');
+        if (serverStatus?.server_id && serverStatus.server_id !== selectedServer?.id) {
+            console.log('[Dashboard] Server ID changed, clearing logs');
+            setLocalLogs([]);
+            setLocalStatus(serverStatus?.status || 'offline');
+        }
     }, [serverStatus?.server_id]);
 
 
