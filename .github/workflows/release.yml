@@ -30,6 +30,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './electron-app/package-lock.json'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -40,7 +42,10 @@ jobs:
       - name: Install dependencies
         run: |
           cd electron-app
-          npm install
+          npm config set fetch-retries 10
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm ci --prefer-offline --no-audit
 
       - name: Install Python dependencies
         run: |
