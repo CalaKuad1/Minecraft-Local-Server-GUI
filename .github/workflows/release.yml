@@ -19,6 +19,13 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v4
 
+      - name: Delete existing release (if exists)
+        shell: bash
+        run: |
+          gh release delete ${{ github.ref_name }} --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
