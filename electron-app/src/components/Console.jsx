@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
+import { api } from '../api';
 
 export default function Console() {
     const [isConnected, setIsConnected] = useState(false);

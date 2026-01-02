@@ -326,6 +326,18 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         return;
                     }
 
+                    // 2. Handle Tunnel Events
+                    if (item.type === 'tunnel_connected') {
+                        setTunnelAddress(item.address);
+                        setTunnelConnecting(false);
+                        return;
+                    }
+                    if (item.type === 'tunnel_disconnected') {
+                        setTunnelAddress(null);
+                        setTunnelConnecting(false);
+                        return;
+                    }
+
                     // 2. Handle Logs
                     if (item.message !== undefined) {
                         setLocalLogs(prev => {
