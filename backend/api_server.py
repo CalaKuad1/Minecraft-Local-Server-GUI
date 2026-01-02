@@ -110,6 +110,9 @@ class AppState:
         self._log_broadcaster_task: Optional[asyncio.Task] = None
         
         # Tunnel management
+        self.tunnel_process = None
+        self.tunnel_address = None
+        
         # Install Progress Tracking
         self.install_progress = 0
         self.install_status_msg = ""

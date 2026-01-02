@@ -202,11 +202,15 @@ class ServerHandler:
         Unified status check. Prioritizes the actual process state.
         Returns: 'offline', 'starting', 'online', or 'stopping'.
         """
+        # If explicitly stopping, return stopping until process is dead
+        if self.server_stopping:
+            if self.server_process is None or self.server_process.poll() is not None:
+                self.server_stopping = False # Reset if actually dead
+                return 'offline'
+            return 'stopping'
+
         if self.server_process is None or self.server_process.poll() is not None:
             return 'offline'
-        
-        if self.server_stopping:
-            return 'stopping'
             
         if self.server_fully_started:
             return 'online'

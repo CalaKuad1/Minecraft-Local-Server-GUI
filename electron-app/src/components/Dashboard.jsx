@@ -338,17 +338,19 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         return;
                     }
 
-                    // 2. Handle Logs
-                    if (item.message !== undefined) {
+                    // Logs - ensure message is a string
+                    if (item.message !== undefined || item.level) {
+                        const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
+
                         setLocalLogs(prev => {
-                            const newLogs = [...prev, item];
+                            const newLogs = [...prev, { ...item, message: msgText }];
                             return newLogs.slice(-100); // Increased buffer to 100
                         });
 
                         // Fallback: Detect status from log text (Skip for historical logs)
                         if (isHistory) return;
 
-                        const msg = (item.message || "").toString();
+                        const msg = msgText.toString();
                         if (msg.includes("Done") && msg.includes("For help")) {
                             setLocalStatus('online');
                             setLoading(false);
@@ -394,16 +396,17 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 const status = await api.getTunnelStatus();
                 if (status.active && status.address) {
                     setTunnelAddress(status.address);
-                } else {
+                    setTunnelConnecting(false);
+                } else if (!tunnelConnecting) {
                     setTunnelAddress(null);
+                    setTunnelConnecting(false);
                 }
-                setTunnelConnecting(false);
             } catch (e) { }
         };
         checkTunnel();
         const interval = setInterval(checkTunnel, 5000);
         return () => clearInterval(interval);
-    }, []);
+    }, [tunnelConnecting]); // Add dep to prevent clearing while connecting
 
     const handleStart = async () => {
         setLoading(true);
@@ -633,7 +636,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                         log.level === 'input' ? 'text-cyan-400 font-bold' :
                                             'text-gray-300'
                                 }`}>
-                                {log.level !== 'input' && <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>}
+                                {log.level !== 'input' && (
+                                    <span className="opacity-30 mr-2 text-[10px]">
+                                        [{log.time ? new Date(log.time).toLocaleTimeString() : new Date().toLocaleTimeString()}]
+                                    </span>
+                                )}
                                 {log.message}
                             </div>
                         ))
@@ -643,7 +650,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             <span>Waiting for server output...</span>
                         </div>
                     )}
-                    <div ref={logsEndRef} />
+                    <div ref={logsEndRef} className="h-1 shadow-sm" />
                 </div>
                 {/* Mini Console Input */}
                 <form
@@ -691,6 +698,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 }

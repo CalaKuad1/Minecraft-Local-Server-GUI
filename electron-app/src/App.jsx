@@ -90,7 +90,8 @@ function App() {
       a.pid === b.pid &&
       a.players === b.players &&
       a.cpu === b.cpu &&
-      a.ram === b.ram
+      a.ram === b.ram &&
+      JSON.stringify(a.recent_logs?.[a.recent_logs?.length - 1]) === JSON.stringify(b.recent_logs?.[b.recent_logs?.length - 1])
     );
   };
 
@@ -116,7 +117,7 @@ function App() {
           }
           timer = setTimeout(tick, 2000);
         } catch (e) {
-          timer = setTimeout(tick, 5000);
+          timer = setTimeout(tick, 2000);
         }
       };
 
