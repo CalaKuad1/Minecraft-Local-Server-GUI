@@ -361,8 +361,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
 
                         setLocalLogs(prev => {
+                            // OPTIMIZACIÓN: Reducir buffer visual en Dashboard
+                            // En PCs lentos, renderizar 100 elementos complejos cuesta mucho.
+                            // Bajamos a 50 para la vista rápida (mini consola).
                             const newLogs = [...prev, { ...item, message: msgText }];
-                            return newLogs.slice(-100); // Increased buffer to 100
+                            if (newLogs.length > 50) {
+                                return newLogs.slice(newLogs.length - 50);
+                            }
+                            return newLogs;
                         });
 
                         // Fallback: Detect status from log text (Skip for historical logs)

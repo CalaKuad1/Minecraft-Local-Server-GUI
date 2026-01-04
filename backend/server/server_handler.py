@@ -60,6 +60,11 @@ class ServerHandler:
         # Scheduled Shutdown
         self._shutdown_timer = None
         self._shutdown_time_target = None # Epoch time when shutdown will occur
+        
+        # Statistics Cache for low-resource environments
+        self._stats_cache = {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
+        self._last_stats_time = 0
+        self._stats_update_interval = 2.0 # Update stats every 2 seconds maximum
 
     def _log(self, message, level="normal"):
         """Internal log method that stores history and calls callback."""
@@ -758,74 +763,77 @@ allow-flight=false
         return props
 
     def get_stats(self):
+        # If the process doesn't exist, return zeros immediately
         if not self.server_process:
             self._cached_process = None
             return {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
-        
+
+        # If it's been less than the interval, return cache (KEY OPTIMIZATION)
+        current_time = time.time()
+        if current_time - self._last_stats_time < self._stats_update_interval:
+            return self._stats_cache
+
         try:
             # Logic to find the actual Java process if we haven't already or if it died
             if not hasattr(self, '_cached_process') or self._cached_process is None or not self._cached_process.is_running():
-                parent = psutil.Process(self.server_process.pid)
-                
-                # Get all descendants
                 try:
+                    parent = psutil.Process(self.server_process.pid)
+                    # Get all descendants (expensive operation, done only once per start)
                     children = parent.children(recursive=True)
+                    candidates = children + [parent]
+                    
+                    best_proc = None
+                    max_mem = -1
+
+                    for p in candidates:
+                        try:
+                            # Use oneshot for faster retrieval
+                            with p.oneshot():
+                                mem_info = p.memory_info()
+                                rss = mem_info.rss
+                                name = p.name().lower()
+                                
+                            score = rss
+                            if 'java' in name or 'openjdk' in name:
+                                score += 1024 * 1024 * 1024 * 100 
+                            
+                            if score > max_mem:
+                                max_mem = score
+                                best_proc = p
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+                    
+                    self._cached_process = best_proc if best_proc else parent
                 except psutil.NoSuchProcess:
-                    children = []
-
-                # Include parent in candidates? Usually parent is cmd.exe, we want the heavy child.
-                candidates = children + [parent]
-                
-                best_proc = None
-                max_mem = -1
-
-                for p in candidates:
-                    try:
-                        # Get memory info
-                        mem_info = p.memory_info()
-                        rss = mem_info.rss
-                        
-                        # Prioritize if name contains java
-                        name = p.name().lower()
-                        score = rss
-                        if 'java' in name or 'openjdk' in name:
-                            # Give a massive bonus to java processes so they win even if they just started and have low ram
-                            score += 1024 * 1024 * 1024 * 100 # +100GB bonus
-                        
-                        if score > max_mem:
-                            max_mem = score
-                            best_proc = p
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        continue
-                
-                if best_proc:
-                    self._cached_process = best_proc
-                    # Debug log to verify we hooked the right one
-                    # self.output_callback(f"[Debug] Monitoring Process: {best_proc.name()} (PID: {best_proc.pid})\n", "normal")
-                else:
-                    self._cached_process = parent
+                    return self._stats_cache # Return last known good stats
 
             proc = self._cached_process
             
+            # Use oneshot for faster retrieval
             with proc.oneshot():
-                cpu_percent = proc.cpu_percent(interval=None) / psutil.cpu_count()
+                cpu_percent = proc.cpu_percent(interval=None) / (psutil.cpu_count() or 1)
                 mem = proc.memory_info()
                 create_time = proc.create_time()
 
             # RAM
             ram_used_gb = mem.rss / (1024 * 1024 * 1024)
-            ram_max_gb = float(self.ram_max) # simple assumption
+            ram_max_gb = float(self.ram_max)
             
             # Uptime
             uptime_seconds = time.time() - create_time
             hours = int(uptime_seconds // 3600)
             minutes = int((uptime_seconds % 3600) // 60)
             
-            return {
+            # Update cache
+            self._stats_cache = {
                 "cpu": round(cpu_percent, 1),
                 "ram": f"{ram_used_gb:.1f}/{ram_max_gb:.1f} GB",
                 "uptime": f"{hours}h {minutes}m"
             }
+            self._last_stats_time = current_time
+            
+            return self._stats_cache
+
         except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
             # If process dies or we can't read it, reset cache
             self._cached_process = None

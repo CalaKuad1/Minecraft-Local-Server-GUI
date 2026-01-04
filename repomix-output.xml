@@ -32,7 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: .github/workflows, backend, backend/assets, backend/assets/ControlPanel.png, backend/assets/logo.png, backend/assets/ServerSetup.png, backend/gui, backend/gui/widgets.py, backend/java_runtimes, backend/java_runtimes/java-21, backend/java_runtimes/java_config.json, backend/server, backend/server/__pycache__, backend/server/config_manager.py, backend/server/server_handler.py, backend/utils, backend/utils/__pycache__, backend/utils/api_client.py, backend/utils/constants.py, backend/utils/helpers.py, backend/utils/java_manager.py, backend/utils/mods_manager.py, backend/utils/server_detector.py, backend/utils/status_query.py, backend/api_server.py, backend/gui_config.json, backend/main.py, backend/minecraft_server_gui.py, backend/requirements.txt, backend/run.bat, electron-app, electron-app/build, electron-app/dist, electron-app/electron, electron-app/node_modules, electron-app/public, electron-app/public/images, electron-app/public/images/icon.ico, electron-app/public/images/logo2.png, electron-app/public/vite.svg, electron-app/release, electron-app/release/__appImage-x64, electron-app/release/.icon-ico, electron-app/release/linux-unpacked, electron-app/release/win-unpacked, electron-app/release/builder-debug.yml, electron-app/release/builder-effective-config.yaml, electron-app/release/Minecraft Local Server GUI Setup 1.0.0.exe, electron-app/release/Minecraft Local Server GUI Setup 1.0.0.exe.blockmap, electron-app/release/Minecraft Local Server GUI Setup 1.0.1.exe, electron-app/release/Minecraft Local Server GUI Setup 1.0.1.exe.blockmap, electron-app/release/Minecraft Local Server GUI Setup 1.1.0.exe, electron-app/release/Minecraft Local Server GUI Setup 1.1.0.exe.blockmap, electron-app/release/Minecraft Local Server GUI Setup 1.1.1.exe, electron-app/release/Minecraft Local Server GUI Setup 1.1.1.exe.blockmap, electron-app/release/Minecraft Local Server GUI Setup 1.1.2.exe, electron-app/release/Minecraft Local Server GUI Setup 1.1.2.exe.blockmap, electron-app/src, electron-app/.gitignore, electron-app/eslint.config.js, electron-app/index.html, electron-app/package-lock.json, electron-app/package.json, electron-app/postcss.config.js, electron-app/README.md, electron-app/tailwind.config.js, electron-app/vite.config.js, images, images/dashboard-screenshot.png, .gitignore, backend_debug.lnk, changelog.txt, LICENSE, README.md
+- Only files matching these patterns are included: .github/workflows, backend, backend/assets, backend/assets/ControlPanel.png, backend/assets/logo.png, backend/assets/ServerSetup.png, backend/gui, backend/gui/widgets.py, backend/java_runtimes, backend/java_runtimes/java-21, backend/java_runtimes/java_config.json, backend/server, backend/server/__pycache__, backend/server/config_manager.py, backend/server/server_handler.py, backend/utils, backend/utils/__pycache__, backend/utils/api_client.py, backend/utils/constants.py, backend/utils/helpers.py, backend/utils/java_manager.py, backend/utils/mods_manager.py, backend/utils/server_detector.py, backend/utils/status_query.py, backend/api_server.py, backend/gui_config.json, backend/main.py, backend/minecraft_server_gui.py, backend/requirements.txt, backend/run.bat, electron-app, images, images/dashboard-screenshot.png, .gitignore, backend_debug.lnk, changelog.txt, LICENSE, README.md
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -5646,69 +5646,6 @@ createRoot(document.getElementById('root')).render(
 )
 </file>
 
-<file path=".github/workflows/release.yml">
-name: Build and Release
-
-on:
-  push:
-    tags:
-      - "v*"
-
-jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
-
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          cd electron-app
-          npm install
-
-      - name: Install Python dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install pyinstaller
-
-      - name: Build Backend with PyInstaller
-        run: |
-          cd backend
-          pyinstaller --onefile --noconsole api_server.py
-          # Move binary to backend root so it's picked up by extraResources
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv dist/api_server.exe .
-          else
-            mv dist/api_server .
-          fi
-        shell: bash
-
-      - name: Build and Publish Electron
-        run: |
-          cd electron-app
-          npm run electron:build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-</file>
-
 <file path="backend/requirements.txt">
 requests>=2.25.0
 psutil>=5.8.0
@@ -6785,6 +6722,301 @@ Thumbs.db
 electron-app/release/
 </file>
 
+<file path="electron-app/src/components/Console.jsx">
+import React, { useEffect, useRef, useState } from 'react';
+import { Send } from 'lucide-react';
+import { api } from '../api';
+
+export default function Console() {
+    const [isConnected, setIsConnected] = useState(false);
+    const [logs, setLogs] = useState([]);
+    const [inputObj, setInputObj] = useState('');
+    const ws = useRef(null);
+    const scrollRef = useRef(null);
+    const MAX_LOGS = 800;
+
+    useEffect(() => {
+        let timeoutId;
+        let isMounted = true;
+
+        const connect = () => {
+            // Clean up previous connection if it exists
+            if (ws.current) {
+                ws.current.onclose = null; // Prevent triggering reconnect
+                ws.current.close();
+            }
+
+            ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
+
+            ws.current.onopen = () => {
+                if (isMounted) setIsConnected(true);
+            };
+
+            ws.current.onmessage = (event) => {
+                if (!isMounted) return;
+                try {
+                    const data = JSON.parse(event.data);
+
+                    const appendItems = (items) => {
+                        const filtered = items.filter((it) => {
+                            // Ignore structured events that aren't real console lines
+                            if (it && typeof it === 'object' && it.type && it.message === undefined) return false;
+                            return true;
+                        });
+
+                        if (filtered.length === 0) return;
+
+                        setLogs((prev) => {
+                            const next = [...prev, ...filtered];
+                            if (next.length > MAX_LOGS) {
+                                return next.slice(next.length - MAX_LOGS);
+                            }
+                            return next;
+                        });
+                    };
+
+                    if (data && typeof data === 'object' && data.type === 'batch' && Array.isArray(data.items)) {
+                        appendItems(data.items);
+                        return;
+                    }
+
+                    appendItems([data]);
+                } catch (e) {
+                    console.error("Failed to parse log", e);
+                }
+            };
+
+            ws.current.onclose = () => {
+                if (isMounted) {
+                    setIsConnected(false);
+                    // Reconnect only if mounted
+                    timeoutId = setTimeout(connect, 3000);
+                }
+            };
+
+            ws.current.onerror = (err) => {
+                console.error('WS Error:', err);
+                // The onerror event usually precedes onclose, so we let onclose handle the retry
+            };
+
+            // Polling Fallback (Every 1s)
+            // This ensures logs appear even if WS fails (common on Windows with Reset errors)
+            const intervalId = setInterval(async () => {
+                try {
+                    const status = await api.getStatus();
+                    if (status.recent_logs && Array.isArray(status.recent_logs)) {
+                        setLogs((prev) => {
+                            // Simple merge strategy to avoid flicker
+                            if (status.recent_logs.length === 0) return prev;
+
+                            const lastPoll = status.recent_logs[status.recent_logs.length - 1];
+                            const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
+
+                            // Update if local is empty OR last message differs OR poll has more logs
+                            if (!lastLocal || lastLocal.message !== lastPoll.message || status.recent_logs.length > prev.length) {
+                                return status.recent_logs;
+                            }
+                            return prev;
+                        });
+
+                        // Also update connection status heuristic
+                        if (status.status === 'online' || status.status === 'starting') {
+                            if (isMounted) setIsConnected(true);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore polling errors
+                }
+            }, 1000);
+
+            return () => clearInterval(intervalId);
+        };
+
+        connect();
+
+        return () => {
+            isMounted = false;
+            // Clear reconnection timeout
+            if (timeoutId) clearTimeout(timeoutId);
+
+            // Close socket cleanly
+            if (ws.current) {
+                // Remove listeners to prevent logic from running during close
+                ws.current.onclose = null;
+                ws.current.onerror = null;
+                ws.current.onmessage = null;
+                ws.current.onopen = null;
+
+                if (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING) {
+                    ws.current.close();
+                }
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [logs]);
+
+    const sendCommand = async (e) => {
+        e.preventDefault();
+        if (!inputObj.trim()) return;
+
+        // Optimistic UI update
+        setLogs(prev => {
+            const next = [...prev, { message: `> ${inputObj}`, level: 'input' }];
+            if (next.length > MAX_LOGS) {
+                return next.slice(next.length - MAX_LOGS);
+            }
+            return next;
+        });
+
+        // Try WS first, fall back to API
+        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+            ws.current.send(inputObj);
+        } else {
+            // Fallback: Send via HTTP API
+            try {
+                await api.sendCommand(inputObj);
+            } catch (err) {
+                setLogs(prev => [...prev, { message: `Error sending command: ${err.message}`, level: 'error' }]);
+            }
+        }
+        setInputObj('');
+    };
+
+    return (
+        <div className="bg-[#0f0f0f]/85 backdrop-blur-xl rounded-2xl border border-white/10 flex flex-col h-[calc(100vh-140px)] shadow-2xl overflow-hidden font-mono text-sm">
+            <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a1a]/90 border-b border-white/5 text-gray-400 text-xs uppercase tracking-widest font-bold">
+                <div className="flex items-center gap-4">
+                    <div className="flex gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                        <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
+                        <div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
+                    </div>
+                    <span>Terminal Output</span>
+                </div>
+                <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-gray-500'}`}>
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                    {isConnected ? 'Connected' : 'Syncing...'}
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-700" ref={scrollRef}>
+                {logs.map((log, i) => (
+                    <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
+                        log.level === 'warning' ? 'text-yellow-400' :
+                            log.level === 'input' ? 'text-cyan-400 font-bold opacity-80' :
+                                'text-gray-300'
+                        }`}>
+                        {log.level !== 'input' && <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>}
+                        {log.message}
+                    </div>
+                ))}
+                {logs.length === 0 && (
+                    <div className="text-gray-600 italic flex items-center gap-2 h-full justify-center opacity-50">
+                        {isConnected ? 'Waiting for server output...' : 'Connecting to console...'}
+                    </div>
+                )}
+            </div>
+
+            <form onSubmit={sendCommand} className="p-2 bg-[#1a1a1a] border-t border-white/5 flex gap-2">
+                <span className="text-primary flex items-center justify-center pl-2 font-bold pointer-events-none">$</span>
+                <input
+                    type="text"
+                    value={inputObj}
+                    onChange={(e) => setInputObj(e.target.value)}
+                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-600 font-mono"
+                    placeholder={isConnected ? "Type a command..." : "Connecting..."}
+                    autoFocus
+                    disabled={!isConnected}
+                />
+                <button type="submit" disabled={!isConnected} className="text-primary hover:text-white p-2 transition-colors disabled:opacity-50">
+                    <Send size={16} />
+                </button>
+            </form>
+        </div>
+    );
+}
+</file>
+
+<file path=".github/workflows/release.yml">
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Delete existing release (if exists)
+        shell: bash
+        run: |
+          gh release delete ${{ github.ref_name }} --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './electron-app/package-lock.json'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd electron-app
+          npm config set fetch-retries 10
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm ci --prefer-offline --no-audit
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pyinstaller
+
+      - name: Build Backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller --onefile --noconsole api_server.py
+          # Move binary to backend root so it's picked up by extraResources
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv dist/api_server.exe .
+          else
+            mv dist/api_server .
+          fi
+        shell: bash
+
+      - name: Build and Publish Electron
+        run: |
+          cd electron-app
+          npm run electron:build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+</file>
+
 <file path="backend/server/server_handler.py">
 import subprocess
 import threading
@@ -6990,11 +7222,15 @@ class ServerHandler:
         Unified status check. Prioritizes the actual process state.
         Returns: 'offline', 'starting', 'online', or 'stopping'.
         """
+        # If explicitly stopping, return stopping until process is dead
+        if self.server_stopping:
+            if self.server_process is None or self.server_process.poll() is not None:
+                self.server_stopping = False # Reset if actually dead
+                return 'offline'
+            return 'stopping'
+
         if self.server_process is None or self.server_process.poll() is not None:
             return 'offline'
-        
-        if self.server_stopping:
-            return 'stopping'
             
         if self.server_fully_started:
             return 'online'
@@ -7822,226 +8058,6 @@ allow-flight=false
         if self.cached_status and self.cached_status.get("online"):
             return self.cached_status["players"]["sample"] or []
         return []
-</file>
-
-<file path="electron-app/src/components/Console.jsx">
-import React, { useEffect, useRef, useState } from 'react';
-import { Send } from 'lucide-react';
-import { api } from '../api';
-
-export default function Console() {
-    const [isConnected, setIsConnected] = useState(false);
-    const [logs, setLogs] = useState([]);
-    const [inputObj, setInputObj] = useState('');
-    const ws = useRef(null);
-    const scrollRef = useRef(null);
-    const MAX_LOGS = 800;
-
-    useEffect(() => {
-        let timeoutId;
-        let isMounted = true;
-
-        const connect = () => {
-            // Clean up previous connection if it exists
-            if (ws.current) {
-                ws.current.onclose = null; // Prevent triggering reconnect
-                ws.current.close();
-            }
-
-            ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
-
-            ws.current.onopen = () => {
-                if (isMounted) setIsConnected(true);
-            };
-
-            ws.current.onmessage = (event) => {
-                if (!isMounted) return;
-                try {
-                    const data = JSON.parse(event.data);
-
-                    const appendItems = (items) => {
-                        const filtered = items.filter((it) => {
-                            // Ignore structured events that aren't real console lines
-                            if (it && typeof it === 'object' && it.type && it.message === undefined) return false;
-                            return true;
-                        });
-
-                        if (filtered.length === 0) return;
-
-                        setLogs((prev) => {
-                            const next = [...prev, ...filtered];
-                            if (next.length > MAX_LOGS) {
-                                return next.slice(next.length - MAX_LOGS);
-                            }
-                            return next;
-                        });
-                    };
-
-                    if (data && typeof data === 'object' && data.type === 'batch' && Array.isArray(data.items)) {
-                        appendItems(data.items);
-                        return;
-                    }
-
-                    appendItems([data]);
-                } catch (e) {
-                    console.error("Failed to parse log", e);
-                }
-            };
-
-            ws.current.onclose = () => {
-                if (isMounted) {
-                    setIsConnected(false);
-                    // Reconnect only if mounted
-                    timeoutId = setTimeout(connect, 3000);
-                }
-            };
-
-            ws.current.onerror = (err) => {
-                console.error('WS Error:', err);
-                // The onerror event usually precedes onclose, so we let onclose handle the retry
-            };
-
-            // Polling Fallback (Every 1s)
-            // This ensures logs appear even if WS fails (common on Windows with Reset errors)
-            const intervalId = setInterval(async () => {
-                try {
-                    const status = await api.getStatus();
-                    if (status.recent_logs && Array.isArray(status.recent_logs)) {
-                        setLogs((prev) => {
-                            // Simple merge strategy to avoid flicker
-                            if (status.recent_logs.length === 0) return prev;
-
-                            const lastPoll = status.recent_logs[status.recent_logs.length - 1];
-                            const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
-
-                            // Update if local is empty OR last message differs OR poll has more logs
-                            if (!lastLocal || lastLocal.message !== lastPoll.message || status.recent_logs.length > prev.length) {
-                                return status.recent_logs;
-                            }
-                            return prev;
-                        });
-
-                        // Also update connection status heuristic
-                        if (status.status === 'online' || status.status === 'starting') {
-                            if (isMounted) setIsConnected(true);
-                        }
-                    }
-                } catch (e) {
-                    // Ignore polling errors
-                }
-            }, 1000);
-
-            return () => clearInterval(intervalId);
-        };
-
-        connect();
-
-        return () => {
-            isMounted = false;
-            // Clear reconnection timeout
-            if (timeoutId) clearTimeout(timeoutId);
-
-            // Close socket cleanly
-            if (ws.current) {
-                // Remove listeners to prevent logic from running during close
-                ws.current.onclose = null;
-                ws.current.onerror = null;
-                ws.current.onmessage = null;
-                ws.current.onopen = null;
-
-                if (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING) {
-                    ws.current.close();
-                }
-            }
-        };
-    }, []);
-
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-    }, [logs]);
-
-    const sendCommand = async (e) => {
-        e.preventDefault();
-        if (!inputObj.trim()) return;
-
-        // Optimistic UI update
-        setLogs(prev => {
-            const next = [...prev, { message: `> ${inputObj}`, level: 'input' }];
-            if (next.length > MAX_LOGS) {
-                return next.slice(next.length - MAX_LOGS);
-            }
-            return next;
-        });
-
-        // Try WS first, fall back to API
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            ws.current.send(inputObj);
-        } else {
-            // Fallback: Send via HTTP API
-            try {
-                await api.sendCommand(inputObj);
-            } catch (err) {
-                setLogs(prev => [...prev, { message: `Error sending command: ${err.message}`, level: 'error' }]);
-            }
-        }
-        setInputObj('');
-    };
-
-    return (
-        <div className="bg-[#0f0f0f]/85 backdrop-blur-xl rounded-2xl border border-white/10 flex flex-col h-[calc(100vh-140px)] shadow-2xl overflow-hidden font-mono text-sm">
-            <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a1a]/90 border-b border-white/5 text-gray-400 text-xs uppercase tracking-widest font-bold">
-                <div className="flex items-center gap-4">
-                    <div className="flex gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
-                    </div>
-                    <span>Terminal Output</span>
-                </div>
-                <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-gray-500'}`}>
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                    {isConnected ? 'Connected' : 'Syncing...'}
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-700" ref={scrollRef}>
-                {logs.map((log, i) => (
-                    <div key={i} className={`whitespace-pre-wrap break-all ${log.level === 'error' ? 'text-red-400' :
-                        log.level === 'warning' ? 'text-yellow-400' :
-                            log.level === 'input' ? 'text-cyan-400 font-bold opacity-80' :
-                                'text-gray-300'
-                        }`}>
-                        {log.level !== 'input' && <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>}
-                        {log.message}
-                    </div>
-                ))}
-                {logs.length === 0 && (
-                    <div className="text-gray-600 italic flex items-center gap-2 h-full justify-center opacity-50">
-                        {isConnected ? 'Waiting for server output...' : 'Connecting to console...'}
-                    </div>
-                )}
-            </div>
-
-            <form onSubmit={sendCommand} className="p-2 bg-[#1a1a1a] border-t border-white/5 flex gap-2">
-                <span className="text-primary flex items-center justify-center pl-2 font-bold pointer-events-none">$</span>
-                <input
-                    type="text"
-                    value={inputObj}
-                    onChange={(e) => setInputObj(e.target.value)}
-                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-600 font-mono"
-                    placeholder={isConnected ? "Type a command..." : "Connecting..."}
-                    autoFocus
-                    disabled={!isConnected}
-                />
-                <button type="submit" disabled={!isConnected} className="text-primary hover:text-white p-2 transition-colors disabled:opacity-50">
-                    <Send size={16} />
-                </button>
-            </form>
-        </div>
-    );
-}
 </file>
 
 <file path="backend/utils/java_manager.py">
@@ -9293,248 +9309,6 @@ export const api = {
 };
 </file>
 
-<file path="electron-app/src/App.jsx">
-import React, { useState, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package, Plug } from 'lucide-react';
-import { api } from './api';
-
-import logo from './assets/logo2.png';
-
-// Components
-import Dashboard from './components/Dashboard';
-import Console from './components/Console';
-import SetupWizard from './components/SetupWizard';
-
-import Players from './components/Players';
-import Settings from './components/Settings';
-import Worlds from './components/Worlds';
-import Mods from './components/Mods';
-import Plugins from './components/Plugins';
-
-import ServerSelector from './components/ServerSelector';
-import TitleBar from './components/TitleBar';
-
-// Sidebar component
-function Sidebar({ activeTab, setActiveTab, onBack }) {
-  const menuItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'console', icon: Terminal, label: 'Console' },
-    { id: 'players', icon: Users, label: 'Players' },
-    { id: 'worlds', icon: Globe, label: 'Worlds' },
-    { id: 'mods', icon: Package, label: 'Mods' },
-    { id: 'plugins', icon: Plug, label: 'Plugins' },
-    { id: 'settings', icon: SettingsIcon, label: 'Settings' },
-  ];
-
-  return (
-    <div className="w-64 bg-surface/60 backdrop-blur-xl h-screen flex flex-col border-r border-white/5 pt-8">
-      <div className="p-6 flex justify-center mb-2">
-        <img src={logo} alt="Server Manager" className="w-full max-h-24 object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]" />
-      </div>
-      <div className="px-4 mb-2 mt-4">
-        <button onClick={onBack} className="w-full flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
-          <LayoutDashboard size={14} className="rotate-180" />
-          <span>Back to Library</span>
-        </button>
-      </div>
-      <nav className="flex-1 px-4 space-y-2 mt-2">
-        {menuItems.map((item) => (
-          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${activeTab === item.id ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'text-gray-400 hover:bg-surface-hover hover:text-white'}`}>
-            <item.icon size={20} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
-            <span className="font-medium">{item.label}</span>
-            {activeTab === item.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_currentColor]" />}
-          </button>
-        ))}
-      </nav>
-      <div className="p-4 border-t border-white/5">
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-black/40 text-sm text-gray-400">
-          <Activity size={16} className="text-green-500 animate-pulse" />
-          <span>System Online</span>
-        </div>
-      </div>
-      <div className="px-6 pb-6 pt-2">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>Made by <span className="text-white font-medium">CalaKuad1</span></span>
-          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white" title="View on GitHub"><Github size={16} /></a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedServer, setSelectedServer] = useState(null);
-  const [serverStatus, setServerStatus] = useState(null);
-  const [showWizard, setShowWizard] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-
-  useEffect(() => {
-    if (window.electron && window.electron.onCloseRequested) {
-      window.electron.onCloseRequested(() => {
-        setIsStopping(true);
-      });
-    }
-  }, []);
-
-  // Updated comparison function to handle minor differences gracefully
-  const isSameStatus = (a, b) => {
-    if (!a || !b) return false;
-    return (
-      a.status === b.status &&
-      a.pid === b.pid &&
-      a.players === b.players &&
-      a.cpu === b.cpu &&
-      a.ram === b.ram
-    );
-  };
-
-  // Helper to force a fetch immediately
-  const triggerRefresh = async () => {
-    try {
-      const status = await api.getStatus();
-      setServerStatus(status);
-    } catch (e) { }
-  };
-
-  useEffect(() => {
-    if (selectedServer) {
-      let cancelled = false;
-      let timer = null;
-
-      const tick = async () => {
-        if (cancelled) return;
-        try {
-          const status = await api.getStatus();
-          if (!cancelled) {
-            setServerStatus((prev) => (isSameStatus(prev, status) ? prev : status));
-          }
-          timer = setTimeout(tick, 2000);
-        } catch (e) {
-          timer = setTimeout(tick, 5000);
-        }
-      };
-
-      tick();
-      return () => {
-        cancelled = true;
-        if (timer) clearTimeout(timer);
-      };
-    }
-  }, [selectedServer]);
-
-  const handleServerSelected = async (serverId = null) => {
-    if (!serverId) {
-      // If no ID provided, we just want to refresh or load default
-      try {
-        const servers = await api.getServers();
-        if (servers && servers.length > 0) {
-          serverId = servers[servers.length - 1].id;
-        }
-      } catch (e) { return; }
-    }
-
-    if (!serverId) return;
-
-    // 1. Limpieza visual inmediata antes de la carga (solo si es un cambio de servidor)
-    if (selectedServer?.id !== serverId) {
-      setSelectedServer(null);
-      setServerStatus(null);
-    }
-
-    try {
-      // Ahora selectServer devuelve el estado actual también, aprovechémoslo
-      const response = await api.selectServer(serverId);
-
-      // Actualización atómica
-      if (response.server_status) {
-        setServerStatus(response.server_status);
-        setSelectedServer(response.server_status); // Trigger UI render
-      } else {
-        const status = await api.getStatus();
-        setServerStatus(status);
-        setSelectedServer(status);
-      }
-    } catch (e) {
-      setSelectedServer({ id: serverId }); // Fallback
-    }
-    setActiveTab('dashboard');
-  };
-
-  const handleBackToLibrary = async () => {
-    setSelectedServer(null);
-    setServerStatus(null);
-  };
-
-  if (isStopping) {
-    return (
-      <div className="h-screen w-screen bg-black/90 flex flex-col items-center justify-center text-white z-[9999] fixed inset-0 font-sans">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-6"></div>
-        <h2 className="text-3xl font-bold mb-2">Stopping Server</h2>
-        <p className="text-gray-400">Saving world and closing gracefully...</p>
-      </div>
-    );
-  }
-
-  if (showWizard) {
-    return (
-      <div className="h-screen w-screen bg-background text-white overflow-hidden flex flex-col pt-8">
-        <TitleBar />
-        <div className="flex-1 overflow-y-auto">
-          <SetupWizard onComplete={(serverId) => { setShowWizard(false); handleServerSelected(serverId); }} onCancel={() => setShowWizard(false)} />
-        </div>
-      </div>
-    );
-  }
-
-  if (!selectedServer) {
-    return (
-      <div className="pt-8 bg-[#050505] min-h-screen">
-        <TitleBar />
-        <ServerSelector onSelect={handleServerSelected} onAdd={() => setShowWizard(true)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-screen bg-transparent font-sans selection:bg-primary/30 text-white overflow-hidden">
-      <TitleBar />
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onBack={handleBackToLibrary} />
-      <main className="flex-1 overflow-hidden relative flex flex-col pt-8">
-        <div className="flex-1 overflow-y-auto p-8 relative z-10">
-          <div className="max-w-6xl mx-auto">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${activeTab}-${selectedServer?.id}`}
-                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                style={{ display: activeTab === 'console' ? 'none' : 'block' }}
-              >
-                {activeTab === 'dashboard' && <Dashboard status={serverStatus} onRefresh={triggerRefresh} />}
-                {activeTab === 'players' && <Players status={serverStatus} />}
-                {activeTab === 'worlds' && <Worlds />}
-                {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
-                {activeTab === 'plugins' && <Plugins status={serverStatus} />}
-                {activeTab === 'settings' && <Settings />}
-              </motion.div>
-            </AnimatePresence>
-
-            <div style={{ display: activeTab === 'console' ? 'block' : 'none', height: '100%' }}>
-              <Console key={selectedServer?.id} />
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-export default App;
-</file>
-
 <file path="electron-app/src/components/ServerSelector.jsx">
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
@@ -10212,6 +9986,351 @@ export default function SetupWizard({ onComplete, onCancel }) {
 }
 </file>
 
+<file path="electron-app/src/App.jsx">
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package, Plug } from 'lucide-react';
+import { api } from './api';
+
+import logo from './assets/logo2.png';
+
+// Components
+import Dashboard from './components/Dashboard';
+import Console from './components/Console';
+import SetupWizard from './components/SetupWizard';
+
+import Players from './components/Players';
+import Settings from './components/Settings';
+import Worlds from './components/Worlds';
+import Mods from './components/Mods';
+import Plugins from './components/Plugins';
+
+import ServerSelector from './components/ServerSelector';
+import TitleBar from './components/TitleBar';
+
+// Sidebar component
+function Sidebar({ activeTab, setActiveTab, onBack }) {
+  const menuItems = [
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'console', icon: Terminal, label: 'Console' },
+    { id: 'players', icon: Users, label: 'Players' },
+    { id: 'worlds', icon: Globe, label: 'Worlds' },
+    { id: 'mods', icon: Package, label: 'Mods' },
+    { id: 'plugins', icon: Plug, label: 'Plugins' },
+    { id: 'settings', icon: SettingsIcon, label: 'Settings' },
+  ];
+
+  return (
+    <div className="w-64 bg-surface/60 backdrop-blur-xl h-screen flex flex-col border-r border-white/5 pt-8">
+      <div className="p-6 flex justify-center mb-2">
+        <img src={logo} alt="Server Manager" className="w-full max-h-24 object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]" />
+      </div>
+      <div className="px-4 mb-2 mt-4">
+        <button onClick={onBack} className="w-full flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+          <LayoutDashboard size={14} className="rotate-180" />
+          <span>Back to Library</span>
+        </button>
+      </div>
+      <nav className="flex-1 px-4 space-y-2 mt-2">
+        {menuItems.map((item) => (
+          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${activeTab === item.id ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'text-gray-400 hover:bg-surface-hover hover:text-white'}`}>
+            <item.icon size={20} className={activeTab === item.id ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <span className="font-medium">{item.label}</span>
+            {activeTab === item.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_currentColor]" />}
+          </button>
+        ))}
+      </nav>
+      <div className="p-4 border-t border-white/5">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-black/40 text-sm text-gray-400">
+          <Activity size={16} className="text-green-500 animate-pulse" />
+          <span>System Online</span>
+        </div>
+      </div>
+      <div className="px-6 pb-6 pt-2">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>Made by <span className="text-white font-medium">CalaKuad1</span></span>
+          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white" title="View on GitHub"><Github size={16} /></a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedServer, setSelectedServer] = useState(null);
+  const [serverStatus, setServerStatus] = useState(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+
+  useEffect(() => {
+    if (window.electron && window.electron.onCloseRequested) {
+      window.electron.onCloseRequested(() => {
+        setIsStopping(true);
+      });
+    }
+  }, []);
+
+  // Updated comparison function to handle minor differences gracefully
+  const isSameStatus = (a, b) => {
+    if (!a || !b) return false;
+    return (
+      a.status === b.status &&
+      a.pid === b.pid &&
+      a.players === b.players &&
+      a.cpu === b.cpu &&
+      a.ram === b.ram &&
+      a.recent_logs?.length === b.recent_logs?.length &&
+      JSON.stringify(a.recent_logs?.[a.recent_logs?.length - 1]) === JSON.stringify(b.recent_logs?.[b.recent_logs?.length - 1]) &&
+      JSON.stringify(a.tunnel) === JSON.stringify(b.tunnel)
+    );
+  };
+
+  // Helper to force a fetch immediately
+  const triggerRefresh = async () => {
+    try {
+      const status = await api.getStatus();
+      setServerStatus(status);
+    } catch (e) { }
+  };
+
+  useEffect(() => {
+    if (selectedServer) {
+      let cancelled = false;
+      let timer = null;
+
+      const tick = async () => {
+        if (cancelled) return;
+        try {
+          const status = await api.getStatus();
+          if (!cancelled) {
+            setServerStatus((prev) => (isSameStatus(prev, status) ? prev : status));
+          }
+          timer = setTimeout(tick, 2000);
+        } catch (e) {
+          timer = setTimeout(tick, 2000);
+        }
+      };
+
+      tick();
+      return () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      };
+    }
+  }, [selectedServer]);
+
+  const handleServerSelected = async (serverId = null) => {
+    if (!serverId) {
+      // If no ID provided, we just want to refresh or load default
+      try {
+        const servers = await api.getServers();
+        if (servers && servers.length > 0) {
+          serverId = servers[servers.length - 1].id;
+        }
+      } catch (e) { return; }
+    }
+
+    if (!serverId) return;
+
+    // 1. Limpieza visual inmediata antes de la carga (solo si es un cambio de servidor)
+    if (selectedServer?.id !== serverId) {
+      setSelectedServer(null);
+      setServerStatus(null);
+    }
+
+    try {
+      // Ahora selectServer devuelve el estado actual también, aprovechémoslo
+      const response = await api.selectServer(serverId);
+
+      // Actualización atómica
+      if (response.server_status) {
+        setServerStatus(response.server_status);
+        setSelectedServer(response.server_status); // Trigger UI render
+      } else {
+        const status = await api.getStatus();
+        setServerStatus(status);
+        setSelectedServer(status);
+      }
+    } catch (e) {
+      setSelectedServer({ id: serverId }); // Fallback
+    }
+    setActiveTab('dashboard');
+  };
+
+  const handleBackToLibrary = async () => {
+    setSelectedServer(null);
+    setServerStatus(null);
+  };
+
+  if (isStopping) {
+    return (
+      <div className="h-screen w-screen bg-black/90 flex flex-col items-center justify-center text-white z-[9999] fixed inset-0 font-sans">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-6"></div>
+        <h2 className="text-3xl font-bold mb-2">Stopping Server</h2>
+        <p className="text-gray-400">Saving world and closing gracefully...</p>
+      </div>
+    );
+  }
+
+  if (showWizard) {
+    return (
+      <div className="h-screen w-screen bg-background text-white overflow-hidden flex flex-col pt-8">
+        <TitleBar />
+        <div className="flex-1 overflow-y-auto">
+          <SetupWizard onComplete={(serverId) => { setShowWizard(false); handleServerSelected(serverId); }} onCancel={() => setShowWizard(false)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedServer) {
+    return (
+      <div className="pt-8 bg-[#050505] min-h-screen">
+        <TitleBar />
+        <ServerSelector onSelect={handleServerSelected} onAdd={() => setShowWizard(true)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-transparent font-sans selection:bg-primary/30 text-white overflow-hidden">
+      <TitleBar />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onBack={handleBackToLibrary} />
+      <main className="flex-1 overflow-hidden relative flex flex-col pt-8">
+        <div className="flex-1 overflow-y-auto p-8 relative z-10">
+          <div className="max-w-6xl mx-auto">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activeTab}-${selectedServer?.id}`}
+                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                style={{ display: activeTab === 'console' ? 'none' : 'block' }}
+              >
+                {activeTab === 'dashboard' && <Dashboard status={serverStatus} onRefresh={triggerRefresh} />}
+                {activeTab === 'players' && <Players status={serverStatus} />}
+                {activeTab === 'worlds' && <Worlds />}
+                {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
+                {activeTab === 'plugins' && <Plugins status={serverStatus} />}
+                {activeTab === 'settings' && <Settings />}
+              </motion.div>
+            </AnimatePresence>
+
+            <div style={{ display: activeTab === 'console' ? 'block' : 'none', height: '100%' }}>
+              <Console key={selectedServer?.id} />
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default App;
+</file>
+
+<file path="electron-app/package.json">
+{
+  "name": "minecraft-server-gui",
+  "private": true,
+  "version": "1.1.7",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git"
+  },
+  "description": "The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.",
+  "author": "CalaKuad <calakuad.dev@gmail.com>",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron:build": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.300.0",
+    "framer-motion": "^10.16.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "vite": "^5.0.8",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.minecraft.localservergui",
+    "productName": "Minecraft Local Server GUI",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "CalaKuad1",
+        "repo": "Minecraft-Local-Server-GUI"
+      }
+    ],
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/venv/**",
+          "!**/env/**",
+          "!**/java_runtimes/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/images/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/images/logo2.png",
+      "category": "Game"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "installerIcon": "public/images/icon.ico",
+      "uninstallerIcon": "public/images/icon.ico",
+      "runAfterFinish": true
+    }
+  }
+}
+</file>
+
 <file path="electron-app/src/components/Dashboard.jsx">
 import React, { useEffect, useState, useRef } from 'react';
 import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock } from 'lucide-react';
@@ -10442,6 +10561,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     // Referencia para evitar que el polling sobrescriba el estado 'offline' recién adquirido
     const isStoppingRef = useRef(serverStatus?.status === 'stopping');
+    const lastIdRef = useRef(serverStatus?.server_id);
 
     // Derived values
     const status = serverStatus || { status: 'offline' };
@@ -10472,28 +10592,45 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             // Polling Fallback for Logs (If WS is dead/unstable)
             if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
-                    // Update if polling has more logs, or if local is empty
-                    if (prev.length === 0 || serverStatus.recent_logs.length > prev.length) {
-                        return serverStatus.recent_logs.slice(-100);
-                    }
+                    // Update if local is empty
+                    if (prev.length === 0) return serverStatus.recent_logs.slice(-100);
 
-                    // Simple check: if contents are different (even if same length), update
+                    // If the last log from polling isn't in our local logs (or differs from our last log),
+                    // it means we missed something or are out of sync.
                     const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
                     const lastLocal = prev[prev.length - 1];
-                    if (lastPoll && lastLocal && lastPoll.message !== lastLocal.message) {
-                        return serverStatus.recent_logs.slice(-100);
+
+                    if (lastPoll && (!lastLocal || lastPoll.message !== lastLocal.message)) {
+                        // Check if it's really new (isn't already in the last few local logs)
+                        const isRepetition = prev.slice(-5).some(l => l.message === lastPoll.message && l.time === lastPoll.time);
+                        if (!isRepetition) {
+                            return serverStatus.recent_logs.slice(-100);
+                        }
                     }
 
                     return prev;
                 });
             }
+            // Sync tunnel info from polling too
+            if (serverStatus.tunnel) {
+                if (serverStatus.tunnel.active && serverStatus.tunnel.address) {
+                    setTunnelAddress(serverStatus.tunnel.address);
+                    setTunnelConnecting(false);
+                } else if (!tunnelConnecting && tunnelAddress) {
+                    setTunnelAddress(null);
+                }
+            }
         }
-    }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs]);
+    }, [serverStatus?.status, serverStatus?.shutdown_info, serverStatus?.recent_logs, serverStatus?.tunnel]);
 
-    // Reset logs ONLY when the server ID changes (Persist logs after stop)
+    // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
     useEffect(() => {
-        setLocalLogs([]);
-        setLocalStatus(serverStatus?.status || 'offline');
+        if (serverStatus?.server_id && serverStatus.server_id !== lastIdRef.current) {
+            console.log('[Dashboard] Server ID changed, clearing logs');
+            setLocalLogs([]);
+            setLocalStatus(serverStatus?.status || 'offline');
+            lastIdRef.current = serverStatus.server_id;
+        }
     }, [serverStatus?.server_id]);
 
 
@@ -10553,17 +10690,19 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         return;
                     }
 
-                    // 2. Handle Logs
-                    if (item.message !== undefined) {
+                    // Logs - ensure message is a string
+                    if (item.message !== undefined || item.level) {
+                        const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
+
                         setLocalLogs(prev => {
-                            const newLogs = [...prev, item];
+                            const newLogs = [...prev, { ...item, message: msgText }];
                             return newLogs.slice(-100); // Increased buffer to 100
                         });
 
                         // Fallback: Detect status from log text (Skip for historical logs)
                         if (isHistory) return;
 
-                        const msg = (item.message || "").toString();
+                        const msg = msgText.toString();
                         if (msg.includes("Done") && msg.includes("For help")) {
                             setLocalStatus('online');
                             setLoading(false);
@@ -10609,16 +10748,17 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 const status = await api.getTunnelStatus();
                 if (status.active && status.address) {
                     setTunnelAddress(status.address);
-                } else {
+                    setTunnelConnecting(false);
+                } else if (!tunnelConnecting) {
                     setTunnelAddress(null);
+                    setTunnelConnecting(false);
                 }
-                setTunnelConnecting(false);
             } catch (e) { }
         };
         checkTunnel();
         const interval = setInterval(checkTunnel, 5000);
         return () => clearInterval(interval);
-    }, []);
+    }, [tunnelConnecting]); // Add dep to prevent clearing while connecting
 
     const handleStart = async () => {
         setLoading(true);
@@ -10797,8 +10937,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         } catch (err) {
                             console.error('[Dashboard] Tunnel error:', err);
                             setTunnelConnecting(false);
+                            // Get the error message from the response if possible
+                            const errorMsg = err.response?.data?.detail || err.message || "Unknown error";
                             // Show error in logs
-                            setLocalLogs(prev => [...prev, { message: `❌ Tunnel error: ${err.message}`, level: 'error' }]);
+                            setLocalLogs(prev => [...prev, {
+                                message: `❌ Tunnel error: ${errorMsg}`,
+                                level: 'error',
+                                time: new Date().toISOString()
+                            }]);
+                            alert(`Error de túnel: ${errorMsg}`);
                         }
                     }}
                     disabled={tunnelConnecting && !tunnelAddress}
@@ -10848,7 +10995,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                         log.level === 'input' ? 'text-cyan-400 font-bold' :
                                             'text-gray-300'
                                 }`}>
-                                {log.level !== 'input' && <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString()}]</span>}
+                                {log.level !== 'input' && (
+                                    <span className="opacity-30 mr-2 text-[10px]">
+                                        [{log.time ? new Date(log.time).toLocaleTimeString() : new Date().toLocaleTimeString()}]
+                                    </span>
+                                )}
                                 {log.message}
                             </div>
                         ))
@@ -10858,7 +11009,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             <span>Waiting for server output...</span>
                         </div>
                     )}
-                    <div ref={logsEndRef} />
+                    <div ref={logsEndRef} className="h-1 shadow-sm" />
                 </div>
                 {/* Mini Console Input */}
                 <form
@@ -10906,108 +11057,8 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
-}
-</file>
-
-<file path="electron-app/package.json">
-{
-  "name": "minecraft-server-gui",
-  "private": true,
-  "version": "1.1.7",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git"
-  },
-  "description": "The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.",
-  "author": "CalaKuad <calakuad.dev@gmail.com>",
-  "type": "module",
-  "main": "electron/main.cjs",
-  "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "electron:build": "vite build && electron-builder"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.300.0",
-    "framer-motion": "^10.16.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "electron": "^28.1.0",
-    "electron-builder": "^24.9.1",
-    "eslint": "^8.55.0",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.5",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "vite": "^5.0.8",
-    "wait-on": "^7.2.0"
-  },
-  "build": {
-    "appId": "com.minecraft.localservergui",
-    "productName": "Minecraft Local Server GUI",
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "CalaKuad1",
-        "repo": "Minecraft-Local-Server-GUI"
-      }
-    ],
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "extraResources": [
-      {
-        "from": "../backend",
-        "to": "backend",
-        "filter": [
-          "**/*",
-          "!**/__pycache__/**",
-          "!**/*.pyc",
-          "!**/venv/**",
-          "!**/env/**",
-          "!**/java_runtimes/**"
-        ]
-      }
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "public/images/icon.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "icon": "public/images/logo2.png",
-      "category": "Game"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "installerIcon": "public/images/icon.ico",
-      "uninstallerIcon": "public/images/icon.ico",
-      "runAfterFinish": true
-    }
-  }
 }
 </file>
 
@@ -11443,8 +11494,21 @@ async def delete_server(server_id: str, delete_files: bool = False):
 
 @app.get("/status")
 def get_status():
-    if not state or not state.server_handler:
-        return {"status": "not_configured"}
+    if not state:
+        return {"status": "offline", "cpu": 0, "ram": 0, "players": 0}
+    
+    # If we are installing, return 'starting' so the UI knows we are busy
+    installing = getattr(state, 'install_progress', 0) > 0 and getattr(state, 'install_progress', 0) < 100
+    
+    if not state.server_handler:
+        return {
+            "status": "starting" if installing else "not_configured",
+            "server_id": state.selected_server_id,
+            "cpu": 0,
+            "ram": 0,
+            "players": 0,
+            "recent_logs": state.log_history[-50:]
+        }
     
     stats = state.server_handler.get_stats()
 
@@ -11453,6 +11517,7 @@ def get_status():
     return {
         "status": state.server_handler.get_status(),
         "pid": state.server_handler.get_pid(),
+        "server_id": state.server_handler.server_id,
         "server_type": state.server_handler.server_type,
         "minecraft_version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],
@@ -11460,11 +11525,13 @@ def get_status():
         "players": players_count,
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
-        "online_players": online_players,
         "uptime": stats["uptime"],
-        # Return last 50 lines for the mini console polling fallback
-        "recent_logs": state.log_history[-50:] if state else [], 
-        "shutdown_info": state.server_handler.get_shutdown_info()
+        "recent_logs": state.log_history[-50:], 
+        "shutdown_info": state.server_handler.get_shutdown_info(),
+        "tunnel": {
+            "active": state.tunnel_process is not None and state.tunnel_process.poll() is None,
+            "address": state.tunnel_address
+        }
     }
 
 @app.post("/server/open-folder")
@@ -12351,6 +12418,40 @@ def start_tunnel(request: Request, region: str = Query("eu")):
             state.tunnel_process = None
             state.tunnel_address = None
         
+        # Verify SSH is available BEFORE starting the thread
+        ssh_executable = shutil.which("ssh")
+        if not ssh_executable and sys.platform == "win32":
+            # Fallback for Windows if not in PATH
+            common_paths = [
+                os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32\\OpenSSH\\ssh.exe"),
+                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "OpenSSH\\ssh.exe"),
+                os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "OpenSSH\\ssh.exe"),
+            ]
+            for p in common_paths:
+                if os.path.exists(p):
+                    ssh_executable = p
+                    logging.info(f"Found SSH at fallback path: {p}")
+                    break
+        
+        if not ssh_executable:
+            logging.error("SSH not found in PATH or common locations")
+            raise HTTPException(
+                status_code=400, 
+                detail="SSH no encontrado. Por favor, instala 'OpenSSH Client' en las características opcionales de Windows para usar 'Make Public'."
+            )
+        
+        # Discover ssh-keygen as well
+        ssh_keygen_executable = shutil.which("ssh-keygen")
+        if not ssh_keygen_executable and ssh_executable:
+            # If we found ssh.exe in a folder, its likely ssh-keygen is there too
+            potential_keygen = os.path.join(os.path.dirname(ssh_executable), "ssh-keygen.exe")
+            if os.path.exists(potential_keygen):
+                ssh_keygen_executable = potential_keygen
+        
+        if not ssh_keygen_executable:
+            ssh_keygen_executable = "ssh-keygen" # Fallback to PATH and hope for the best if we couldn't find it explicitly
+        
+        
         # Get server port (default 25565)
         port = "25565"
         if state.server_handler:
@@ -12379,7 +12480,7 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 if not os.path.exists(key_path) or not os.path.exists(pub_path):
                     logging.info("Generating new SSH key for Pinggy...")
                     subprocess.run(
-                        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
+                        [ssh_keygen_executable, "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
                         check=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -12399,12 +12500,6 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 # regions: eu, us, ap, sa
                 host = f"{region}.free.pinggy.io"
                 
-                # Verify SSH is available
-                if not shutil.which("ssh"):
-                    logging.error("SSH not found in PATH")
-                    state.broadcast_log_sync("❌ Error: 'ssh' is not installed or not in PATH. Cannot start public tunnel.", "error")
-                    return
-
                 logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
                 state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
                 
@@ -12413,7 +12508,7 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                 
                 # Pinggy SSH command - optimized with identity
                 cmd = [
-                    "ssh",
+                    ssh_executable,
                     "-p", "443",
                     "-o", "StrictHostKeyChecking=no",
                     "-o", "ServerAliveInterval=30",

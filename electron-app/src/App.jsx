@@ -115,11 +115,23 @@ function App() {
         try {
           const status = await api.getStatus();
           if (!cancelled) {
-            setServerStatus((prev) => (isSameStatus(prev, status) ? prev : status));
+            setServerStatus((prev) => {
+              // PROTECCIÓN CONTRA "STATE JUMPING"
+              // Si localmente ya sabemos que está ONLINE, ignorar un estado STARTING que venga con retraso
+              if (prev?.status === 'online' && status.status === 'starting') {
+                // Solo aceptamos cambiar de Online a Starting si el PID del proceso ha cambiado (significa reinicio real)
+                if (prev.pid === status.pid) {
+                  return prev; // Ignorar actualización vieja/errónea
+                }
+              }
+
+              return isSameStatus(prev, status) ? prev : status;
+            });
           }
-          timer = setTimeout(tick, 2000);
+          // Aumentar el tiempo de polling a 3000ms (3s) para reducir carga en PCs lentos
+          timer = setTimeout(tick, 3000);
         } catch (e) {
-          timer = setTimeout(tick, 2000);
+          timer = setTimeout(tick, 5000); // Si falla, esperar más
         }
       };
 
