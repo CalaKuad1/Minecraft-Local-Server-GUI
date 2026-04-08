@@ -540,6 +540,91 @@ allow-flight=false
                     "server_id": self.server_id
                 })
 
+    def _process_log_line(self, line, level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern):
+        line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
+        
+        # Check for standard server start completion messages
+        is_done = False
+        if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
+            is_done = True
+        elif 'Done (' in line_no_ansi and ')!' in line_no_ansi:
+            is_done = True
+        elif 'started on port' in line_no_ansi.lower():
+            is_done = True
+            
+        if is_done:
+            self.server_fully_started = True
+            self.server_stopping = False
+            # Broadcast explicit status change to online
+            if self.output_callback:
+                self.output_callback({
+                    "type": "status_change",
+                    "status": "online",
+                    "server_id": self.server_id
+                })
+        elif 'Stopping the server' in line_no_ansi or 'Stopping server' in line_no_ansi:
+            self.server_stopping = True
+        elif 'All dimensions are saved' in line_no_ansi or 'All chunks are saved' in line_no_ansi:
+            if self.server_stopping:
+                # Detect that the server HAS saved everything.
+                # If it doesn't close in 7 seconds, we force it.
+                def delayed_kill():
+                    time.sleep(7)
+                    if self.get_status() == 'stopping':
+                        self._log("Server finished saving but hung. Forcing termination.\n", "warning")
+                        self._kill_process_tree()
+                
+                threading.Thread(target=delayed_kill, daemon=True).start()
+        
+        # Detect player join/leave
+        join_match = join_pattern.search(line_no_ansi)
+        if join_match:
+            player_name = join_match.group(1)
+            self.tracked_players.add(player_name)
+            
+        leave_match = leave_pattern.search(line_no_ansi)
+        if leave_match:
+            player_name = leave_match.group(1)
+            self.tracked_players.discard(player_name)
+
+        clean_line = line_no_ansi.strip()
+        suppress_from_console = False
+        if clean_line:
+            if self._expecting_player_list_next_line:
+                # Only accept the expected next line if it actually contains a players list.
+                if "players online:" not in clean_line.lower():
+                    self._expecting_player_list_next_line = False
+                else:
+                    # Parse the content after 'players online:'
+                    names_line = clean_line.split("players online:", 1)[1].strip()
+                    if names_line:
+                        self.tracked_players = {p.strip() for p in names_line.split(",") if p.strip()}
+                    else:
+                        self.tracked_players = set()
+                    self._expecting_player_list_next_line = False
+                    suppress_from_console = True
+
+            elif "there are no players online" in clean_line.lower():
+                self.tracked_players = set()
+                self._expecting_player_list_next_line = False
+                suppress_from_console = True
+
+            else:
+                inline_match = list_inline_pattern.search(clean_line)
+                if inline_match is not None:
+                    names_part = (inline_match.group(1) or "").strip()
+                    if names_part:
+                        self.tracked_players = {p.strip() for p in names_part.split(",") if p.strip()}
+                    else:
+                        self._expecting_player_list_next_line = True
+                    suppress_from_console = True
+                elif list_header_pattern.search(clean_line) is not None:
+                    self._expecting_player_list_next_line = True
+                    suppress_from_console = True
+        
+        if not suppress_from_console:
+            self._log(line + '\n', level)
+
     def _read_output(self, pipe, level):
         import re
         join_pattern = re.compile(r'\b([A-Za-z0-9_]{1,16})\b\s+joined the game', re.IGNORECASE)
@@ -549,107 +634,38 @@ allow-flight=false
         list_header_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$", re.IGNORECASE)
 
         try:
-            logging.info(f"Handler: Log reader thread started for {level} (Binary mode)")
-            # In binary mode, readline returns bytes
-            for line_bytes in iter(pipe.readline, b''):
-                try:
-                    line = line_bytes.decode('utf-8', errors='replace')
-                except Exception as de:
-                    logging.error(f"Handler: Decode error in {level}: {de}")
-                    continue
-
-                line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
+            logging.info(f"Handler: Log reader thread started for {level} (Chunked Binary mode)")
+            
+            buffer = b""
+            while True:
+                chunk = pipe.read(4096)
+                if not chunk:
+                    # End of stream
+                    if buffer:
+                        self._process_log_line(buffer.decode('utf-8', errors='replace'), level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern)
+                    break
                 
-                # Check for standard server start completion messages
-                is_done = False
-                if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
-                    is_done = True
-                elif 'Done (' in line_no_ansi and ')!' in line_no_ansi:
-                    is_done = True
-                elif 'started on port' in line_no_ansi.lower():
-                    is_done = True
+                buffer += chunk
+                while b'\n' in buffer or b'\r' in buffer:
+                    # Find the first line break
+                    idx_n = buffer.find(b'\n')
+                    idx_r = buffer.find(b'\r')
                     
-                if is_done:
-                    self.server_fully_started = True
-                    self.server_stopping = False
-                    # Broadcast explicit status change to online
-                    if self.output_callback:
-                        self.output_callback({
-                            "type": "status_change",
-                            "status": "online",
-                            "server_id": self.server_id
-                        })
-                elif 'Stopping the server' in line_no_ansi or 'Stopping server' in line_no_ansi:
-                    self.server_stopping = True
-                elif 'All dimensions are saved' in line_no_ansi or 'All chunks are saved' in line_no_ansi:
-                    if self.server_stopping:
-                        # Detect that the server HAS saved everything.
-                        # If it doesn't close in 7 seconds, we force it.
-                        def delayed_kill():
-                            time.sleep(7)
-                            if self.get_status() == 'stopping':
-                                self._log("Server finished saving but hung. Forcing termination.\n", "warning")
-                                self._kill_process_tree()
-                        
-                        threading.Thread(target=delayed_kill, daemon=True).start()
-                
-                # Detect player join/leave
-                join_match = join_pattern.search(line_no_ansi)
-                if join_match:
-                    player_name = join_match.group(1)
-                    self.tracked_players.add(player_name)
-                    
-                leave_match = leave_pattern.search(line_no_ansi)
-                if leave_match:
-                    player_name = leave_match.group(1)
-                    self.tracked_players.discard(player_name)
-
-                clean_line = line_no_ansi.strip()
-                suppress_from_console = False
-                if clean_line:
-                    if self._expecting_player_list_next_line:
-                        # Only accept the expected next line if it actually contains a players list.
-                        # Some servers output only the header line when there are 0 players.
-                        if "players online:" not in clean_line.lower():
-                            self._expecting_player_list_next_line = False
-                        else:
-                            # Parse the content after 'players online:' (avoid issues with timestamp prefixes)
-                            names_line = clean_line.split("players online:", 1)[1].strip()
-                            if names_line:
-                                self.tracked_players = {p.strip() for p in names_line.split(",") if p.strip()}
-                            else:
-                                self.tracked_players = set()
-                            self._expecting_player_list_next_line = False
-
-                            # Hide list output from console, but keep parsed data
-                            suppress_from_console = True
-
-                    elif "there are no players online" in clean_line.lower():
-                        self.tracked_players = set()
-                        self._expecting_player_list_next_line = False
-
-                        # Hide list output from console
-                        suppress_from_console = True
-
+                    if idx_n != -1 and (idx_r == -1 or idx_n < idx_r):
+                        idx = idx_n
+                        sep_len = 1
                     else:
-                        inline_match = list_inline_pattern.search(clean_line)
-                        if inline_match is not None:
-                            names_part = (inline_match.group(1) or "").strip()
-                            if names_part:
-                                self.tracked_players = {p.strip() for p in names_part.split(",") if p.strip()}
-                            else:
-                                self._expecting_player_list_next_line = True
+                        idx = idx_r
+                        sep_len = 1
+                        if idx != -1 and idx + 1 < len(buffer) and buffer[idx+1] == ord('\n'):
+                            sep_len = 2 # Handle \r\n
+                    
+                    line_bytes = buffer[:idx]
+                    buffer = buffer[idx + sep_len:]
+                    
+                    line = line_bytes.decode('utf-8', errors='replace')
+                    self._process_log_line(line, level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern)
 
-                            # Hide list output from console
-                            suppress_from_console = True
-                        elif list_header_pattern.search(clean_line) is not None:
-                            self._expecting_player_list_next_line = True
-
-                            # Hide list output from console
-                            suppress_from_console = True
-                
-                if not suppress_from_console:
-                    self._log(line_no_ansi, level)
             logging.info(f"Handler: Log reader thread {level} finished normally")
         except Exception as e:
             error_details = traceback.format_exc()
