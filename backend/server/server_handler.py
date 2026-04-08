@@ -378,6 +378,7 @@ allow-flight=false
         # Prepare environment for startup (injecting JAVA_HOME and PATH)
         logging.info(f"Handler: Preparing environment. Java Path: {java_path}")
         custom_env = os.environ.copy()
+        custom_env["PYTHONIOENCODING"] = "utf-8"
         if java_path != "java":
             # Extract installation root (assuming path/to/java-21/bin/java.exe)
             java_bin_dir = os.path.dirname(java_path)
@@ -484,6 +485,8 @@ allow-flight=false
                 stderr=subprocess.PIPE, 
                 stdin=subprocess.PIPE, 
                 text=True, 
+                encoding='utf-8',
+                errors='replace',
                 bufsize=1, 
                 universal_newlines=True, 
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, 
@@ -548,6 +551,7 @@ allow-flight=false
         list_header_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$", re.IGNORECASE)
 
         try:
+            logging.info(f"Handler: Log reader thread started for {level}")
             for line in iter(pipe.readline, ''):
                 line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
                 
@@ -641,8 +645,16 @@ allow-flight=false
                 
                 if not suppress_from_console:
                     self._log(line_no_ansi, level)
+            logging.info(f"Handler: Log reader thread {level} finished normally")
+        except Exception as e:
+            error_details = traceback.format_exc()
+            logging.error(f"Handler: CRASH in _read_output ({level}) thread:\n{error_details}")
+            self._log(f"Log reader failure ({level}): {e}\n", "error")
         finally:
-            pipe.close()
+            try:
+                pipe.close()
+            except:
+                pass
 
     def request_player_list_refresh(self, force: bool = False):
         if not self.is_running():
