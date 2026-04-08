@@ -16,8 +16,8 @@
 - **Fixed backend restart loop on Windows** — Watchdog now correctly monitors the Electron process using a passed PID, preventing premature restarts during installations.
 - **Improved Java version mapping** — Version detection now correctly maps high-version servers (NeoForge/NeoMinecraft 26.x+) to **Java 25**.
 - **Fixed Startup Scripts (run.bat/run.sh)** — Implemented **Environment Injection** (JAVA_HOME & PATH) to force startup scripts to use the app's managed Java version instead of the system default.
-- **Fixed Portable Executable Stability** — Added `freeze_support()` and improved PyInstaller bundling to prevent the backend from crashing when running from the GitHub-generated `.exe`.
-- **Robust Forge version handling** — Versions like "26.1.1" now correctly trigger the Java 25 requirement.
+- **Fixed Portable Executable Stability** — Implemented **Industrial Strength** fixes including `stdout/stderr` redirection and extensive dependency bundling (uvicorn/fastapi) to prevent crashes in the installer version.
+- **Robust Forge version handling** — Versions like "26.1.1" now correctly trigger the Java 25 requirement and use the managed environment.
 
 ### 🔧 IMPROVEMENTS:
 - **Smart close behavior** — App checks for running servers before deciding to hide or quit

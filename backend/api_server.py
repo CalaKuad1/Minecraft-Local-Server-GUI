@@ -1,14 +1,20 @@
-import asyncio
-import collections
-import multiprocessing
-import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List, Dict
-from fastapi import UploadFile, File
 import os
 import sys
+import multiprocessing
+
+# --- CRITICAL: REDIRECT STREAMS IN FROZEN EXE ---
+# If running as a PyInstaller --noconsole EXE, stdout/stderr are None, which crashes many libraries.
+if getattr(sys, 'frozen', False) and sys.platform == "win32":
+    null_device = open(os.devnull, 'w')
+    sys.stdout = null_device
+    sys.stderr = null_device
+    # Also ensure freeze_support is called as early as possible
+    multiprocessing.freeze_support()
+
+import asyncio
+import collections
+import threading
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
 import json
 import logging
 from queue import Queue

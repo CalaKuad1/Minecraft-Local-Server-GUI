@@ -55,7 +55,20 @@ jobs:
       - name: Build Backend with PyInstaller
         run: |
           cd backend
-          pyinstaller --onefile --noconsole --collect-all uvicorn --collect-all fastapi api_server.py
+          pyinstaller --onefile --noconsole \
+            --collect-all uvicorn \
+            --collect-all fastapi \
+            --hidden-import=uvicorn.logging \
+            --hidden-import=uvicorn.loops \
+            --hidden-import=uvicorn.loops.auto \
+            --hidden-import=uvicorn.protocols \
+            --hidden-import=uvicorn.protocols.http \
+            --hidden-import=uvicorn.protocols.http.auto \
+            --hidden-import=uvicorn.protocols.websockets \
+            --hidden-import=uvicorn.protocols.websockets.auto \
+            --hidden-import=uvicorn.lifespan \
+            --hidden-import=uvicorn.lifespan.on \
+            api_server.py
           # Move binary to backend root so it's picked up by extraResources
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv dist/api_server.exe .
