@@ -6,6 +6,11 @@ import collections
 import sys
 import logging
 import re
+import shutil
+import time
+import requests
+import json
+import traceback
 
 from utils.api_client import download_file_from_url, download_and_extract_zip
 from utils.java_manager import JavaManager
@@ -371,6 +376,7 @@ allow-flight=false
                     return None, None
         
         # Prepare environment for startup (injecting JAVA_HOME and PATH)
+        logging.info(f"Handler: Preparing environment. Java Path: {java_path}")
         custom_env = os.environ.copy()
         if java_path != "java":
             # Extract installation root (assuming path/to/java-21/bin/java.exe)
@@ -380,15 +386,17 @@ allow-flight=false
             # Prepend to PATH so scripts find this 'java' first
             path_sep = ';' if sys.platform == "win32" else ':'
             custom_env["PATH"] = f"{java_bin_dir}{path_sep}{custom_env.get('PATH', '')}"
-            logger.info(f"Injecting Java environment: JAVA_HOME={java_root}")
+            logging.info(f"Handler: Injected Environment - JAVA_HOME={java_root}")
         
         run_script = None
         
         # Universal check for startup scripts
         if sys.platform == "win32":
             script_path = os.path.join(self.server_path, 'run.bat')
+            logging.info(f"Handler: Checking for run.bat at {script_path}")
             if os.path.exists(script_path):
                 run_script = script_path
+                logging.info("Handler: run.bat FOUND")
         else: # For macOS and Linux
             script_path = os.path.join(self.server_path, 'run.sh')
             if os.path.exists(script_path):
@@ -464,10 +472,24 @@ allow-flight=false
         return command, custom_env
 
     def _run_server(self, command, env):
+        logging.info(f"Handler: Background thread started. Command: {command}")
         stdout_thread = None
         stderr_thread = None
         try:
-            self.server_process = subprocess.Popen(command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, env=env)
+            logging.info(f"Handler: Launching process in {self.server_path}...")
+            self.server_process = subprocess.Popen(
+                command, 
+                cwd=self.server_path, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                stdin=subprocess.PIPE, 
+                text=True, 
+                bufsize=1, 
+                universal_newlines=True, 
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, 
+                env=env
+            )
+            logging.info(f"Handler: Process spawned with PID {self.server_process.pid}")
             
             stdout_thread = threading.Thread(target=self._read_output, args=(self.server_process.stdout, "normal"), daemon=True)
             stderr_thread = threading.Thread(target=self._read_output, args=(self.server_process.stderr, "error"), daemon=True)
@@ -475,9 +497,13 @@ allow-flight=false
             stderr_thread.start()
 
             self.server_process.wait()
+            logging.info(f"Handler: Process exited with code {self.server_process.returncode}")
         except FileNotFoundError:
+            logging.error("Handler: Java or Script NOT FOUND during spawn")
             self._log("Error: 'java' command not found. Is Java installed and in your PATH?\n", "error")
         except Exception as e:
+            error_details = traceback.format_exc()
+            logging.error(f"Handler: CRASH in _run_server thread:\n{error_details}")
             self._log(f"Server start failed: {e}\n", "error")
         finally:
             # Esperar a que los hilos de salida terminen de procesar los últimos logs

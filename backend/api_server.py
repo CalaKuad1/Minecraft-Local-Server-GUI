@@ -491,10 +491,18 @@ def open_server_folder():
 
 @app.post("/start")
 def start_server():
+    logging.info("API: /start request received")
     if not state or not state.server_handler:
+        logging.error("API: /start failed - Server not configured")
         raise HTTPException(status_code=400, detail="Server not configured")
-    state.server_handler.start()
-    return {"message": "Start command issued"}
+    
+    try:
+        logging.info("API: Triggering server_handler.start()...")
+        state.server_handler.start()
+        return {"message": "Start command issued"}
+    except Exception as e:
+        logging.exception("API: Critical error in /start endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/stop")
 def stop_server(force: bool = False):
