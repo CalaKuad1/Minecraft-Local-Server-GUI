@@ -14,7 +14,10 @@ if getattr(sys, 'frozen', False) and sys.platform == "win32":
 import asyncio
 import collections
 import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, List, Dict
 import json
 import logging
 from queue import Queue
