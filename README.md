@@ -34,8 +34,8 @@
 
 | Platform | Download |
 |:--------:|:---------|
-| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.7/Minecraft-Local-Server-GUI-Setup-1.1.7.exe) |
-| **Linux** | [📦 Download AppImage (.AppImage)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.7/Minecraft-Local-Server-GUI-1.1.7.AppImage) |
+| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.9/Minecraft-Local-Server-GUI-Setup-1.1.9.exe) |
+| **Linux** | [📦 Download AppImage (.AppImage)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.9/Minecraft-Local-Server-GUI-1.1.9.AppImage) |
 
 > **Note:** The app automatically downloads and manages Java for you. Just install and play!
 
@@ -91,7 +91,7 @@
 ### ⚙️ Configuration
 - **Visual settings editor** — No file editing required
 - **server.properties GUI** — All options organized by category
-- **RAM allocation** — Customize min/max memory per server
+- **RAM allocation** — Customize min/max memory per server with smart system limits
 - **Player management** — Op, ban, whitelist with one click
 
 ### 👥 Players
@@ -170,7 +170,7 @@ This project is configured with GitHub Actions. To trigger a new release with Wi
 
 ### For Users (Installer)
 - **Windows 10/11** (64-bit)
-- **Linux** (Any disto supporting AppImage or `.deb`)
+- **Linux** (Any distro supporting AppImage or `.deb`)
 - **Internet connection** (for initial Java download)
 - ~500MB disk space
 
@@ -212,6 +212,12 @@ Server files are stored in the location you choose during setup. App configurati
 <summary><strong>How do I import an existing server?</strong></summary>
 
 Click "Add Server" → "Use Existing" → Select your server folder. The app will auto-detect the server type and version.
+</details>
+
+<details>
+<summary><strong>Where is app data stored on Linux?</strong></summary>
+
+On Linux, all app data (Java runtimes, config files, logs) is stored in `~/.minecraft_server_gui/`. On Windows, it's in `%APPDATA%/MinecraftServerGUI`.
 </details>
 
 ---

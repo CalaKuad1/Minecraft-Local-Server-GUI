@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -6,6 +6,7 @@ const http = require('http');
 let mainWindow;
 let pythonProcess;
 let isQuitting = false;
+let tray = null;
 
 // Identify if we are in dev mode
 const isDev = !app.isPackaged;
@@ -30,7 +31,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false, // Reverted to fix blank screen in dev mode
+      webSecurity: true, // Secure mode enabled
       preload: path.join(__dirname, 'preload.cjs')
     },
     frame: false, // Custom frame
@@ -47,8 +48,34 @@ function createWindow() {
   }
 
   mainWindow.on('close', (e) => {
+    if (isQuitting) {
+      // Already in shutdown sequence — let the window close
+      return;
+    }
+
     e.preventDefault();
-    performShutdown();
+
+    // Smart close: check if any server is running
+    checkForRunningServers().then((hasRunning) => {
+      if (hasRunning && process.platform === 'win32') {
+        // Windows + servers running: hide to tray so servers keep running
+        mainWindow.hide();
+        if (tray) {
+          try {
+            tray.displayBalloon({
+              title: 'Minecraft Server GUI',
+              content: 'Servers still running. App minimized to tray.'
+            });
+          } catch (_) { /* displayBalloon is Windows-only */ }
+        }
+      } else {
+        // No servers running OR Linux → perform clean shutdown
+        performShutdown();
+      }
+    }).catch(() => {
+      // Backend unreachable → just quit
+      performShutdown();
+    });
   });
 }
 
@@ -220,9 +247,63 @@ const performShutdown = async () => {
   app.exit(0);
 };
 
+function createTray() {
+  let iconPath;
+  try {
+    if (process.platform === 'win32') {
+      iconPath = path.join(__dirname, isDev ? '../public/images/icon.ico' : '../dist/images/icon.ico');
+    } else {
+      // Linux: use PNG for tray icon (ICO not always supported)
+      iconPath = path.join(__dirname, isDev ? '../public/images/logo2.png' : '../dist/images/logo2.png');
+    }
+    tray = new Tray(iconPath);
+  } catch (err) {
+    console.error('Failed to create tray icon:', err);
+    return; // Tray not supported (e.g. Wayland without tray extension)
+  }
+  
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Show App', click: () => { if (mainWindow) mainWindow.show(); } },
+    { type: 'separator' },
+    { label: 'Stop Server & Quit', click: () => { 
+        performShutdown(); 
+      } 
+    }
+  ]);
+  
+  tray.setToolTip('Minecraft Server GUI');
+  tray.setContextMenu(contextMenu);
+  
+  tray.on('click', () => {
+    if (mainWindow) mainWindow.show();
+  });
+}
+
+// --- Helper: Check if any Minecraft server is running ---
+const checkForRunningServers = () => {
+  return new Promise((resolve, reject) => {
+    const req = http.get(`http://127.0.0.1:${API_PORT}/servers/running`, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.any_running === true);
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    req.on('error', () => reject(false));
+    req.setTimeout(2000, () => { req.destroy(); reject(false); });
+    req.end();
+  });
+};
+
 app.whenReady().then(() => {
   startPythonBackend();
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

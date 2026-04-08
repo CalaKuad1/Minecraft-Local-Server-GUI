@@ -2,6 +2,7 @@ import subprocess
 import threading
 import os
 import glob
+import collections
 import sys
 import logging
 import re
@@ -11,6 +12,7 @@ from utils.java_manager import JavaManager
 from utils.status_query import get_server_status
 import psutil
 import time
+from typing import Optional
 
 class ServerHandler:
     def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None, server_id=None):
@@ -27,10 +29,10 @@ class ServerHandler:
         # Inicializar el gestor de Java
         self.java_manager = JavaManager()
         
-        self.server_process = None
-        self.tunnel_process = None
-        self.public_url = None
-        self.tunnel_thread = None
+        self.server_process: Optional[subprocess.Popen] = None
+        self.tunnel_process: Optional[subprocess.Popen] = None
+        self.public_url: Optional[str] = None
+        self.tunnel_thread: Optional[threading.Thread] = None
         self.stop_tunnel_event = threading.Event()
         self.server_fully_started = False
         self.server_stopping = False
@@ -42,7 +44,7 @@ class ServerHandler:
         # if minecraft_version:
         #     self._setup_java_for_minecraft(minecraft_version)
         
-        self.log_history = [] 
+        self.log_history = collections.deque(maxlen=1000)
         
         # Track players from log messages
         self.tracked_players = set() 
@@ -58,8 +60,8 @@ class ServerHandler:
         self._status_in_flight = False
         
         # Scheduled Shutdown
-        self._shutdown_timer = None
-        self._shutdown_time_target = None # Epoch time when shutdown will occur
+        self._shutdown_timer: Optional[threading.Timer] = None
+        self._shutdown_time_target: Optional[float] = None # Epoch time when shutdown will occur
         
         # Statistics Cache for low-resource environments
         self._stats_cache = {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
@@ -78,11 +80,8 @@ class ServerHandler:
             if self.server_id and "server_id" not in msg_obj:
                 msg_obj["server_id"] = self.server_id
             
-        # Store in local history
+        # Store in local history (deque auto-evicts oldest when full)
         self.log_history.append(msg_obj)
-        if len(self.log_history) > 1000:
-            self.log_history.pop(0)
-            
         # Broadcast via callback
         if self.output_callback:
             self.output_callback(msg_obj)
@@ -129,8 +128,6 @@ class ServerHandler:
             if result.returncode != 0:
                 print(f"[DEBUG] Java Check Failed. Path: {java_path}, RC: {result.returncode}, Stderr: {result.stderr}")
             return result.returncode == 0
-        except Exception as e:
-            return False
         except Exception as e:
             print(f"[DEBUG] Java Check Exception. Path: {java_path}, Error: {e}")
             return False
@@ -211,10 +208,17 @@ class ServerHandler:
         if self.server_stopping:
             if self.server_process is None or self.server_process.poll() is not None:
                 self.server_stopping = False # Reset if actually dead
+                self.server_running = False
                 return 'offline'
             return 'stopping'
 
+        # Prevents race condition: thread spawned but server_process not assigned yet
+        if self.server_running and self.server_process is None:
+            return 'starting'
+
         if self.server_process is None or self.server_process.poll() is not None:
+            self.server_running = False
+            self.server_fully_started = False
             return 'offline'
             
         if self.server_fully_started:
@@ -450,6 +454,8 @@ allow-flight=false
         return command, None
 
     def _run_server(self, command, env):
+        stdout_thread = None
+        stderr_thread = None
         try:
             self.server_process = subprocess.Popen(command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, env=env)
             
@@ -508,7 +514,17 @@ allow-flight=false
         try:
             for line in iter(pipe.readline, ''):
                 line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
+                
+                # Check for standard server start completion messages
+                is_done = False
                 if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
+                    is_done = True
+                elif 'Done (' in line_no_ansi and ')!' in line_no_ansi:
+                    is_done = True
+                elif 'started on port' in line_no_ansi.lower():
+                    is_done = True
+                    
+                if is_done:
                     self.server_fully_started = True
                     self.server_stopping = False
                     # Broadcast explicit status change to online
@@ -521,16 +537,16 @@ allow-flight=false
                 elif 'Stopping the server' in line_no_ansi or 'Stopping server' in line_no_ansi:
                     self.server_stopping = True
                 elif 'All dimensions are saved' in line_no_ansi or 'All chunks are saved' in line_no_ansi:
-                    self.server_stopping = True
-                    # Detect that the server HAS saved everything.
-                    # If it doesn't close in 7 seconds, we force it.
-                    def delayed_kill():
-                        time.sleep(7)
-                        if self.get_status() == 'stopping':
-                            self._log("Server finished saving but hung. Forcing termination.\n", "warning")
-                            self._kill_process_tree()
-                    
-                    threading.Thread(target=delayed_kill, daemon=True).start()
+                    if self.server_stopping:
+                        # Detect that the server HAS saved everything.
+                        # If it doesn't close in 7 seconds, we force it.
+                        def delayed_kill():
+                            time.sleep(7)
+                            if self.get_status() == 'stopping':
+                                self._log("Server finished saving but hung. Forcing termination.\n", "warning")
+                                self._kill_process_tree()
+                        
+                        threading.Thread(target=delayed_kill, daemon=True).start()
                 
                 # Detect player join/leave
                 join_match = join_pattern.search(line_no_ansi)

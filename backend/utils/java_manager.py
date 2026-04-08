@@ -20,15 +20,27 @@ class JavaManager:
     Descarga automáticamente las versiones necesarias y las vincula a cada servidor.
     """
     
-    def __init__(self, base_dir: str = None):
+    def __init__(self, base_dir: Optional[str] = None):
         """
         Inicializa el gestor de Java.
         
         Args:
-            base_dir: Directorio base donde se almacenarán las instalaciones de Java
+            base_dir: Directorio base donde se almacenarán las instalaciones de Java.
+                      Si no se proporciona, usa el directorio de datos de la app
+                      (~/.minecraft_server_gui/java_runtimes en Linux,
+                       %APPDATA%/MinecraftServerGUI/java_runtimes en Windows).
         """
-        self.base_dir = Path(base_dir) if base_dir else Path.cwd() / "java_runtimes"
-        self.base_dir.mkdir(exist_ok=True)
+        if base_dir:
+            self.base_dir = Path(base_dir)
+        else:
+            # CRITICAL: Never use CWD as default — it may be read-only
+            # (e.g. inside an AppImage SquashFS mount on Linux)
+            if sys.platform == "win32":
+                app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
+                self.base_dir = Path(app_data) / "MinecraftServerGUI" / "java_runtimes"
+            else:
+                self.base_dir = Path.home() / ".minecraft_server_gui" / "java_runtimes"
+        self.base_dir.mkdir(parents=True, exist_ok=True)
         
         # Archivo de configuración para mapear servidores con sus versiones de Java
         self.config_file = self.base_dir / "java_config.json"
@@ -88,28 +100,38 @@ class JavaManager:
         if version in self.mc_java_requirements:
             return self.mc_java_requirements[version]
         
-        # Buscar por versión mayor (ej: 1.20.x -> 1.20)
+        # Analizar versión numéricamente para soporte dinámico de nuevas versiones
         parts = version.split('.')
         if len(parts) >= 2:
+            try:
+                major_version = int(parts[0])
+                minor_version = int(parts[1])
+                patch_version = int(parts[2]) if len(parts) >= 3 else 0
+                
+                if major_version == 1:
+                    if minor_version >= 22:
+                        return 25 # 1.22+ requiere Java 25
+                    elif minor_version == 21 and patch_version >= 4:
+                        return 25 # 1.21.4+ requiere Java 25
+                    elif minor_version >= 21:
+                        return 21 # 1.21 - 1.21.3 requiere Java 21
+                    elif minor_version >= 17:
+                        return 17 # 1.17 - 1.20.6 requiere Java 17
+            except Exception as e:
+                logger.warning(f"Error parsing version {minecraft_version}: {e}")
+            
+            # Si no ha coincidido por lógica numérica, buscar por 'mayor.menor'
             major_minor = f"{parts[0]}.{parts[1]}"
             if major_minor in self.mc_java_requirements:
                 return self.mc_java_requirements[major_minor]
             
-            # Para versiones muy nuevas, asumir Java 21
-            try:
-                minor_version = int(parts[1])
-                if minor_version >= 21:
-                    return 21
-                elif minor_version >= 17:
-                    return 17
-            except Exception as e:
-                logger.warning(f"Error parsing version {minecraft_version}: {e}")
-                logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 21")
-                return 21 # Default to modern Java (21) instead of 8, as it's safer for new servers
+            # Para versiones no mapeadas y muy nuevas, asumir Java 25
+            logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 25")
+            return 25
         
         # Fallback para versiones desconocidas
-        logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 21")
-        return 21
+        logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 25")
+        return 25
     
     def detect_system_java(self, java_path: str = "java") -> Optional[Tuple[int, str]]:
         """
@@ -189,7 +211,7 @@ class JavaManager:
         
         return (os_name, arch)
     
-    def download_java(self, java_version: int, progress_callback: Callable[[float], None] = None) -> Optional[str]:
+    def download_java(self, java_version: int, progress_callback: Optional[Callable[[float], None]] = None) -> Optional[str]:
         """
         Descarga e instala una versión específica de Java.
         
@@ -410,7 +432,7 @@ class JavaManager:
             logger.error(f"Java validation error: {e}")
             return False
 
-    def get_java_for_server(self, server_path: str, minecraft_version: str, force_download: bool = False, skip_download: bool = False, progress_callback: Callable[[float], None] = None) -> Optional[str]:
+    def get_java_for_server(self, server_path: str, minecraft_version: str, force_download: bool = False, skip_download: bool = False, progress_callback: Optional[Callable[[float], None]] = None) -> Optional[str]:
         """
         Obtiene la ruta de Java apropiada para un servidor específico.
         Descarga automáticamente si es necesario (unless skip_download=True).
@@ -600,7 +622,7 @@ class JavaManager:
 
 
 # Función de conveniencia para uso directo
-def get_java_for_minecraft(minecraft_version: str, server_path: str = None, progress_callback: Callable[[float], None] = None) -> Optional[str]:
+def get_java_for_minecraft(minecraft_version: str, server_path: Optional[str] = None, progress_callback: Optional[Callable[[float], None]] = None) -> Optional[str]:
     """
     Función de conveniencia para obtener Java para una versión específica de Minecraft.
     

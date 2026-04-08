@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import threading
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,8 +56,8 @@ app = FastAPI()
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origin_regex=".*",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -127,7 +128,7 @@ class AppState:
         self.active_handlers = {} # server_id -> ServerHandler
         
         # App-level log history for Dashboard mini-console
-        self.app_log_history = []
+        self.app_log_history = collections.deque(maxlen=500)
 
     def start_background_tasks(self):
         if self._log_broadcaster_task is None:
@@ -288,8 +289,7 @@ class AppState:
             
             if not is_verbose_installer:
                 self.app_log_history.append(msg_obj)
-                if len(self.app_log_history) > 500:
-                    self.app_log_history.pop(0)
+                # deque auto-evicts oldest when full — no manual pop needed
 
                 # Thread-safe enqueue into the asyncio queue (only non-verbose logs)
                 try:
@@ -1687,12 +1687,14 @@ def start_parent_watchdog():
                     raise psutil.NoSuchProcess(parent_pid)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 logging.warning("Parent process lost. Shutting down backend and servers...")
-                # Intentar cerrar servidores limpiamente si es posible
-                if state and state.server_handler:
-                    try:
-                        state.server_handler.stop(force=True, silent=True)
-                    except:
-                        pass
+                # Stop ALL active server handlers, not just the selected one
+                if state and state.active_handlers:
+                    for server_id, handler in state.active_handlers.items():
+                        try:
+                            if handler.is_running() or handler.is_starting():
+                                handler.stop(force=True, silent=True)
+                        except:
+                            pass
                 os._exit(0)
             time.sleep(2)
 
@@ -1907,6 +1909,37 @@ def install_plugin(req: PluginInstallRequest):
     
     threading.Thread(target=run_plugin_install, daemon=True).start()
     return {"status": "started", "message": "Plugin installation started"}
+
+# --- System Info (RAM validation) ---
+
+@app.get("/system/info")
+def get_system_info():
+    """Returns system information for frontend validation (e.g. RAM limits)."""
+    try:
+        mem = psutil.virtual_memory()
+        total_gb = round(mem.total / (1024 ** 3), 1)
+        available_gb = round(mem.available / (1024 ** 3), 1)
+        return {
+            "total_ram_gb": total_gb,
+            "available_ram_gb": available_gb,
+            "cpu_count": psutil.cpu_count(logical=True),
+            # Recommended max: 80% of total RAM
+            "max_recommended_ram_gb": round(total_gb * 0.8, 1)
+        }
+    except Exception as e:
+        logging.error(f"Error getting system info: {e}")
+        return {"total_ram_gb": 16, "available_ram_gb": 8, "cpu_count": 4, "max_recommended_ram_gb": 12}
+
+@app.get("/servers/running")
+def get_running_servers():
+    """Returns whether any server is currently running. Used by Electron close handler."""
+    if not state:
+        return {"any_running": False}
+    for handler in state.active_handlers.values():
+        if handler.is_running() or handler.is_starting():
+            return {"any_running": True}
+    return {"any_running": False}
+
 
 if __name__ == "__main__":
     import uvicorn

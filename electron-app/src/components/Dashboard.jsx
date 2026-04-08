@@ -4,24 +4,30 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { Select } from './ui/Select';
 
-const StatCard = ({ icon: Icon, label, value, sublabel, color }) => {
+const StatCard = ({ icon: Icon, label, value, sublabel, color, delay }) => {
     const colors = {
-        primary: 'text-primary bg-primary/10 border-primary/20',
-        secondary: 'text-secondary bg-secondary/10 border-secondary/20',
-        accent: 'text-accent bg-accent/10 border-accent/20',
+        primary: 'text-primary bg-primary/10 border-primary/20 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]',
+        secondary: 'text-secondary bg-secondary/10 border-secondary/20 hover:border-secondary/40 hover:shadow-[0_0_20px_rgba(236,72,153,0.2)]',
+        accent: 'text-accent bg-accent/10 border-accent/20 hover:border-accent/40 hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]',
     };
 
     return (
-        <div className="bg-surface/50 backdrop-blur-md border border-white/5 rounded-2xl p-6 flex items-start justify-between hover:border-white/10 transition-colors shadow-lg">
-            <div className={`p-3 rounded-xl ${colors[color]} group-hover:scale-110 transition-transform duration-300`}>
-                <Icon size={24} />
+        <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: delay || 0, type: "spring", bounce: 0.4 }}
+            whileHover={{ scale: 1.03, y: -4 }}
+            className={`bg-surface/50 backdrop-blur-md border rounded-2xl p-6 flex items-start justify-between transition-all duration-300 group cursor-default ${colors[color]}`}
+        >
+            <div className={`p-3 rounded-xl bg-white/5 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-300`}>
+                <Icon size={24} className="drop-shadow-[0_0_10px_currentColor]" />
             </div>
-            <div>
-                <h3 className="text-gray-400 text-sm font-medium">{label}</h3>
-                <div className="text-2xl font-bold mt-1 text-white tracking-tight">{value}</div>
+            <div className="text-right">
+                <h3 className="text-gray-400 text-sm font-medium group-hover:text-gray-300 transition-colors">{label}</h3>
+                <div className="text-2xl font-bold mt-1 text-white tracking-tight drop-shadow-sm">{value}</div>
                 <div className="text-xs text-gray-500 mt-1">{sublabel}</div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 
@@ -500,8 +506,20 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             {/* Header & Controls */}
             <div className="flex items-center justify-between p-8 bg-surface/50 backdrop-blur-md border border-white/5 rounded-3xl shadow-xl relative overflow-hidden">
 
-                {/* Abstract Background Gradient */}
-                <div className={`absolute top-0 right-0 w-96 h-96 bg-primary/20 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-1000 ${isOnline ? 'opacity-100' : 'opacity-0'}`} />
+                {/* Abstract Glowing Animated Background */}
+                <motion.div 
+                    animate={{ 
+                        scale: isOnline ? [1, 1.15, 1] : 1, 
+                        opacity: isOnline ? [0.4, 0.7, 0.4] : 0.1,
+                        rotate: isOnline ? [0, 90, 180, 270, 360] : 0
+                    }}
+                    transition={{ 
+                        scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                        opacity: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                        rotate: { duration: 60, repeat: Infinity, ease: "linear" }
+                    }}
+                    className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-primary/30 to-accent/20 blur-[100px] rounded-full translate-x-1/3 -translate-y-1/3 pointer-events-none" 
+                />
 
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-2">
@@ -643,11 +661,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard icon={Users} label="Players" value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} Online`} color="accent" />
-                <StatCard icon={Cpu} label="CPU Usage" value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel="System Total" color="primary" />
-                <StatCard icon={HardDrive} label="RAM Usage" value={status.ram || '--'} sublabel="Usage / Allocated" color="secondary" />
-                <StatCard icon={Activity} label="Uptime" value={status.uptime || '--'} sublabel="Since last restart" color="accent" />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
+                <StatCard icon={Users} label="Players" value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} Online`} color="accent" delay={0.1} />
+                <StatCard icon={Cpu} label="CPU Usage" value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel="System Total" color="primary" delay={0.2} />
+                <StatCard icon={HardDrive} label="RAM Usage" value={status.ram || '--'} sublabel="Usage / Allocated" color="secondary" delay={0.3} />
+                <StatCard icon={Activity} label="Uptime" value={status.uptime || '--'} sublabel="Since last restart" color="accent" delay={0.4} />
             </div>
 
             {/* Mini Console (Real-time via WS) */}

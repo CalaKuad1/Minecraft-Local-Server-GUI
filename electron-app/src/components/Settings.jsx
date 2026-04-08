@@ -12,6 +12,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [systemInfo, setSystemInfo] = useState(null); // { total_ram_gb, max_recommended_ram_gb }
 
     // State for Server Properties
     const [serverProps, setServerProps] = useState({});
@@ -39,6 +40,11 @@ export default function Settings() {
             const app = await api.getAppSettings();
             setServerProps(props);
             setAppSettings(app);
+            // Fetch system info for RAM validation
+            try {
+                const res = await fetch('http://127.0.0.1:8000/system/info');
+                if (res.ok) setSystemInfo(await res.json());
+            } catch (_) { /* System info not critical */ }
         } catch (e) {
             console.error("Failed to load settings", e);
             setError(e?.message || 'Failed to load settings');
@@ -504,10 +510,15 @@ export default function Settings() {
 
             {activeTab === 'system' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl">
+            <div className="bg-surface border border-white/5 p-6 rounded-2xl">
                         <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
                             <HardDrive size={20} className="text-purple-400" />
                             Resources
+                            {systemInfo && (
+                                <span className="text-xs font-normal text-gray-500 ml-auto">
+                                    System: {systemInfo.total_ram_gb} GB RAM
+                                </span>
+                            )}
                         </h3>
 
                         <div className="mb-8">
@@ -518,7 +529,7 @@ export default function Settings() {
                             <input
                                 type="range"
                                 min="2"
-                                max="16"
+                                max={systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 16}
                                 step="1"
                                 value={appSettings.ram_max}
                                 onChange={(e) => handleAppChange('ram_max', e.target.value)}
@@ -526,9 +537,24 @@ export default function Settings() {
                             />
                             <div className="flex justify-between text-xs text-gray-500 mt-2">
                                 <span>2 GB</span>
-                                <span>8 GB</span>
-                                <span>16 GB</span>
+                                <span>{systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb / 2) : 8} GB</span>
+                                <span>{systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 16} GB</span>
                             </div>
+                            {systemInfo && Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.5 && (
+                                <div className={`mt-3 px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                                    Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
+                                        ? 'bg-red-500/10 border border-red-500/30 text-red-400'
+                                        : 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400'
+                                }`}>
+                                    <span>{Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75 ? '⚠️' : '💡'}</span>
+                                    <span>
+                                        {Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
+                                            ? `Warning: Allocating ${appSettings.ram_max}GB of ${systemInfo.total_ram_gb}GB may freeze your system. Leave at least 4GB for the OS.`
+                                            : `Using ${Math.round(Number(appSettings.ram_max) / systemInfo.total_ram_gb * 100)}% of system RAM. Consider leaving headroom for the OS.`
+                                        }
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="mb-4">
