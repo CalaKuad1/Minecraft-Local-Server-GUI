@@ -1671,9 +1671,9 @@ def shutdown_app():
     threading.Thread(target=perform_full_shutdown, daemon=True).start()
     return {"message": "Shutdown sequence started"}
 
-def start_parent_watchdog():
+def start_parent_watchdog(forced_parent_pid=None):
     """Vigila si el proceso padre (Electron) sigue vivo. Si muere, cerramos todo."""
-    parent_pid = os.getppid()
+    parent_pid = forced_parent_pid or os.getppid()
     if parent_pid <= 1: # No parent or init
         return
 
@@ -1943,6 +1943,11 @@ def get_running_servers():
 
 if __name__ == "__main__":
     import uvicorn
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--parent-pid", type=int)
+    args, _ = parser.parse_known_args()
+    
     # Iniciar el watchdog antes de arrancar el servidor
-    start_parent_watchdog()
+    start_parent_watchdog(args.parent_pid)
     uvicorn.run(app, host="127.0.0.1", port=8000)

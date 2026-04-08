@@ -110,28 +110,28 @@ class JavaManager:
                 
                 if major_version == 1:
                     if minor_version >= 22:
-                        return 25 # 1.22+ requiere Java 25
+                        return 21 # Default to 21 for unknown future versions (e.g. 1.22+)
                     elif minor_version == 21 and patch_version >= 4:
-                        return 25 # 1.21.4+ requiere Java 25
+                        return 21 # 1.21.4+ works well with 21
                     elif minor_version >= 21:
-                        return 21 # 1.21 - 1.21.3 requiere Java 21
+                        return 21 
                     elif minor_version >= 17:
-                        return 17 # 1.17 - 1.20.6 requiere Java 17
+                        return 17 
             except Exception as e:
-                logger.warning(f"Error parsing version {minecraft_version}: {e}")
+                logger.warning(f"Error parsing version {version}: {e}")
             
             # Si no ha coincidido por lógica numérica, buscar por 'mayor.menor'
             major_minor = f"{parts[0]}.{parts[1]}"
             if major_minor in self.mc_java_requirements:
                 return self.mc_java_requirements[major_minor]
             
-            # Para versiones no mapeadas y muy nuevas, asumir Java 25
-            logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 25")
-            return 25
+            # Para versiones no mapeadas y muy nuevas, asumir Java 21
+            logger.warning(f"Unknown Minecraft version {version}, defaulting to Java 21")
+            return 21
         
-        # Fallback para versiones desconocidas
-        logger.warning(f"Unknown Minecraft version {minecraft_version}, defaulting to Java 25")
-        return 25
+        # Fallback para versiones totalmente desconocidas
+        logger.warning(f"Unknown Minecraft version {version}, defaulting to Java 21")
+        return 21
     
     def detect_system_java(self, java_path: str = "java") -> Optional[Tuple[int, str]]:
         """

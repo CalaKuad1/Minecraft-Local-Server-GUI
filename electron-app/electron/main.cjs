@@ -130,14 +130,14 @@ function startPythonBackend() {
 
   if (useBinary) {
     console.log(`Starting Bundled Backend: ${binaryPath}`);
-    pythonProcess = spawn(binaryPath, [], {
+    pythonProcess = spawn(binaryPath, ['--parent-pid', process.pid.toString()], {
       cwd: path.dirname(binaryPath),
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false
     });
   } else {
     console.log(`Starting Python Script: ${scriptPath}`);
-    pythonProcess = spawn(pythonCmd, [scriptPath], {
+    pythonProcess = spawn(pythonCmd, [scriptPath, '--parent-pid', process.pid.toString()], {
       cwd: path.dirname(scriptPath),
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false

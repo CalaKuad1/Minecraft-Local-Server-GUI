@@ -12,6 +12,11 @@
 - **RAM warning system** — Visual warnings when assigning >50% or >75% of system RAM
 - **System info endpoint** — New `/system/info` API returns total RAM for frontend validation
 
+### ⚡ HOTFIX 1.1.9.1 (Included in v1.1.9):
+- **Fixed backend restart loop on Windows** — Watchdog now correctly monitors the Electron process using a passed PID, preventing premature restarts during installations.
+- **Improved Java version mapping** — Version detection now defaults to Java 21/17 for unknown future versions instead of Java 25.
+- **Robust Forge version handling** — Versions like "26.1.1" no longer trigger incorrect Java 25 snapshot logic.
+
 ### 🔧 IMPROVEMENTS:
 - **Smart close behavior** — App checks for running servers before deciding to hide or quit
 - **Tray icon fixes for Linux** — Uses PNG instead of ICO, graceful fallback if tray not supported (Wayland)
