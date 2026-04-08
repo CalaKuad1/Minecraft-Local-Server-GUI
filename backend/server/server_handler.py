@@ -370,6 +370,18 @@ allow-flight=false
                     self.output_callback("Critical error: No working Java installation was found. Please install Java.\n", "error")
                     return None, None
         
+        # Prepare environment for startup (injecting JAVA_HOME and PATH)
+        custom_env = os.environ.copy()
+        if java_path != "java":
+            # Extract installation root (assuming path/to/java-21/bin/java.exe)
+            java_bin_dir = os.path.dirname(java_path)
+            java_root = os.path.dirname(java_bin_dir)
+            custom_env["JAVA_HOME"] = java_root
+            # Prepend to PATH so scripts find this 'java' first
+            path_sep = ';' if sys.platform == "win32" else ':'
+            custom_env["PATH"] = f"{java_bin_dir}{path_sep}{custom_env.get('PATH', '')}"
+            logger.info(f"Injecting Java environment: JAVA_HOME={java_root}")
+        
         run_script = None
         
         # Universal check for startup scripts
@@ -385,9 +397,7 @@ allow-flight=false
         # If a run script is found, prioritize it
         if run_script:
             self.output_callback(f"Detected startup script: {os.path.basename(run_script)}. Using it to launch.\n", "info")
-            # For Forge, we might need to set JVM_ARGS, but for now, a direct run is more universal.
-            # A more advanced implementation could parse the script to inject RAM settings.
-            return [run_script, '--nogui'], None
+            return [run_script, '--nogui'], custom_env
 
         # Fallback to JAR-based startup if no script is found
         self.output_callback("No startup script found. Using generic JAR startup method.\n", "info")
@@ -451,7 +461,7 @@ allow-flight=false
 
         command.extend(['-jar', os.path.basename(server_jar_path), '--nogui'])
         
-        return command, None
+        return command, custom_env
 
     def _run_server(self, command, env):
         stdout_thread = None

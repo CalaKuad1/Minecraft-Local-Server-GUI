@@ -14,8 +14,9 @@
 
 ### ⚡ HOTFIX 1.1.9.1 (Included in v1.1.9):
 - **Fixed backend restart loop on Windows** — Watchdog now correctly monitors the Electron process using a passed PID, preventing premature restarts during installations.
-- **Improved Java version mapping** — Version detection now defaults to Java 21/17 for unknown future versions instead of Java 25.
-- **Robust Forge version handling** — Versions like "26.1.1" no longer trigger incorrect Java 25 snapshot logic.
+- **Improved Java version mapping** — Version detection now correctly maps high-version servers (NeoForge/NeoMinecraft 26.x+) to **Java 25**.
+- **Fixed Startup Scripts (run.bat/run.sh)** — Implemented **Environment Injection** (JAVA_HOME & PATH) to force startup scripts to use the app's managed Java version instead of the system default.
+- **Robust Forge version handling** — Versions like "26.1.1" now correctly trigger the Java 25 requirement.
 
 ### 🔧 IMPROVEMENTS:
 - **Smart close behavior** — App checks for running servers before deciding to hide or quit
