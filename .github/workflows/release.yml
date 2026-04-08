@@ -55,7 +55,7 @@ jobs:
       - name: Build Backend with PyInstaller
         run: |
           cd backend
-          pyinstaller --onefile --noconsole api_server.py
+          pyinstaller --onefile --noconsole --collect-all uvicorn --collect-all fastapi api_server.py
           # Move binary to backend root so it's picked up by extraResources
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv dist/api_server.exe .

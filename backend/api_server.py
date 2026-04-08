@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import multiprocessing
 import threading
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -1942,6 +1943,7 @@ def get_running_servers():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     import uvicorn
     import argparse
     parser = argparse.ArgumentParser()
