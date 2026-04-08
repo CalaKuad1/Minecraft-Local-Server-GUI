@@ -483,12 +483,10 @@ allow-flight=false
                 cwd=self.server_path, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE, 
-                stdin=subprocess.PIPE, 
-                text=True, 
-                encoding='utf-8',
-                errors='replace',
-                bufsize=1, 
-                universal_newlines=True, 
+                stdin=subprocess.DEVNULL, 
+                text=False, 
+                bufsize=0, 
+                universal_newlines=False, 
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, 
                 env=env
             )
@@ -551,8 +549,15 @@ allow-flight=false
         list_header_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$", re.IGNORECASE)
 
         try:
-            logging.info(f"Handler: Log reader thread started for {level}")
-            for line in iter(pipe.readline, ''):
+            logging.info(f"Handler: Log reader thread started for {level} (Binary mode)")
+            # In binary mode, readline returns bytes
+            for line_bytes in iter(pipe.readline, b''):
+                try:
+                    line = line_bytes.decode('utf-8', errors='replace')
+                except Exception as de:
+                    logging.error(f"Handler: Decode error in {level}: {de}")
+                    continue
+
                 line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
                 
                 # Check for standard server start completion messages
