@@ -446,7 +446,7 @@ async def select_server(req: SelectServerRequest):
     try:
         # Si cambiamos de servidor, limpiamos el historial de logs globales de la UI
         if state.selected_server_id != req.server_id:
-            state.app_log_history = []
+            state.app_log_history.clear()
 
         config = state.load_server(req.server_id)
 
@@ -502,7 +502,7 @@ def get_status():
             "cpu": 0,
             "ram": 0,
             "players": 0,
-            "recent_logs": state.log_history[-50:],
+            "recent_logs": list(state.log_history)[-50:],
         }
 
     stats = state.server_handler.get_stats()
@@ -521,7 +521,7 @@ def get_status():
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
         "uptime": stats["uptime"],
-        "recent_logs": state.log_history[-50:],
+        "recent_logs": list(state.log_history)[-50:],
         "shutdown_info": state.server_handler.get_shutdown_info(),
         "tunnel": {
             "active": state.tunnel_process is not None
