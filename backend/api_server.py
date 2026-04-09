@@ -78,18 +78,34 @@ from utils.mods_manager import ModsManager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Suppress WinError 10054 on Windows asyncio loop
-    if sys.platform == "win32":
+    global state
+    logging.info("Lifespan starting...")
+
+    # Ensure loop is set
+    try:
         loop = asyncio.get_running_loop()
+        if state:
+            state.loop = loop
+            # Set exception handler
+            if sys.platform == "win32":
 
-        def custom_exception_handler(loop, context):
-            if "WinError 10054" in str(context.get("exception", "")):
-                return
-            loop.default_exception_handler(context)
+                def custom_exception_handler(loop, context):
+                    if "WinError 10054" in str(context.get("exception", "")):
+                        return
+                    loop.default_exception_handler(context)
 
-        loop.set_exception_handler(custom_exception_handler)
+                loop.set_exception_handler(custom_exception_handler)
+
+            state.start_background_tasks()
+            logging.info("Background tasks started in lifespan")
+    except Exception as e:
+        logging.error(f"Error in lifespan startup: {e}")
 
     yield
+    logging.info("Lifespan shutting down...")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -122,22 +138,48 @@ class AppState:
 
         # Config Path
         self.config_path = os.path.join(self.app_data_dir, "gui_config.json")
-        default_config = os.path.join(self.script_dir, "gui_config.json")
 
-        # Check if config exists in AppData, if not copy from default (if exists) or create empty
+        # MIGRATION: Check for legacy config in local folder (next to exe or script)
+        # If running from EXE, sys.executable is the EXE. If script, __file__ is the script.
+        current_dir = os.path.dirname(
+            os.path.abspath(
+                sys.executable if getattr(sys, "frozen", False) else __file__
+            )
+        )
+        legacy_config = os.path.join(current_dir, "gui_config.json")
+
+        # Alternative legacy location: one level up from backend (Resources folder)
+        resources_dir = os.path.dirname(current_dir)
+        legacy_config_alt = os.path.join(resources_dir, "gui_config.json")
+
+        # Check if config exists in AppData, if not try to migrate or create empty
         if not os.path.exists(self.config_path):
-            if os.path.exists(default_config):
+            found_legacy = None
+            if os.path.exists(legacy_config):
+                found_legacy = legacy_config
+            elif os.path.exists(legacy_config_alt):
+                found_legacy = legacy_config_alt
+
+            if found_legacy:
                 try:
-                    with open(default_config, "r") as f:
-                        data = f.read()
-                    with open(self.config_path, "w") as f:
-                        f.write(data)
+                    logging.info(
+                        f"Migrating legacy config from {found_legacy} to {self.config_path}"
+                    )
+                    shutil.copy2(found_legacy, self.config_path)
                 except Exception as e:
-                    print(f"Failed to copy default config: {e}")
+                    logging.error(f"Failed to migrate legacy config: {e}")
             else:
-                # Create empty default config
-                with open(self.config_path, "w") as f:
-                    f.write(json.dumps({"servers": []}))
+                default_config = os.path.join(self.script_dir, "gui_config.json")
+                if os.path.exists(default_config):
+                    try:
+                        shutil.copy2(default_config, self.config_path)
+                    except Exception as e:
+                        logging.error(f"Failed to copy default config: {e}")
+                else:
+                    # Create empty default config
+                    with open(self.config_path, "w") as f:
+                        json.dump({"servers": []}, f)
+                    logging.info("Created new empty config in AppData")
 
         self.config_manager = ConfigManager(self.config_path)
 
@@ -147,22 +189,22 @@ class AppState:
         self.mods_manager = ModsManager()
 
         self.active_websockets: List[WebSocket] = []
-        self.loop = asyncio.get_running_loop()
-        self.selected_server_id = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.selected_server_id: Optional[str] = None
 
         # Log broadcasting control (prevents WS flood from starving the API)
-        self._log_queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+        self._log_queue: Optional[asyncio.Queue] = None
         self._log_broadcaster_task: Optional[asyncio.Task] = None
 
         # Tunnel management
-        self.tunnel_process = None
-        self.tunnel_address = None
+        self.tunnel_process: Optional[subprocess.Popen] = None
+        self.tunnel_address: Optional[str] = None
 
         # Install Progress Tracking
-        self.install_progress = 0
-        self.install_status_msg = ""
-        self.install_error = None
-        self.installed_server_id = None
+        self.install_progress: int = 0
+        self.install_status_msg: str = ""
+        self.install_error: Optional[str] = None
+        self.installed_server_id: Optional[str] = None
 
         self.world_size_cache = {}
         self.world_size_inflight = set()
@@ -175,11 +217,15 @@ class AppState:
         self.app_log_history = collections.deque(maxlen=500)
 
     def start_background_tasks(self):
+        if self._log_queue is None:
+            self._log_queue = asyncio.Queue(maxsize=2000)
         if self._log_broadcaster_task is None:
             self._log_broadcaster_task = asyncio.create_task(self._log_broadcaster())
 
     def _enqueue_log_from_loop(self, msg_obj: dict):
         """Must be called from the asyncio loop thread."""
+        if self._log_queue is None:
+            return
         try:
             if self._log_queue.full() and msg_obj.get("level") in ("normal", "info"):
                 return
@@ -195,10 +241,8 @@ class AppState:
                 return
 
     async def _log_broadcaster(self):
-        """Batches log messages and streams them to WebSocket clients.
-
-        This avoids scheduling thousands of per-line tasks during server startup.
-        """
+        if self._log_queue is None:
+            return
         while True:
             msg = await self._log_queue.get()
 
@@ -349,10 +393,13 @@ class AppState:
                 # deque auto-evicts oldest when full — no manual pop needed
 
                 # Thread-safe enqueue into the asyncio queue (only non-verbose logs)
-                try:
-                    self.loop.call_soon_threadsafe(self._enqueue_log_from_loop, msg_obj)
-                except Exception:
-                    return
+                if self.loop:
+                    try:
+                        self.loop.call_soon_threadsafe(
+                            self._enqueue_log_from_loop, msg_obj
+                        )
+                    except Exception:
+                        return
         except Exception as e:
             print(f"Error logging: {e}")
 
@@ -371,14 +418,8 @@ class AppState:
                 pass
 
 
-state: Optional[AppState] = None
-
-
-@app.on_event("startup")
-async def startup_event():
-    global state
-    state = AppState()
-    state.start_background_tasks()
+state: AppState = AppState()
+logging.info(f"Global state initialized. Config path: {state.config_path}")
 
 
 # --- Models ---
@@ -757,6 +798,7 @@ def install_server(req: InstallRequest):
     install_path = os.path.join(req.parent_path, req.folder_name)
 
     def run_install():
+        logging.info("Installation thread started")
         try:
             # Helper to send structured progress
             def send_progress(pct, msg, **kwargs):
@@ -911,6 +953,7 @@ def install_server(req: InstallRequest):
             )
 
         except Exception as e:
+            logging.exception(f"Installation failed: {e}")
             state.install_error = str(e)
             state.broadcast_log_sync(f"Installation failed: {e}", "error")
             state.broadcast_log_sync({"type": "progress", "value": 0, "error": str(e)})
