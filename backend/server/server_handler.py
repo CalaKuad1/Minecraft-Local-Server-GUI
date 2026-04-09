@@ -909,14 +909,6 @@ allow-flight=false
                 self._log("Attempting graceful stop...\n", "info")
             self.send_command("stop")
 
-            # Cerrar stdin para señalar EOF (Fin de Archivo).
-            # Esto ayuda a que Java sepa que la consola se ha cerrado y termine antes.
-            try:
-                if self.server_process and self.server_process.stdin:
-                    self.server_process.stdin.close()
-            except Exception as e:
-                self._log(f"Warning closing stdin: {e}\n", "warning")
-
             # Lanzar un hilo para vigilar si se cuelga
             threading.Thread(target=self._watchdog_stop, daemon=True).start()
 
@@ -1383,5 +1375,7 @@ allow-flight=false
         # Fallback: Use SLP sample (may be empty)
         self._update_status_cache()
         if self.cached_status and self.cached_status.get("online"):
-            return self.cached_status["players"]["sample"] or []
+            players_data = self.cached_status.get("players", {})
+            if players_data:
+                return players_data.get("sample") or []
         return []
