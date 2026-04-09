@@ -555,6 +555,8 @@ allow-flight=false
             java_path,
             max_ram_str,
             min_ram_str,
+            "-Djline.terminal=jline.UnsupportedTerminal",
+            "-Dorg.jline.terminal.dumb=true",
             "--add-modules=jdk.incubator.vector",
             "--enable-native-access=ALL-UNNAMED",
             "-XX:+UnlockExperimentalVMOptions",

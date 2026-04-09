@@ -4,8 +4,8 @@ import multiprocessing
 
 # --- CRITICAL: REDIRECT STREAMS IN FROZEN EXE ---
 # If running as a PyInstaller --noconsole EXE, stdout/stderr are None, which crashes many libraries.
-if getattr(sys, 'frozen', False) and sys.platform == "win32":
-    null_device = open(os.devnull, 'w')
+if getattr(sys, "frozen", False) and sys.platform == "win32":
+    null_device = open(os.devnull, "w")
     sys.stdout = null_device
     sys.stderr = null_device
     # Also ensure freeze_support is called as early as possible
@@ -14,7 +14,16 @@ if getattr(sys, 'frozen', False) and sys.platform == "win32":
 import asyncio
 import collections
 import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Query, UploadFile, File
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    Request,
+    Query,
+    UploadFile,
+    File,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -35,14 +44,14 @@ try:
         log_dir = os.path.join(os.getenv("APPDATA"), "MinecraftServerGUI")
     else:
         log_dir = os.path.join(os.path.expanduser("~"), ".minecraft_server_gui")
-        
+
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-        
+
     logging.basicConfig(
         filename=os.path.join(log_dir, "backend_debug.log"),
         level=logging.DEBUG,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(levelname)s - %(message)s",
     )
     logging.info("Backend starting up...")
     logging.info(f"CWD: {os.getcwd()}")
@@ -58,7 +67,11 @@ from server.server_handler import ServerHandler
 from server.config_manager import ConfigManager
 from utils.java_manager import JavaManager
 from utils.server_detector import ServerDetector
-from utils.api_client import get_server_versions, get_forge_versions, download_server_jar
+from utils.api_client import (
+    get_server_versions,
+    get_forge_versions,
+    download_server_jar,
+)
 from utils.mods_manager import ModsManager
 
 app = FastAPI()
@@ -72,46 +85,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- Global State ---
 class AppState:
     def __init__(self):
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
         # PROD FIX: Use APPDATA for mutable data
         if sys.platform == "win32":
             self.app_data_dir = os.path.join(os.getenv("APPDATA"), "MinecraftServerGUI")
         else:
-            self.app_data_dir = os.path.join(os.path.expanduser("~"), ".minecraft_server_gui")
-            
+            self.app_data_dir = os.path.join(
+                os.path.expanduser("~"), ".minecraft_server_gui"
+            )
+
         if not os.path.exists(self.app_data_dir):
             os.makedirs(self.app_data_dir)
-            
+
         # Config Path
         self.config_path = os.path.join(self.app_data_dir, "gui_config.json")
         default_config = os.path.join(self.script_dir, "gui_config.json")
-        
+
         # Check if config exists in AppData, if not copy from default (if exists) or create empty
         if not os.path.exists(self.config_path):
             if os.path.exists(default_config):
                 try:
-                    with open(default_config, 'r') as f:
+                    with open(default_config, "r") as f:
                         data = f.read()
-                    with open(self.config_path, 'w') as f:
+                    with open(self.config_path, "w") as f:
                         f.write(data)
                 except Exception as e:
                     print(f"Failed to copy default config: {e}")
             else:
                 # Create empty default config
-                 with open(self.config_path, 'w') as f:
+                with open(self.config_path, "w") as f:
                     f.write(json.dumps({"servers": []}))
 
         self.config_manager = ConfigManager(self.config_path)
-        
+
         # Java Runtimes in AppData
         self.java_runtimes_dir = os.path.join(self.app_data_dir, "java_runtimes")
         self.java_manager = JavaManager(self.java_runtimes_dir)
         self.mods_manager = ModsManager()
-        
+
         self.active_websockets: List[WebSocket] = []
         self.loop = asyncio.get_running_loop()
         self.selected_server_id = None
@@ -119,11 +135,11 @@ class AppState:
         # Log broadcasting control (prevents WS flood from starving the API)
         self._log_queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
         self._log_broadcaster_task: Optional[asyncio.Task] = None
-        
+
         # Tunnel management
         self.tunnel_process = None
         self.tunnel_address = None
-        
+
         # Install Progress Tracking
         self.install_progress = 0
         self.install_status_msg = ""
@@ -133,10 +149,10 @@ class AppState:
         self.world_size_cache = {}
         self.world_size_inflight = set()
         self.world_size_lock = threading.Lock()
-        
+
         # Multi-server management
-        self.active_handlers = {} # server_id -> ServerHandler
-        
+        self.active_handlers = {}  # server_id -> ServerHandler
+
         # App-level log history for Dashboard mini-console
         self.app_log_history = collections.deque(maxlen=500)
 
@@ -176,7 +192,9 @@ class AppState:
                 if remaining <= 0:
                     break
                 try:
-                    nxt = await asyncio.wait_for(self._log_queue.get(), timeout=remaining)
+                    nxt = await asyncio.wait_for(
+                        self._log_queue.get(), timeout=remaining
+                    )
                     batch.append(nxt)
                 except asyncio.TimeoutError:
                     break
@@ -212,7 +230,7 @@ class AppState:
         if self.selected_server_id:
             return self.active_handlers.get(self.selected_server_id)
         return None
-    
+
     @server_handler.setter
     def server_handler(self, handler):
         """Sets the handler for the current server."""
@@ -240,29 +258,36 @@ class AppState:
 
         # If we already have a handler for this server, use it
         if server_id in self.active_handlers:
-            self.broadcast_log_sync(f"Reconnected to server: {server_config.get('name', server_id)}", "info")
+            self.broadcast_log_sync(
+                f"Reconnected to server: {server_config.get('name', server_id)}", "info"
+            )
             return server_config
-            
+
         server_path = server_config.get("path")
         if not server_path or not os.path.exists(server_path):
             raise ValueError(f"Server path invalid: {server_path}")
-            
-        self.broadcast_log_sync(f"Switched to server: {server_config.get('name', server_id)}", "info")
-        
+
+        self.broadcast_log_sync(
+            f"Switched to server: {server_config.get('name', server_id)}", "info"
+        )
+
         # Create new handler
         new_handler = ServerHandler(
             server_id=server_id,
             server_path=server_path,
-            server_type=server_config.get("type") or server_config.get("server_type") or "vanilla",
+            server_type=server_config.get("type")
+            or server_config.get("server_type")
+            or "vanilla",
             ram_min=server_config.get("ram_min", "2"),
             ram_max=server_config.get("ram_max", "4"),
             ram_unit=server_config.get("ram_unit", "G"),
             output_callback=self.broadcast_log_sync,
-            minecraft_version=server_config.get("version") or server_config.get("minecraft_version"),
-            java_path=server_config.get("java_path") # Pass saved Java path
+            minecraft_version=server_config.get("version")
+            or server_config.get("minecraft_version"),
+            java_path=server_config.get("java_path"),  # Pass saved Java path
         )
         self.active_handlers[server_id] = new_handler
-        
+
         self.config_manager.config["last_selected_id"] = server_id
         self.config_manager.save()
         return server_config
@@ -271,32 +296,36 @@ class AppState:
         """Thread-safe wrapper to broadcast logs from synchronous code."""
         try:
             if isinstance(message, dict):
-                 msg_obj = message
-                 if server_id and "server_id" not in msg_obj:
-                     msg_obj["server_id"] = server_id
+                msg_obj = message
+                if server_id and "server_id" not in msg_obj:
+                    msg_obj["server_id"] = server_id
             else:
-                 if isinstance(message, str):
-                     message = message.replace("\r", "")
-                 msg_obj = {"message": message, "level": level, "server_id": server_id}
-            
+                if isinstance(message, str):
+                    message = message.replace("\r", "")
+                msg_obj = {"message": message, "level": level, "server_id": server_id}
+
             # Store in app-level history for Dashboard polling
             # Skip verbose installer logs (recipe files, etc.) to avoid spam
-            msg_text = msg_obj.get("message", "") if isinstance(msg_obj, dict) else str(msg_obj)
-            
+            msg_text = (
+                msg_obj.get("message", "")
+                if isinstance(msg_obj, dict)
+                else str(msg_obj)
+            )
+
             # Robust filter for Forge/other installer verbose output
             # Patterns: "[Installer]   " (extra spaces), ".json", ".jar", "data/minecraft/", etc.
             is_verbose_installer = False
             if "[Installer]" in msg_text:
                 lower_msg = msg_text.lower()
                 is_verbose_installer = (
-                    "   " in msg_text or  # File listings usually have extra indentation
-                    ".json" in lower_msg or 
-                    ".class" in lower_msg or
-                    "data/minecraft/" in lower_msg or
-                    "extracting " in lower_msg or
-                    "unpacking " in lower_msg
+                    "   " in msg_text  # File listings usually have extra indentation
+                    or ".json" in lower_msg
+                    or ".class" in lower_msg
+                    or "data/minecraft/" in lower_msg
+                    or "extracting " in lower_msg
+                    or "unpacking " in lower_msg
                 )
-            
+
             if not is_verbose_installer:
                 self.app_log_history.append(msg_obj)
                 # deque auto-evicts oldest when full — no manual pop needed
@@ -312,18 +341,20 @@ class AppState:
     async def broadcast_log(self, message: dict):
         # Filter logs: Only send to WS if they belong to the CURRENT server or are global (no server_id)
         msg_server_id = message.get("server_id")
-        
+
         # If message belongs to a specific server, and it's NOT the selected one, don't stream it to console
         if msg_server_id and msg_server_id != self.selected_server_id:
-            return 
-            
+            return
+
         for ws in self.active_websockets:
             try:
                 await ws.send_json(message)
             except Exception:
                 pass
 
+
 state: Optional[AppState] = None
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -331,9 +362,10 @@ async def startup_event():
     state = AppState()
     state.start_background_tasks()
 
+
 # --- Models ---
 class ServerConfig(BaseModel):
-    name: str # New field
+    name: str  # New field
     path: str
     type: str
     version: Optional[str] = None
@@ -341,8 +373,10 @@ class ServerConfig(BaseModel):
     ram_max: str
     ram_unit: str
 
+
 class CommandRequest(BaseModel):
     command: str
+
 
 class InstallRequest(BaseModel):
     server_type: str
@@ -351,28 +385,36 @@ class InstallRequest(BaseModel):
     folder_name: str
     forge_version: Optional[str] = None
 
+
 class ValidatePathRequest(BaseModel):
     path: str
+
 
 class SelectServerRequest(BaseModel):
     server_id: str
 
+
 class ModInstallRequest(BaseModel):
     version_id: str
+
 
 class ModDeleteRequest(BaseModel):
     filename: str
 
+
 class ScheduleStopRequest(BaseModel):
     minutes: int
 
+
 # --- Core Endpoints ---
+
 
 @app.get("/servers")
 async def list_servers():
-    if not state: return []
+    if not state:
+        return []
     servers = state.config_manager.get_all_servers()
-    
+
     # Enrich with runtime status
     for s in servers:
         s_id = s.get("id")
@@ -380,71 +422,79 @@ async def list_servers():
             s["status"] = state.active_handlers[s_id].get_status()
         else:
             s["status"] = "offline"
-            
+
     return servers
+
 
 @app.post("/servers")
 async def add_server(config: ServerConfig):
     # This endpoint creates a new profile
     data = config.dict()
     # Ensure validation
-    if not os.path.exists(data['path']):
-         # If path doesn't exist, we might be creating a new one soon, 
-         # but for "import" it should exist. 
-         # For "create", the wizard creates folder first.
-         pass 
-         
+    if not os.path.exists(data["path"]):
+        # If path doesn't exist, we might be creating a new one soon,
+        # but for "import" it should exist.
+        # For "create", the wizard creates folder first.
+        pass
+
     new_server = state.config_manager.add_server(data)
     return new_server
+
 
 @app.post("/servers/select")
 async def select_server(req: SelectServerRequest):
     try:
         # Si cambiamos de servidor, limpiamos el historial de logs globales de la UI
         if state.selected_server_id != req.server_id:
-            state.app_log_history = [] 
-            
+            state.app_log_history = []
+
         config = state.load_server(req.server_id)
-        
+
         # Devolver estado inmediato para evitar lag visual
-        status_response = get_status() 
+        status_response = get_status()
         return {"status": "success", "server": config, "server_status": status_response}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/servers/{server_id}")
 async def delete_server(server_id: str, delete_files: bool = False):
     # Get server info before deleting profile
     server_info = state.config_manager.get_server(server_id)
     server_path = server_info.get("path") if server_info else None
-    
+
     # Delete the profile
     state.config_manager.delete_server(server_id)
     if state.selected_server_id == server_id:
         state.server_handler = None
         state.selected_server_id = None
-    
+
     # Optionally delete files
     if delete_files and server_path and os.path.exists(server_path):
         import shutil
+
         try:
             shutil.rmtree(server_path)
         except Exception as e:
             return {"status": "deleted", "files_deleted": False, "error": str(e)}
         return {"status": "deleted", "files_deleted": True}
-    
+
     return {"status": "deleted", "files_deleted": False}
+
 
 @app.get("/status")
 def get_status():
     if not state:
         return {"status": "offline", "cpu": 0, "ram": 0, "players": 0}
-    
+
     # If we are installing, return 'starting' so the UI knows we are busy
-    installing = getattr(state, 'install_progress', 0) > 0 and getattr(state, 'install_progress', 0) < 100
-    
+    installing = (
+        getattr(state, "install_progress", 0) > 0
+        and getattr(state, "install_progress", 0) < 100
+    )
+
     if not state.server_handler:
         return {
             "status": "starting" if installing else "not_configured",
@@ -452,9 +502,9 @@ def get_status():
             "cpu": 0,
             "ram": 0,
             "players": 0,
-            "recent_logs": state.log_history[-50:]
+            "recent_logs": state.log_history[-50:],
         }
-    
+
     stats = state.server_handler.get_stats()
 
     online_players = state.server_handler.get_active_players_list(trigger_refresh=False)
@@ -471,23 +521,26 @@ def get_status():
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
         "uptime": stats["uptime"],
-        "recent_logs": state.log_history[-50:], 
+        "recent_logs": state.log_history[-50:],
         "shutdown_info": state.server_handler.get_shutdown_info(),
         "tunnel": {
-            "active": state.tunnel_process is not None and state.tunnel_process.poll() is None,
-            "address": state.tunnel_address
-        }
+            "active": state.tunnel_process is not None
+            and state.tunnel_process.poll() is None,
+            "address": state.tunnel_address,
+        },
     }
+
 
 @app.post("/server/open-folder")
 def open_server_folder():
     if not state or not state.server_handler:
         raise HTTPException(status_code=400, detail="Server not initialized")
-    
+
     success = state.server_handler.open_folder()
     if not success:
         raise HTTPException(status_code=500, detail="Failed to open folder")
     return {"status": "success"}
+
 
 @app.post("/start")
 def start_server():
@@ -495,7 +548,7 @@ def start_server():
     if not state or not state.server_handler:
         logging.error("API: /start failed - Server not configured")
         raise HTTPException(status_code=400, detail="Server not configured")
-    
+
     try:
         logging.info("API: Triggering server_handler.start()...")
         state.server_handler.start()
@@ -504,28 +557,32 @@ def start_server():
         logging.exception("API: Critical error in /start endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/stop")
 def stop_server(force: bool = False):
     if not state or not state.server_handler:
-         raise HTTPException(status_code=400, detail="Server not configured")
+        raise HTTPException(status_code=400, detail="Server not configured")
     state.server_handler.stop(force=force)
     return {"message": "Stop command issued"}
+
 
 @app.post("/server/schedule-stop")
 def schedule_stop_server(req: ScheduleStopRequest):
     if not state or not state.server_handler:
-         raise HTTPException(status_code=400, detail="Server not configured")
+        raise HTTPException(status_code=400, detail="Server not configured")
     success, message = state.server_handler.schedule_shutdown(req.minutes)
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return {"message": message}
 
+
 @app.post("/server/cancel-stop")
 def cancel_stop_server():
     if not state or not state.server_handler:
-         raise HTTPException(status_code=400, detail="Server not configured")
+        raise HTTPException(status_code=400, detail="Server not configured")
     success, message = state.server_handler.cancel_shutdown()
     return {"message": message}
+
 
 @app.post("/command")
 def send_console_command(cmd: CommandRequest):
@@ -534,9 +591,11 @@ def send_console_command(cmd: CommandRequest):
     state.server_handler.send_command(cmd.command)
     return {"message": "Command sent"}
 
+
 @app.post("/configure")
 def configure_server(config: ServerConfig):
-    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
     state.config_manager.set("server_path", config.server_path)
     state.config_manager.set("server_type", config.server_type)
     state.config_manager.set("ram_min", config.ram_min)
@@ -548,7 +607,9 @@ def configure_server(config: ServerConfig):
     state.initialize_handler()
     return {"message": "Configuration saved"}
 
+
 # --- Setup Endpoints ---
+
 
 @app.get("/setup/versions/{server_type}")
 def getting_versions(server_type: str):
@@ -558,21 +619,26 @@ def getting_versions(server_type: str):
         return {"versions": list(versions.keys()), "all_data": versions}
     else:
         # returns list of dicts {version: "1.20.1", ...}
-        data = get_server_versions(server_type) 
+        data = get_server_versions(server_type)
         # Extract just version strings for easier frontend consumption
-        versions = [v['version'] for v in data] if data else []
+        versions = [v["version"] for v in data] if data else []
         return {"versions": versions}
+
 
 @app.get("/setup/java/check/{minecraft_version}")
 def check_java_status(minecraft_version: str):
-    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
     return state.java_manager.get_java_status(minecraft_version)
+
 
 class InstallJavaRequest(BaseModel):
     minecraft_version: str
 
+
 class DetectRequest(BaseModel):
     path: str
+
 
 @app.post("/setup/detect")
 def detect_server_info(req: DetectRequest):
@@ -582,10 +648,12 @@ def detect_server_info(req: DetectRequest):
     threading.Thread(target=run_java_install, daemon=True).start()
     return {"message": "Java installation started"}
 
+
 @app.post("/setup/java/install")
 def install_java_endpoint(req: InstallJavaRequest):
-    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
-    
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+
     logging.info(f"Received Java install request for MC {req.minecraft_version}")
 
     def run_java_install():
@@ -593,25 +661,33 @@ def install_java_endpoint(req: InstallJavaRequest):
             logging.info("Starting run_java_install thread")
             # Log the java manager base dir
             logging.info(f"JavaManager base dir: {state.java_manager.base_dir}")
-            
-            required_version = state.java_manager.get_required_java_version(req.minecraft_version)
+
+            required_version = state.java_manager.get_required_java_version(
+                req.minecraft_version
+            )
             logging.info(f"Required Java version: {required_version}")
-            
+
             def send_progress(pct):
                 logging.debug(f"Java Progress: {pct}%")
-                state.broadcast_log_sync({
-                    "type": "java_progress", 
-                    "value": pct, 
-                    "message": f"Downloading Java {required_version}..."
-                })
+                state.broadcast_log_sync(
+                    {
+                        "type": "java_progress",
+                        "value": pct,
+                        "message": f"Downloading Java {required_version}...",
+                    }
+                )
 
             send_progress(0)
-            state.broadcast_log_sync(f"Starting Java {required_version} download...", "info")
-            
+            state.broadcast_log_sync(
+                f"Starting Java {required_version} download...", "info"
+            )
+
             logging.info("Calling download_java...")
-            java_path = state.java_manager.download_java(required_version, progress_callback=send_progress)
+            java_path = state.java_manager.download_java(
+                required_version, progress_callback=send_progress
+            )
             logging.info(f"download_java returned: {java_path}")
-            
+
             if java_path:
                 send_progress(100)
                 state.broadcast_log_sync(f"Java installed at {java_path}", "success")
@@ -619,40 +695,49 @@ def install_java_endpoint(req: InstallJavaRequest):
             else:
                 logging.error("Java download execution returned None")
                 state.broadcast_log_sync("Java download failed", "error")
-                state.broadcast_log_sync({"type": "java_progress", "value": 0, "error": "Download failed"})
+                state.broadcast_log_sync(
+                    {"type": "java_progress", "value": 0, "error": "Download failed"}
+                )
 
         except Exception as e:
             logging.exception("Exception in run_java_install:")
             state.broadcast_log_sync(f"Java install error: {e}", "error")
-            state.broadcast_log_sync({"type": "java_progress", "value": 0, "error": str(e)})
+            state.broadcast_log_sync(
+                {"type": "java_progress", "value": 0, "error": str(e)}
+            )
 
     threading.Thread(target=run_java_install, daemon=True).start()
     return {"message": "Java installation started"}
+
 
 @app.post("/setup/validate-path")
 def validate_path(req: ValidatePathRequest):
     if os.path.isdir(req.path):
         # Check if valid server
-        has_jar = any(f.endswith('.jar') for f in os.listdir(req.path))
+        has_jar = any(f.endswith(".jar") for f in os.listdir(req.path))
         return {"valid": True, "has_jar": has_jar}
     return {"valid": False, "error": "Directory does not exist"}
 
+
 @app.get("/setup/install/progress")
 def get_install_progress():
-    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
     return {
         "value": state.install_progress,
         "message": state.install_status_msg,
         "error": state.install_error,
-        "server_id": state.installed_server_id
+        "server_id": state.installed_server_id,
     }
+
 
 @app.post("/setup/install")
 def install_server(req: InstallRequest):
-    if not state: raise HTTPException(status_code=500, detail="App state not initialized")
-    
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+
     install_path = os.path.join(req.parent_path, req.folder_name)
-    
+
     def run_install():
         try:
             # Helper to send structured progress
@@ -661,12 +746,8 @@ def install_server(req: InstallRequest):
                 state.install_status_msg = msg
                 if "server_id" in kwargs:
                     state.installed_server_id = kwargs["server_id"]
-                
-                data = {
-                    "type": "progress", 
-                    "value": pct, 
-                    "message": msg
-                }
+
+                data = {"type": "progress", "value": pct, "message": msg}
                 data.update(kwargs)
                 state.broadcast_log_sync(data)
 
@@ -677,15 +758,18 @@ def install_server(req: InstallRequest):
             state.installed_server_id = None
 
             # 1. Preparación del Directorio
-            send_progress(5, f"Preparing directory for {req.server_type} {req.version}...")
+            send_progress(
+                5, f"Preparing directory for {req.server_type} {req.version}..."
+            )
             os.makedirs(install_path, exist_ok=True)
             state.broadcast_log_sync(f"Install location: {install_path}", "info")
 
             # 2. GESTIÓN AUTOMÁTICA DE JAVA (Paso Crítico para Forge)
             # Forge requiere ejecutar su instalador con la versión correcta de Java.
             send_progress(10, "Checking Java compatibility...")
-            
+
             last_java_p = -1
+
             def java_progress_callback(p):
                 nonlocal last_java_p
                 int_p = int(p)
@@ -697,20 +781,23 @@ def install_server(req: InstallRequest):
 
             # Esto descarga Java si es necesario y devuelve la ruta al ejecutable
             java_path = state.java_manager.get_java_for_server(
-                install_path, 
-                req.version, 
+                install_path,
+                req.version,
                 force_download=False,
-                progress_callback=java_progress_callback
+                progress_callback=java_progress_callback,
             )
-            
+
             if not java_path:
-                raise Exception(f"Could not setup a valid Java runtime for Minecraft {req.version}")
-                
+                raise Exception(
+                    f"Could not setup a valid Java runtime for Minecraft {req.version}"
+                )
+
             state.broadcast_log_sync(f"Using Java: {java_path}", "success")
 
             # Progress wrapper for download functions
             # Throttle updates to avoid flooding the WebSocket and freezing the UI
             last_progress = -1
+
             def progress_callback(p):
                 nonlocal last_progress
                 int_p = int(p)
@@ -724,43 +811,58 @@ def install_server(req: InstallRequest):
             if req.server_type.lower() == "forge":
                 # Crear un handler temporal con la ruta de Java CORRECTA explícita
                 temp_handler = ServerHandler(
-                    install_path, 
-                    "forge", 
-                    "1", "2", "G", 
-                    output_callback=lambda m, l: state.broadcast_log_sync(m, l), 
+                    install_path,
+                    "forge",
+                    "1",
+                    "2",
+                    "G",
+                    output_callback=lambda m, l: state.broadcast_log_sync(m, l),
                     minecraft_version=req.version,
-                    java_path=java_path # IMPORTANTE: Usar el Java recién obtenido
+                    java_path=java_path,  # IMPORTANTE: Usar el Java recién obtenido
                 )
-                
+
                 # Wrap progress for forge installer (50-90 range)
                 def forge_progress(p):
                     scaled = 50 + (p * 0.4)
-                    send_progress(scaled, "Running Forge Installer (this may take a while)...")
-                
+                    send_progress(
+                        scaled, "Running Forge Installer (this may take a while)..."
+                    )
+
                 forge_ver = req.forge_version
                 if not forge_ver:
-                    send_progress(15, f"Fetching latest Forge version for {req.version}...")
+                    send_progress(
+                        15, f"Fetching latest Forge version for {req.version}..."
+                    )
                     from utils.api_client import get_forge_versions
+
                     versions = get_forge_versions()
                     if req.version in versions and versions[req.version]:
                         forge_ver = versions[req.version][0]
-                        state.broadcast_log_sync(f"Auto-selected Forge version: {forge_ver}", "info")
+                        state.broadcast_log_sync(
+                            f"Auto-selected Forge version: {forge_ver}", "info"
+                        )
                     else:
-                        raise Exception(f"No Forge version found for Minecraft {req.version}")
+                        raise Exception(
+                            f"No Forge version found for Minecraft {req.version}"
+                        )
 
                 # Ejecutar instalador
-                temp_handler.install_forge_server(forge_ver, req.version, forge_progress)
-                
+                temp_handler.install_forge_server(
+                    forge_ver, req.version, forge_progress
+                )
+
             else:
                 # Vanilla / Paper / Fabric logic
                 jar_path = os.path.join(install_path, "server.jar")
-                success = download_server_jar(req.server_type, req.version, jar_path, progress_callback)
+                success = download_server_jar(
+                    req.server_type, req.version, jar_path, progress_callback
+                )
                 if not success:
                     raise Exception("Failed to download Server JAR.")
 
             # 4. Configuración Final
             send_progress(95, "Finalizing configuration...")
-            
+
             # Create new server profile
             new_server_data = {
                 "name": req.folder_name,
@@ -770,24 +872,26 @@ def install_server(req: InstallRequest):
                 "ram_min": "2",
                 "ram_max": "4",
                 "ram_unit": "G",
-                "java_path": java_path # Guardar la ruta de Java detectada en la config
+                "java_path": java_path,  # Guardar la ruta de Java detectada en la config
             }
-            
+
             saved_server = state.config_manager.add_server(new_server_data)
-            
+
             try:
-                state.load_server(saved_server["id"]) 
+                state.load_server(saved_server["id"])
                 if state.server_handler:
                     state.server_handler._accept_eula()
                     state.server_handler._create_default_server_properties()
                     # Asegurar que el handler cargado tenga la ruta de Java correcta
-                    state.server_handler.java_path = java_path 
+                    state.server_handler.java_path = java_path
             except Exception as e:
                 state.broadcast_log_sync(f"Warning during final setup: {e}", "warning")
-            
+
             send_progress(100, "Installation complete!", server_id=saved_server["id"])
-            state.broadcast_log_sync("Installation complete! Server is ready to start.", "success")
-            
+            state.broadcast_log_sync(
+                "Installation complete! Server is ready to start.", "success"
+            )
+
         except Exception as e:
             state.install_error = str(e)
             state.broadcast_log_sync(f"Installation failed: {e}", "error")
@@ -795,6 +899,7 @@ def install_server(req: InstallRequest):
 
     threading.Thread(target=run_install, daemon=True).start()
     return {"message": "Installation started running in background"}
+
 
 @app.websocket("/ws/console")
 async def websocket_console(websocket: WebSocket):
@@ -831,15 +936,19 @@ async def websocket_console(websocket: WebSocket):
         if state and websocket in state.active_websockets:
             state.active_websockets.remove(websocket)
 
+
 # --- Player Management Endpoints ---
+
 
 class PlayerActionRequest(BaseModel):
     name: str
     reason: Optional[str] = None
 
+
 import platform
 import subprocess
 from mcstatus import JavaServer
+
 
 # --- Helper to open folder ---
 def open_file_explorer(path):
@@ -850,6 +959,7 @@ def open_file_explorer(path):
     else:
         subprocess.Popen(["xdg-open", path])
 
+
 @app.post("/system/open-folder")
 def open_server_folder():
     if state.server_handler and state.server_handler.server_path:
@@ -859,46 +969,49 @@ def open_server_folder():
             return {"message": "Folder opened"}
     raise HTTPException(status_code=404, detail="Server path not found")
 
+
 @app.get("/players/lists")
 def get_player_lists():
     if not state or not state.server_handler:
         return {"online": [], "ops": [], "banned": [], "whitelist": []}
-    
+
     server_path = state.server_handler.server_path
-    
+
     # helper
     def load_json(name):
         try:
-            with open(os.path.join(server_path, name), 'r') as f:
+            with open(os.path.join(server_path, name), "r") as f:
                 return json.load(f)
-        except: return []
+        except:
+            return []
 
     ops = load_json("ops.json")
     banned = load_json("banned-players.json")
     whitelist = load_json("whitelist.json")
-    
+
     # Get Online Players via ServerHandler (uses status_query)
     online_players = []
     if state.server_handler:
         raw_sample = state.server_handler.get_active_players_list()
         # Convert SLP format {name, id} to frontend expected {name, uuid}
         for player in raw_sample:
-            online_players.append({
-                "name": player.get("name", "Unknown"),
-                "uuid": player.get("id", "")
-            })
+            online_players.append(
+                {"name": player.get("name", "Unknown"), "uuid": player.get("id", "")}
+            )
 
     return {
         "online": online_players,
         "ops": ops,
         "banned": banned,
-        "whitelist": whitelist
+        "whitelist": whitelist,
     }
+
 
 @app.post("/players/op")
 def op_player(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
-    
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+
     if state.server_handler.is_running():
         state.server_handler.send_command(f"op {req.name}")
         return {"message": f"Opped {req.name} (Online)"}
@@ -908,13 +1021,16 @@ def op_player(req: PlayerActionRequest):
         # We will try to add a minimal entry and hope server resolves it or user accepts it might need UUID.
         # Ideally we'd fetch UUID from Mojang API here.
         # VALIDATION: ops.json structure: [{ "uuid": "...", "name": "...", "level": 4 }]
-        
+
         # For simplicity and robustness, we will fetch UUID if possible or fallback to a placeholder
         # In a real production app we SHOULD call Mojang API. For now, we'll warn or try to fetch.
         import requests
+
         uuid = ""
         try:
-            r = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{req.name}")
+            r = requests.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+            )
             if r.status_code == 200:
                 uuid = r.json().get("id")
                 # Format UUID with dashes
@@ -922,20 +1038,27 @@ def op_player(req: PlayerActionRequest):
                     uuid = f"{uuid[:8]}-{uuid[8:12]}-{uuid[12:16]}-{uuid[16:20]}-{uuid[20:]}"
         except:
             pass
-            
+
         if not uuid:
-             return {"message": "Could not fetch UUID. Cannot OP offline without UUID."}
+            return {"message": "Could not fetch UUID. Cannot OP offline without UUID."}
 
         path = os.path.join(state.server_handler.server_path, "ops.json")
-        entry = {"uuid": uuid, "name": req.name, "level": 4, "bypassesPlayerLimit": False}
-        
+        entry = {
+            "uuid": uuid,
+            "name": req.name,
+            "level": 4,
+            "bypassesPlayerLimit": False,
+        }
+
         updated = update_json_list(path, entry, "uuid")
         return {"message": f"Opped {req.name} (Offline)"}
 
+
 @app.post("/players/deop")
 def deop_player(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
-    
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+
     if state.server_handler.is_running():
         state.server_handler.send_command(f"deop {req.name}")
         return {"message": f"Deopped {req.name}"}
@@ -944,37 +1067,46 @@ def deop_player(req: PlayerActionRequest):
         remove_from_json_list(path, "name", req.name)
         return {"message": f"Deopped {req.name} (Offline)"}
 
+
 @app.post("/players/whitelist/add")
 def whitelist_add(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
-    
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+
     if state.server_handler.is_running():
         state.server_handler.send_command(f"whitelist add {req.name}")
         return {"message": f"Added {req.name} to whitelist"}
     else:
         # Fetch UUID as required for whitelist usually
         import requests
+
         uuid = ""
         try:
-            r = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{req.name}")
+            r = requests.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+            )
             if r.status_code == 200:
                 uuid = r.json().get("id")
                 if len(uuid) == 32:
                     uuid = f"{uuid[:8]}-{uuid[8:12]}-{uuid[12:16]}-{uuid[16:20]}-{uuid[20:]}"
         except:
             pass
-            
+
         if not uuid:
-             return {"message": "Could not fetch UUID. Cannot Whitelist offline without UUID."}
+            return {
+                "message": "Could not fetch UUID. Cannot Whitelist offline without UUID."
+            }
 
         path = os.path.join(state.server_handler.server_path, "whitelist.json")
         entry = {"uuid": uuid, "name": req.name}
         update_json_list(path, entry, "uuid")
         return {"message": f"Added {req.name} to whitelist (Offline)"}
 
+
 @app.post("/players/whitelist/remove")
 def whitelist_remove(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
 
     if state.server_handler.is_running():
         state.server_handler.send_command(f"whitelist remove {req.name}")
@@ -984,49 +1116,57 @@ def whitelist_remove(req: PlayerActionRequest):
         remove_from_json_list(path, "name", req.name)
         return {"message": f"Removed {req.name} from whitelist (Offline)"}
 
+
 @app.post("/players/ban")
 def ban_player(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
     reason = f" {req.reason}" if req.reason else ""
-    
+
     if state.server_handler.is_running():
         state.server_handler.send_command(f"ban {req.name}{reason}")
         return {"message": f"Banned {req.name}"}
     else:
         # For ban, we ideally need UUID too for banned-players.json
         import requests
+
         uuid = ""
         try:
-            r = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{req.name}")
+            r = requests.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+            )
             if r.status_code == 200:
                 uuid = r.json().get("id")
                 if len(uuid) == 32:
                     uuid = f"{uuid[:8]}-{uuid[8:12]}-{uuid[12:16]}-{uuid[16:20]}-{uuid[20:]}"
         except:
             pass
-        
-        # banned-players.json usually wants UUID, but older versions might accept name? 
+
+        # banned-players.json usually wants UUID, but older versions might accept name?
         # Standard format: [ { "uuid": "...", "name": "...", "created": "...", "source": "Console", "expires": "forever", "reason": "..." } ]
         if not uuid:
             return {"message": "Could not fetch UUID. Cannot Ban offline without UUID."}
 
         path = os.path.join(state.server_handler.server_path, "banned-players.json")
         from datetime import datetime
+
         entry = {
-            "uuid": uuid, 
-            "name": req.name, 
+            "uuid": uuid,
+            "name": req.name,
             "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S %z"),
-            "source": "Console", 
-            "expires": "forever", 
-            "reason": req.reason or "Banned by operator"
+            "source": "Console",
+            "expires": "forever",
+            "reason": req.reason or "Banned by operator",
         }
         update_json_list(path, entry, "uuid")
         return {"message": f"Banned {req.name} (Offline)"}
 
+
 @app.post("/players/pardon")
 def pardon_player(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
-    
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+
     if state.server_handler.is_running():
         state.server_handler.send_command(f"pardon {req.name}")
         return {"message": f"Unbanned {req.name}"}
@@ -1035,16 +1175,19 @@ def pardon_player(req: PlayerActionRequest):
         remove_from_json_list(path, "name", req.name)
         return {"message": f"Unbanned {req.name} (Offline)"}
 
+
 @app.post("/players/kick")
 def kick_player(req: PlayerActionRequest):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
     # Kick only makes sense online
     if not state.server_handler.is_running():
         return {"message": "Cannot kick player while server is offline"}
-        
+
     reason = f" {req.reason}" if req.reason else ""
     state.server_handler.send_command(f"kick {req.name}{reason}")
     return {"message": f"Kicked {req.name}"}
+
 
 # --- Helpers ---
 def update_json_list(path, entry, key_id="uuid"):
@@ -1052,10 +1195,11 @@ def update_json_list(path, entry, key_id="uuid"):
     data = []
     if os.path.exists(path):
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 data = json.load(f)
-        except: data = []
-    
+        except:
+            data = []
+
     # Check if exists
     exists = False
     for i, item in enumerate(data):
@@ -1065,59 +1209,67 @@ def update_json_list(path, entry, key_id="uuid"):
             break
     if not exists:
         data.append(entry)
-        
-    with open(path, 'w') as f:
+
+    with open(path, "w") as f:
         json.dump(data, f, indent=2)
+
 
 def remove_from_json_list(path, key, value):
     """Removes an entry from a JSON list file."""
-    if not os.path.exists(path): return
+    if not os.path.exists(path):
+        return
     try:
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             data = json.load(f)
-        
+
         # Filter out
         data = [item for item in data if item.get(key) != value]
-        
-        with open(path, 'w') as f:
+
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
-    except: pass
+    except:
+        pass
+
 
 # --- Settings Endpoints ---
 
+
 @app.get("/settings/properties")
 def get_server_properties():
-    if not state or not state.server_handler: return {}
+    if not state or not state.server_handler:
+        return {}
     path = os.path.join(state.server_handler.server_path, "server.properties")
     props = {}
     if os.path.exists(path):
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
                     props[key.strip()] = value.strip()
     return props
 
+
 @app.post("/settings/properties")
 async def update_server_properties(request: Request):
-    if not state or not state.server_handler: raise HTTPException(status_code=400, detail="Server not configured")
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
     data = await request.json()
     path = os.path.join(state.server_handler.server_path, "server.properties")
-    
+
     # Read existing lines to preserve comments/order
     lines = []
     if os.path.exists(path):
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             lines = f.readlines()
-            
+
     new_lines = []
     processed_keys = set()
-    
+
     for line in lines:
         stripped = line.strip()
-        if stripped and not stripped.startswith('#') and '=' in stripped:
-            key, val = stripped.split('=', 1)
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key, val = stripped.split("=", 1)
             key = key.strip()
             if key in data:
                 new_lines.append(f"{key}={data[key]}\n")
@@ -1126,60 +1278,68 @@ async def update_server_properties(request: Request):
                 new_lines.append(line)
         else:
             new_lines.append(line)
-            
+
     # Append new keys that weren't in the file
     for key, val in data.items():
         if key not in processed_keys:
             new_lines.append(f"{key}={val}\n")
-            
-    with open(path, 'w') as f:
+
+    with open(path, "w") as f:
         f.writelines(new_lines)
-        
+
     return {"message": "Properties updated"}
+
 
 @app.get("/settings/app")
 def get_app_settings():
-    if not state: return {}
+    if not state:
+        return {}
     conf = state.config_manager.config
     return {
         "ram_min": conf.get("ram_min", "2"),
         "ram_max": conf.get("ram_max", "4"),
         "ram_unit": conf.get("ram_unit", "G"),
-        "java_path": conf.get("java_path", "java")
+        "java_path": conf.get("java_path", "java"),
     }
+
 
 @app.post("/settings/app")
 async def update_app_settings(request: Request):
-    if not state: raise HTTPException(status_code=500, detail="App state invalid")
+    if not state:
+        raise HTTPException(status_code=500, detail="App state invalid")
     data = await request.json()
-    
+
     # Update config manager
     state.config_manager.config.update(data)
     state.config_manager.save()
-    
+
     # Update active handler if it exists
     if state.server_handler:
-        state.server_handler.java_path = data.get("java_path", state.server_handler.java_path)
+        state.server_handler.java_path = data.get(
+            "java_path", state.server_handler.java_path
+        )
         # Update RAM (handler method updates its internal state)
         if "ram_max" in data or "ram_min" in data:
             state.server_handler.update_ram(
                 data.get("ram_max", state.server_handler.ram_max),
                 data.get("ram_min", state.server_handler.ram_min),
-                data.get("ram_unit", state.server_handler.ram_unit)
+                data.get("ram_unit", state.server_handler.ram_unit),
             )
-            
+
     return {"message": "App settings updated"}
 
 
 # --- World Management Endpoints ---
 
+
 @app.get("/worlds")
 def get_worlds():
-    if not state or not state.server_handler: return []
-    
+    if not state or not state.server_handler:
+        return []
+
     server_path = state.server_handler.server_path
     worlds = []
-    
+
     if os.path.exists(server_path):
         for item in os.listdir(server_path):
             item_path = os.path.join(server_path, item)
@@ -1195,16 +1355,24 @@ def get_worlds():
                     if cached and cached.get("folder_mtime") == folder_mtime:
                         size_str = cached.get("size")
                     else:
-                        size_str = cached.get("size") if cached and cached.get("size") else "..."
+                        size_str = (
+                            cached.get("size")
+                            if cached and cached.get("size")
+                            else "..."
+                        )
 
                         with state.world_size_lock:
                             if item_path not in state.world_size_inflight:
                                 state.world_size_inflight.add(item_path)
 
-                                def _compute_world_size(path_to_size: str, expected_folder_mtime: float):
+                                def _compute_world_size(
+                                    path_to_size: str, expected_folder_mtime: float
+                                ):
                                     try:
                                         total_size = 0
-                                        for dirpath, dirnames, filenames in os.walk(path_to_size):
+                                        for dirpath, dirnames, filenames in os.walk(
+                                            path_to_size
+                                        ):
                                             for f in filenames:
                                                 fp = os.path.join(dirpath, f)
                                                 try:
@@ -1220,17 +1388,26 @@ def get_worlds():
                                     finally:
                                         if state:
                                             with state.world_size_lock:
-                                                state.world_size_inflight.discard(path_to_size)
+                                                state.world_size_inflight.discard(
+                                                    path_to_size
+                                                )
 
-                                threading.Thread(target=_compute_world_size, args=(item_path, folder_mtime), daemon=True).start()
-                    
-                    worlds.append({
-                        "name": item,
-                        "size": size_str or "...",
-                        "last_modified": level_mtime
-                    })
-    
+                                threading.Thread(
+                                    target=_compute_world_size,
+                                    args=(item_path, folder_mtime),
+                                    daemon=True,
+                                ).start()
+
+                    worlds.append(
+                        {
+                            "name": item,
+                            "size": size_str or "...",
+                            "last_modified": level_mtime,
+                        }
+                    )
+
     return worlds
+
 
 @app.post("/worlds/create")
 def create_world(request: Request):
@@ -1264,11 +1441,9 @@ def list_world_backups(world: Optional[str] = None):
                 continue
 
             size_mb = round(os.path.getsize(fp) / (1024 * 1024), 2)
-            items.append({
-                "name": name,
-                "size": f"{size_mb} MB",
-                "created": os.path.getmtime(fp)
-            })
+            items.append(
+                {"name": name, "size": f"{size_mb} MB", "created": os.path.getmtime(fp)}
+            )
     except Exception:
         return items
 
@@ -1287,7 +1462,7 @@ def create_world_backup(req: WorldBackupRequest):
         props_path = os.path.join(server_path, "server.properties")
         try:
             if os.path.exists(props_path):
-                with open(props_path, 'r', encoding='utf-8', errors='replace') as f:
+                with open(props_path, "r", encoding="utf-8", errors="replace") as f:
                     for line in f:
                         if line.startswith("level-name="):
                             world_name = line.split("=", 1)[1].strip() or None
@@ -1314,7 +1489,9 @@ def create_world_backup(req: WorldBackupRequest):
             if state:
                 state.broadcast_log_sync(f"📦 Creating backup: {backup_name}", "info")
 
-            with zipfile.ZipFile(backup_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            with zipfile.ZipFile(
+                backup_path, "w", compression=zipfile.ZIP_DEFLATED
+            ) as zf:
                 for dirpath, dirnames, filenames in os.walk(world_path):
                     for filename in filenames:
                         full_path = os.path.join(dirpath, filename)
@@ -1338,24 +1515,28 @@ def create_world_backup(req: WorldBackupRequest):
     threading.Thread(target=run_backup, daemon=True).start()
     return {"status": "started", "name": backup_name}
 
+
 # --- Tunnel Management Endpoints (Pinggy) ---
+
 
 @app.get("/tunnel/status")
 def get_tunnel_status():
     if not state:
         return {"active": False, "address": None}
-    
+
     return {
-        "active": state.tunnel_process is not None and state.tunnel_process.poll() is None,
-        "address": state.tunnel_address
+        "active": state.tunnel_process is not None
+        and state.tunnel_process.poll() is None,
+        "address": state.tunnel_address,
     }
+
 
 @app.post("/tunnel/start")
 def start_tunnel(request: Request, region: str = Query("eu")):
     try:
         if not state:
             raise HTTPException(status_code=500, detail="App state not initialized")
-        
+
         # Stop any existing tunnel before starting a new one
         if state.tunnel_process and state.tunnel_process.poll() is None:
             logging.info("Stopping existing tunnel before starting a new one...")
@@ -1370,74 +1551,98 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                     pass
             state.tunnel_process = None
             state.tunnel_address = None
-        
+
         # Verify SSH is available BEFORE starting the thread
         ssh_executable = shutil.which("ssh")
         if not ssh_executable and sys.platform == "win32":
             # Fallback for Windows if not in PATH
             common_paths = [
-                os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32\\OpenSSH\\ssh.exe"),
-                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "OpenSSH\\ssh.exe"),
-                os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "OpenSSH\\ssh.exe"),
+                os.path.join(
+                    os.environ.get("SystemRoot", "C:\\Windows"),
+                    "System32\\OpenSSH\\ssh.exe",
+                ),
+                os.path.join(
+                    os.environ.get("ProgramFiles", "C:\\Program Files"),
+                    "OpenSSH\\ssh.exe",
+                ),
+                os.path.join(
+                    os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+                    "OpenSSH\\ssh.exe",
+                ),
             ]
             for p in common_paths:
                 if os.path.exists(p):
                     ssh_executable = p
                     logging.info(f"Found SSH at fallback path: {p}")
                     break
-        
+
         if not ssh_executable:
             logging.error("SSH not found in PATH or common locations")
             raise HTTPException(
-                status_code=400, 
-                detail="SSH no encontrado. Por favor, instala 'OpenSSH Client' en las características opcionales de Windows para usar 'Make Public'."
+                status_code=400,
+                detail="SSH no encontrado. Por favor, instala 'OpenSSH Client' en las características opcionales de Windows para usar 'Make Public'.",
             )
-        
+
         # Discover ssh-keygen as well
         ssh_keygen_executable = shutil.which("ssh-keygen")
         if not ssh_keygen_executable and ssh_executable:
             # If we found ssh.exe in a folder, its likely ssh-keygen is there too
-            potential_keygen = os.path.join(os.path.dirname(ssh_executable), "ssh-keygen.exe")
+            potential_keygen = os.path.join(
+                os.path.dirname(ssh_executable), "ssh-keygen.exe"
+            )
             if os.path.exists(potential_keygen):
                 ssh_keygen_executable = potential_keygen
-        
+
         if not ssh_keygen_executable:
-            ssh_keygen_executable = "ssh-keygen" # Fallback to PATH and hope for the best if we couldn't find it explicitly
-        
-        
+            ssh_keygen_executable = "ssh-keygen"  # Fallback to PATH and hope for the best if we couldn't find it explicitly
+
         # Get server port (default 25565)
         port = "25565"
         if state.server_handler:
             try:
-                props_path = os.path.join(state.server_handler.server_path, "server.properties")
+                props_path = os.path.join(
+                    state.server_handler.server_path, "server.properties"
+                )
                 if os.path.exists(props_path):
-                    with open(props_path, 'r', encoding='utf-8', errors='replace') as f:
+                    with open(props_path, "r", encoding="utf-8", errors="replace") as f:
                         for line in f:
                             if line.startswith("server-port="):
                                 port = line.split("=")[1].strip()
                                 break
             except:
                 pass
-        
+
         def _ensure_ssh_key():
             """Ensures a dedicated SSH key exists for the app to authenticate with Pinggy."""
             try:
                 ssh_dir = os.path.join(state.app_data_dir, "ssh")
                 if not os.path.exists(ssh_dir):
                     os.makedirs(ssh_dir)
-                
+
                 key_path = os.path.join(ssh_dir, "id_rsa")
                 pub_path = f"{key_path}.pub"
-                
+
                 # If key doesn't exist, generate it
                 if not os.path.exists(key_path) or not os.path.exists(pub_path):
                     logging.info("Generating new SSH key for Pinggy...")
                     subprocess.run(
-                        [ssh_keygen_executable, "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""],
+                        [
+                            ssh_keygen_executable,
+                            "-t",
+                            "rsa",
+                            "-b",
+                            "2048",
+                            "-f",
+                            key_path,
+                            "-N",
+                            "",
+                        ],
                         check=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
-                        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                        if sys.platform == "win32"
+                        else 0,
                     )
                 return key_path
             except Exception as e:
@@ -1447,36 +1652,43 @@ def start_tunnel(request: Request, region: str = Query("eu")):
         def run_tunnel():
             import subprocess
             import re
+
             connected_emitted = False
             try:
                 # Construct host based on region
                 # regions: eu, us, ap, sa
                 host = f"{region}.free.pinggy.io"
-                
-                logging.info(f"Starting Pinggy tunnel ({region.upper()}) for port {port}...")
-                state.broadcast_log_sync(f"🌐 Starting public tunnel ({region.upper()}) for port {port}...", "info")
-                
+
+                logging.info(
+                    f"Starting Pinggy tunnel ({region.upper()}) for port {port}..."
+                )
+                state.broadcast_log_sync(
+                    f"🌐 Starting public tunnel ({region.upper()}) for port {port}...",
+                    "info",
+                )
+
                 # Ensure we have a key
                 key_path = _ensure_ssh_key()
-                
+
                 # Pinggy SSH command - optimized with identity
                 cmd = [
                     ssh_executable,
-                    "-p", "443",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "ServerAliveInterval=30",
-                    "-o", "BatchMode=yes",
-                    "-T", # Disable pseudo-terminal
+                    "-p",
+                    "443",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ServerAliveInterval=30",
+                    "-o",
+                    "BatchMode=yes",
+                    "-T",  # Disable pseudo-terminal
                 ]
-                
+
                 if key_path and os.path.exists(key_path):
                     cmd.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
-                
-                cmd.extend([
-                    "-R", f"0:127.0.0.1:{port}",
-                    f"tcp@{host}"
-                ])
-                
+
+                cmd.extend(["-R", f"0:127.0.0.1:{port}", f"tcp@{host}"])
+
                 # Using bufsize=1 for line buffering
                 state.tunnel_process = subprocess.Popen(
                     cmd,
@@ -1485,136 +1697,186 @@ def start_tunnel(request: Request, region: str = Query("eu")):
                     stdin=subprocess.PIPE,
                     text=True,
                     bufsize=1,
-                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if sys.platform == "win32"
+                    else 0,
                 )
-                
+
                 # Read output to find the tunnel URL
                 # Use iter to read line by line until process exits
-                for line in iter(state.tunnel_process.stdout.readline, ''):
-                    if not line: break
-                    
+                for line in iter(state.tunnel_process.stdout.readline, ""):
+                    if not line:
+                        break
+
                     line = line.strip()
-                    if not line: continue
-                    
+                    if not line:
+                        continue
+
                     # logging.debug(f"Pinggy output: {line}") # Too noisy
-                    
+
                     # Pinggy outputs something like: "tcp://xyz.a.pinggy.io:12345"
                     # Match tcp:// format
-                    tcp_match = re.search(r'tcp://([a-zA-Z0-9\.\-]+:\d+)', line)
+                    tcp_match = re.search(r"tcp://([a-zA-Z0-9\.\-]+:\d+)", line)
                     if tcp_match:
                         new_addr = tcp_match.group(1)
                         if new_addr and new_addr != state.tunnel_address:
                             state.tunnel_address = new_addr
-                        
+
                     # Match raw address format (free.pinggy.io:12345)
                     # Broader match: something.pinggy.io:digits
                     if not state.tunnel_address:
-                        addr_match = re.search(r'([a-zA-Z0-9\.\-]+\.pinggy\.io:\d+)', line)
+                        addr_match = re.search(
+                            r"([a-zA-Z0-9\.\-]+\.pinggy\.io:\d+)", line
+                        )
                         if addr_match:
                             new_addr = addr_match.group(1)
                             if new_addr and new_addr != state.tunnel_address:
                                 state.tunnel_address = new_addr
-                    
+
                     # Check for "Permission denied" or other errors
                     if "Permission denied" in line or "Error" in line:
-                         state.broadcast_log_sync(f"Tunnel Error: {line}", "error")
+                        state.broadcast_log_sync(f"Tunnel Error: {line}", "error")
 
                     if state.tunnel_address and not connected_emitted:
                         logging.info(f"Tunnel established: {state.tunnel_address}")
-                        state.broadcast_log_sync(f"✅ Public server active! Address: {state.tunnel_address}", "success")
-                        state.broadcast_log_sync({"type": "tunnel_connected", "address": state.tunnel_address})
+                        state.broadcast_log_sync(
+                            f"✅ Public server active! Address: {state.tunnel_address}",
+                            "success",
+                        )
+                        state.broadcast_log_sync(
+                            {
+                                "type": "tunnel_connected",
+                                "address": state.tunnel_address,
+                            }
+                        )
                         connected_emitted = True
-                
+
                 # Additional check if process exited with error
-                if state.tunnel_process.poll() is not None and state.tunnel_process.returncode != 0:
-                     err_out = state.tunnel_process.stderr.read() if state.tunnel_process.stderr else ""
-                     if err_out:
-                         logging.error(f"Tunnel process error: {err_out}")
-                         state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
-                
+                if (
+                    state.tunnel_process.poll() is not None
+                    and state.tunnel_process.returncode != 0
+                ):
+                    err_out = (
+                        state.tunnel_process.stderr.read()
+                        if state.tunnel_process.stderr
+                        else ""
+                    )
+                    if err_out:
+                        logging.error(f"Tunnel process error: {err_out}")
+                        state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
+
                 # If we exit the loop, tunnel has closed
                 state.broadcast_log_sync("🔴 Tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_disconnected"})
                 state.tunnel_address = None
-                
+
             except Exception as e:
                 logging.exception(f"Tunnel error: {e}")
                 state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
                 state.tunnel_address = None
-        
+
         threading.Thread(target=run_tunnel, daemon=True).start()
         return {"message": "Tunnel starting...", "status": "connecting"}
     except Exception as e:
         logging.exception(f"Error in start_tunnel endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/tunnel/stop")
 def stop_tunnel():
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
-    
+
     if state.tunnel_process:
         try:
             state.tunnel_process.terminate()
             state.tunnel_process.wait(timeout=5)
         except:
             state.tunnel_process.kill()
-        
+
         state.tunnel_process = None
         state.tunnel_address = None
         state.broadcast_log_sync("🔴 Tunnel stopped", "info")
         state.broadcast_log_sync({"type": "tunnel_disconnected"})
-    
+
     return {"message": "Tunnel stopped"}
+
 
 # --- Mods Endpoints ---
 @app.get("/mods/search")
-def search_mods(q: str, loader: str = "fabric", version: str = None, project_type: str = "mod", sort: str = "downloads", category: str = None):
-    if not state: raise HTTPException(status_code=500, detail="State not initialized")
-    
+def search_mods(
+    q: str,
+    loader: str = "fabric",
+    version: str = None,
+    project_type: str = "mod",
+    sort: str = "downloads",
+    category: str = None,
+):
+    if not state:
+        raise HTTPException(status_code=500, detail="State not initialized")
+
     # If version not provided, try to use server's version
     if not version and state.server_handler:
         version = state.server_handler.minecraft_version
-        
-    return state.mods_manager.search_mods(q, loader, version, project_type, sort, category)
+
+    return state.mods_manager.search_mods(
+        q, loader, version, project_type, sort, category
+    )
+
 
 @app.get("/mods/versions/{slug}")
 def get_mod_versions(slug: str, loader: str = "fabric", version: str = None):
-    if not state: raise HTTPException(status_code=500, detail="State not initialized")
-    
+    if not state:
+        raise HTTPException(status_code=500, detail="State not initialized")
+
     # If version not provided, use server's version
     if not version and state.server_handler:
         version = state.server_handler.minecraft_version
-        
+
     return state.mods_manager.get_mod_versions(slug, loader, version)
+
 
 @app.get("/mods/installed")
 def get_installed_mods():
-    if not state or not state.server_handler: return []
+    if not state or not state.server_handler:
+        return []
     return state.mods_manager.get_installed_mods(state.server_handler.server_path)
+
 
 @app.post("/mods/install")
 def install_mod(req: ModInstallRequest):
-    if not state or not state.server_handler: 
+    if not state or not state.server_handler:
         raise HTTPException(status_code=400, detail="Server not configured")
-        
+
     def run_mod_install():
         try:
+
             def progress(pct, msg):
-                state.broadcast_log_sync({
-                    "type": "progress",
-                    "value": pct,
-                    "message": msg
-                })
-            
-            result = state.mods_manager.install_mod(req.version_id, state.server_handler.server_path, progress_callback=progress)
-            
+                state.broadcast_log_sync(
+                    {"type": "progress", "value": pct, "message": msg}
+                )
+
+            result = state.mods_manager.install_mod(
+                req.version_id,
+                state.server_handler.server_path,
+                progress_callback=progress,
+            )
+
             if result.get("success"):
-                state.broadcast_log_sync(f"Installation success: {result.get('filename') or 'Modpack'}", "success")
-                state.broadcast_log_sync({"type": "mod_install_complete", "success": True})
+                state.broadcast_log_sync(
+                    f"Installation success: {result.get('filename') or 'Modpack'}",
+                    "success",
+                )
+                state.broadcast_log_sync(
+                    {"type": "mod_install_complete", "success": True}
+                )
             else:
-                state.broadcast_log_sync(f"Installation failed: {result.get('error')}", "error")
-                state.broadcast_log_sync({"type": "mod_install_complete", "success": False})
+                state.broadcast_log_sync(
+                    f"Installation failed: {result.get('error')}", "error"
+                )
+                state.broadcast_log_sync(
+                    {"type": "mod_install_complete", "success": False}
+                )
 
         except Exception as e:
             state.broadcast_log_sync(f"Installation crashed: {e}", "error")
@@ -1622,36 +1884,41 @@ def install_mod(req: ModInstallRequest):
 
     # Start in background
     threading.Thread(target=run_mod_install, daemon=True).start()
-    
+
     return {"status": "started", "message": "Installation started in background"}
+
 
 @app.post("/mods/delete")
 def delete_mod(req: ModDeleteRequest):
     if not state or not state.server_handler:
         raise HTTPException(status_code=400, detail="Server not configured")
-        
-    success = state.mods_manager.delete_mod(req.filename, state.server_handler.server_path)
+
+    success = state.mods_manager.delete_mod(
+        req.filename, state.server_handler.server_path
+    )
     if not success:
         raise HTTPException(status_code=400, detail="Failed to delete mod")
-        
+
     return {"status": "success"}
+
 
 @app.post("/mods/open-folder")
 def open_mods_folder():
     if not state or not state.server_handler:
         raise HTTPException(status_code=400, detail="Server not configured")
-        
+
     mods_path = os.path.join(state.server_handler.server_path, "mods")
     if not os.path.exists(mods_path):
         os.makedirs(mods_path)
-        
+
     open_file_explorer(mods_path)
     return {"message": "Folder opened"}
+
 
 @app.post("/system/shutdown")
 def shutdown_app():
     logging.info("Shutdown request received")
-    
+
     def perform_full_shutdown():
         # Stop any running tunnel
         if state and state.tunnel_process and state.tunnel_process.poll() is None:
@@ -1666,21 +1933,21 @@ def shutdown_app():
                     pass
             state.tunnel_process = None
             state.tunnel_address = None
-        
+
         # Stop servers
         if state and state.active_handlers:
             handlers_to_wait = []
             for server_id, handler in state.active_handlers.items():
-                if handler.is_running() or handler.is_starting():
+                if handler.server_process and handler.server_process.poll() is None:
                     logging.info(f"Stopping server {server_id}...")
                     handler.stop(silent=True)
                     handlers_to_wait.append((server_id, handler))
-            
+
             # Wait for each server to stop
             for server_id, handler in handlers_to_wait:
                 logging.info(f"Waiting for server {server_id} to stop...")
-                handler.wait_for_stop(timeout=25) # Slightly less than backend timeout
-        
+                handler.wait_for_stop(timeout=25)  # Slightly less than backend timeout
+
         logging.info("All servers stopped. Backend exiting.")
         # Final exit
         os._exit(0)
@@ -1689,10 +1956,11 @@ def shutdown_app():
     threading.Thread(target=perform_full_shutdown, daemon=True).start()
     return {"message": "Shutdown sequence started"}
 
+
 def start_parent_watchdog(forced_parent_pid=None):
     """Vigila si el proceso padre (Electron) sigue vivo. Si muere, cerramos todo."""
     parent_pid = forced_parent_pid or os.getppid()
-    if parent_pid <= 1: # No parent or init
+    if parent_pid <= 1:  # No parent or init
         return
 
     def watch():
@@ -1704,12 +1972,17 @@ def start_parent_watchdog(forced_parent_pid=None):
                 if not parent.is_running() or parent.status() == psutil.STATUS_ZOMBIE:
                     raise psutil.NoSuchProcess(parent_pid)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                logging.warning("Parent process lost. Shutting down backend and servers...")
+                logging.warning(
+                    "Parent process lost. Shutting down backend and servers..."
+                )
                 # Stop ALL active server handlers, not just the selected one
                 if state and state.active_handlers:
                     for server_id, handler in state.active_handlers.items():
                         try:
-                            if handler.is_running() or handler.is_starting():
+                            if (
+                                handler.server_process
+                                and handler.server_process.poll() is None
+                            ):
                                 handler.stop(force=True, silent=True)
                         except:
                             pass
@@ -1718,7 +1991,9 @@ def start_parent_watchdog(forced_parent_pid=None):
 
     threading.Thread(target=watch, daemon=True).start()
 
+
 # --- Server Appearance ---
+
 
 @app.post("/server/icon")
 async def upload_server_icon(file: UploadFile = File(...)):
@@ -1727,8 +2002,10 @@ async def upload_server_icon(file: UploadFile = File(...)):
 
     try:
         # Check if valid image extension
-        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-             raise HTTPException(status_code=400, detail="Only PNG or JPG images are allowed")
+        if not file.filename.lower().endswith((".png", ".jpg", ".jpeg")):
+            raise HTTPException(
+                status_code=400, detail="Only PNG or JPG images are allowed"
+            )
 
         server_path = state.server_handler.server_path
         icon_path = os.path.join(server_path, "server-icon.png")
@@ -1737,26 +2014,30 @@ async def upload_server_icon(file: UploadFile = File(...)):
         try:
             from PIL import Image
             import io
-            
+
             contents = await file.read()
             img = Image.open(io.BytesIO(contents))
-            
+
             # Resize to 64x64
             img = img.resize((64, 64), Image.Resampling.LANCZOS)
-            
+
             # Save as PNG
             img.save(icon_path, format="PNG")
-            
+
         except ImportError:
             # Fallback: Just save the file (user must ensure it's 64x64)
             # Or log warning.
-            logging.warning("Pillow not installed, saving icon directly. It might not work if not 64x64.")
+            logging.warning(
+                "Pillow not installed, saving icon directly. It might not work if not 64x64."
+            )
             contents = await file.read()
             with open(icon_path, "wb") as f:
                 f.write(contents)
         except Exception as e:
             logging.error(f"Error processing image: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to process image: {str(e)}"
+            )
 
         return {"status": "success", "message": "Server icon updated"}
 
@@ -1768,63 +2049,64 @@ async def upload_server_icon(file: UploadFile = File(...)):
 async def get_server_icon():
     if not state.server_handler:
         return {"exists": False}
-        
+
     icon_path = os.path.join(state.server_handler.server_path, "server-icon.png")
     if os.path.exists(icon_path):
         return {"exists": True, "ts": os.path.getmtime(icon_path)}
     return {"exists": False}
 
+
 @app.get("/server/icon/image")
 async def get_server_icon_image():
     if not state.server_handler:
         raise HTTPException(status_code=404, detail="No server")
-    
+
     icon_path = os.path.join(state.server_handler.server_path, "server-icon.png")
     if os.path.exists(icon_path):
         from fastapi.responses import FileResponse
+
         return FileResponse(icon_path)
-        
+
     raise HTTPException(status_code=404, detail="No icon")
 
 
 # --- Plugin Management (Paper/Spigot) ---
 
+
 @app.get("/server/plugins")
 def get_plugins():
     if not state.server_handler:
-         raise HTTPException(status_code=400, detail="No server selected")
-         
+        raise HTTPException(status_code=400, detail="No server selected")
+
     plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
     if not os.path.exists(plugins_dir):
         return []
-        
+
     plugins = []
     try:
         for f in os.listdir(plugins_dir):
             if f.endswith(".jar"):
                 path = os.path.join(plugins_dir, f)
                 size_mb = round(os.path.getsize(path) / (1024 * 1024), 2)
-                plugins.append({
-                    "filename": f,
-                    "size": f"{size_mb} MB"
-                })
+                plugins.append({"filename": f, "size": f"{size_mb} MB"})
     except Exception as e:
         logging.error(f"Error listing plugins: {e}")
         return []
-        
+
     return plugins
+
 
 @app.post("/server/plugins")
 async def upload_plugin(file: UploadFile = File(...)):
     if not state.server_handler:
-         raise HTTPException(status_code=400, detail="No server selected")
-         
+        raise HTTPException(status_code=400, detail="No server selected")
+
     plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
     if not os.path.exists(plugins_dir):
         os.makedirs(plugins_dir)
-        
+
     file_path = os.path.join(plugins_dir, file.filename)
-    
+
     try:
         contents = await file.read()
         with open(file_path, "wb") as f:
@@ -1833,14 +2115,15 @@ async def upload_plugin(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/server/plugins/{filename}")
 def delete_plugin(filename: str):
     if not state.server_handler:
-         raise HTTPException(status_code=400, detail="No server selected")
-         
+        raise HTTPException(status_code=400, detail="No server selected")
+
     plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
     file_path = os.path.join(plugins_dir, filename)
-    
+
     if os.path.exists(file_path):
         try:
             os.remove(file_path)
@@ -1850,103 +2133,137 @@ def delete_plugin(filename: str):
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
+
 # --- Plugin Browsing (Modrinth) ---
 
+
 @app.get("/plugins/search")
-def search_plugins(q: str = "", version: str = None, sort: str = "downloads", category: str = None):
-    if not state: raise HTTPException(status_code=500, detail="State not initialized")
-    
+def search_plugins(
+    q: str = "", version: str = None, sort: str = "downloads", category: str = None
+):
+    if not state:
+        raise HTTPException(status_code=500, detail="State not initialized")
+
     # Use server version if not provided
     if not version and state.server_handler:
         version = state.server_handler.minecraft_version
-        
+
     # Search with project_type="plugin" and loaders for bukkit/spigot/paper
-    return state.mods_manager.search_mods(q, loader="paper", version=version, project_type="plugin", sort=sort, category=category)
+    return state.mods_manager.search_mods(
+        q,
+        loader="paper",
+        version=version,
+        project_type="plugin",
+        sort=sort,
+        category=category,
+    )
+
 
 @app.get("/plugins/versions/{slug}")
 def get_plugin_versions(slug: str, version: str = None):
-    if not state: raise HTTPException(status_code=500, detail="State not initialized")
-    
+    if not state:
+        raise HTTPException(status_code=500, detail="State not initialized")
+
     if not version and state.server_handler:
         version = state.server_handler.minecraft_version
-        
+
     return state.mods_manager.get_mod_versions(slug, loader="paper", version=version)
+
 
 class PluginInstallRequest(BaseModel):
     version_id: str
 
+
 @app.post("/plugins/install")
 def install_plugin(req: PluginInstallRequest):
-    if not state or not state.server_handler: 
+    if not state or not state.server_handler:
         raise HTTPException(status_code=400, detail="Server not configured")
-        
+
     def run_plugin_install():
         try:
+
             def progress(pct, msg):
-                state.broadcast_log_sync({
-                    "type": "progress",
-                    "value": pct,
-                    "message": msg
-                })
-            
+                state.broadcast_log_sync(
+                    {"type": "progress", "value": pct, "message": msg}
+                )
+
             # Get version info
-            response = requests.get(f"https://api.modrinth.com/v2/version/{req.version_id}", headers={"User-Agent": "MinecraftLocalServerGUI/1.0"})
+            response = requests.get(
+                f"https://api.modrinth.com/v2/version/{req.version_id}",
+                headers={"User-Agent": "MinecraftLocalServerGUI/1.0"},
+            )
             response.raise_for_status()
             version_data = response.json()
-            
+
             files = version_data.get("files", [])
             if not files:
                 state.broadcast_log_sync("No files found for plugin", "error")
                 return
-                
+
             primary_file = next((f for f in files if f.get("primary")), files[0])
             url = primary_file["url"]
             filename = primary_file["filename"]
-            
+
             plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
             if not os.path.exists(plugins_dir):
                 os.makedirs(plugins_dir)
-                
+
             file_path = os.path.join(plugins_dir, filename)
-            
+
             progress(10, f"Downloading {filename}...")
-            
+
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
-                with open(file_path, 'wb') as f:
+                with open(file_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
-            
+
             progress(100, "Installed!")
             state.broadcast_log_sync(f"Plugin installed: {filename}", "success")
-            state.broadcast_log_sync({"type": "plugin_install_complete", "success": True, "filename": filename})
-            
+            state.broadcast_log_sync(
+                {
+                    "type": "plugin_install_complete",
+                    "success": True,
+                    "filename": filename,
+                }
+            )
+
         except Exception as e:
             state.broadcast_log_sync(f"Plugin install error: {e}", "error")
-            state.broadcast_log_sync({"type": "plugin_install_complete", "success": False})
-    
+            state.broadcast_log_sync(
+                {"type": "plugin_install_complete", "success": False}
+            )
+
     threading.Thread(target=run_plugin_install, daemon=True).start()
     return {"status": "started", "message": "Plugin installation started"}
 
+
 # --- System Info (RAM validation) ---
+
 
 @app.get("/system/info")
 def get_system_info():
     """Returns system information for frontend validation (e.g. RAM limits)."""
     try:
         mem = psutil.virtual_memory()
-        total_gb = round(mem.total / (1024 ** 3), 1)
-        available_gb = round(mem.available / (1024 ** 3), 1)
+        total_gb = round(mem.total / (1024**3), 1)
+        available_gb = round(mem.available / (1024**3), 1)
         return {
             "total_ram_gb": total_gb,
             "available_ram_gb": available_gb,
             "cpu_count": psutil.cpu_count(logical=True),
             # Recommended max: 80% of total RAM
-            "max_recommended_ram_gb": round(total_gb * 0.8, 1)
+            "max_recommended_ram_gb": round(total_gb * 0.8, 1),
         }
     except Exception as e:
         logging.error(f"Error getting system info: {e}")
-        return {"total_ram_gb": 16, "available_ram_gb": 8, "cpu_count": 4, "max_recommended_ram_gb": 12}
+        return {
+            "total_ram_gb": 16,
+            "available_ram_gb": 8,
+            "cpu_count": 4,
+            "max_recommended_ram_gb": 12,
+        }
+
 
 @app.get("/servers/running")
 def get_running_servers():
@@ -1963,10 +2280,11 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
     import uvicorn
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--parent-pid", type=int)
     args, _ = parser.parse_known_args()
-    
+
     # Iniciar el watchdog antes de arrancar el servidor
     start_parent_watchdog(args.parent_pid)
     uvicorn.run(app, host="127.0.0.1", port=8000)
