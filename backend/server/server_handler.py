@@ -19,8 +19,20 @@ import psutil
 import time
 from typing import Optional
 
+
 class ServerHandler:
-    def __init__(self, server_path, server_type, ram_min, ram_max, ram_unit, output_callback, java_path="java", minecraft_version=None, server_id=None):
+    def __init__(
+        self,
+        server_path,
+        server_type,
+        ram_min,
+        ram_max,
+        ram_unit,
+        output_callback,
+        java_path="java",
+        minecraft_version=None,
+        server_id=None,
+    ):
         self.server_id = server_id
         self.server_path = server_path
         self.server_type = server_type
@@ -30,10 +42,10 @@ class ServerHandler:
         self.output_callback = output_callback
         self.java_path = java_path
         self.minecraft_version = minecraft_version
-        
+
         # Inicializar el gestor de Java
         self.java_manager = JavaManager()
-        
+
         self.server_process: Optional[subprocess.Popen] = None
         self.tunnel_process: Optional[subprocess.Popen] = None
         self.public_url: Optional[str] = None
@@ -42,49 +54,52 @@ class ServerHandler:
         self.server_fully_started = False
         self.server_stopping = False
         self.server_running = False
-        
+
         # Si tenemos la versión de Minecraft, configurar Java automáticamente
         # OPTIMIZATION: Do NOT run this in __init__ to avoid blocking the UI during server selection.
         # It will run lazily in start() -> _get_start_command()
         # if minecraft_version:
         #     self._setup_java_for_minecraft(minecraft_version)
-        
+
         self.log_history = collections.deque(maxlen=1000)
-        
+
         # Track players from log messages
-        self.tracked_players = set() 
+        self.tracked_players = set()
         self._expecting_player_list_next_line = False
         self._last_list_request_time = 0.0
         self._list_request_cooldown = 4.0
-        
+
         # Status Cache
         self.cached_status = None
         self.last_status_time = 0
-        self.cache_duration = 4.0 # seconds 
+        self.cache_duration = 4.0  # seconds
         self._status_lock = threading.Lock()
         self._status_in_flight = False
-        
+
         # Scheduled Shutdown
         self._shutdown_timer: Optional[threading.Timer] = None
-        self._shutdown_time_target: Optional[float] = None # Epoch time when shutdown will occur
-        
+        self._shutdown_time_target: Optional[float] = (
+            None  # Epoch time when shutdown will occur
+        )
+
         # Statistics Cache for low-resource environments
         self._stats_cache = {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
         self._last_stats_time = 0
-        self._stats_update_interval = 2.0 # Update stats every 2 seconds maximum
+        self._stats_update_interval = 2.0  # Update stats every 2 seconds maximum
 
     def _log(self, message, level="normal"):
         """Internal log method that stores history and calls callback."""
         # Clean message if string
         if isinstance(message, str):
             message = message.rstrip()
-            if not message: return
+            if not message:
+                return
             msg_obj = {"message": message, "level": level, "server_id": self.server_id}
         else:
             msg_obj = message
             if self.server_id and "server_id" not in msg_obj:
                 msg_obj["server_id"] = self.server_id
-            
+
         # Store in local history (deque auto-evicts oldest when full)
         self.log_history.append(msg_obj)
         # Broadcast via callback
@@ -94,44 +109,58 @@ class ServerHandler:
     def _setup_java_for_minecraft(self, minecraft_version):
         """Configura automáticamente la versión correcta de Java para Minecraft."""
         try:
-            self._log(f"Configuring Java for Minecraft {minecraft_version}...\n", "info")
-            
+            self._log(
+                f"Configuring Java for Minecraft {minecraft_version}...\n", "info"
+            )
+
             # Obtener el Java apropiado - NO descargar durante el start, solo usar lo que ya existe
-            java_path = self.java_manager.get_java_for_server(self.server_path, minecraft_version, skip_download=True)
-            
+            java_path = self.java_manager.get_java_for_server(
+                self.server_path, minecraft_version, skip_download=True
+            )
+
             if java_path:
                 self.java_path = java_path
                 self._log(f"Java configured: {java_path}\n", "info")
             else:
-                self._log("Java not found. Please install Java from the Setup Wizard before starting.\n", "warning")
-                
+                self._log(
+                    "Java not found. Please install Java from the Setup Wizard before starting.\n",
+                    "warning",
+                )
+
         except Exception as e:
             self._log(f"Error configuring Java: {e}\n", "error")
-    
+
     def set_minecraft_version(self, minecraft_version):
         """Establece la versión de Minecraft y reconfigura Java si es necesario."""
         self.minecraft_version = minecraft_version
         self._setup_java_for_minecraft(minecraft_version)
-    
+
     def get_java_status(self):
         """Obtiene el estado actual de Java para este servidor."""
         if not self.minecraft_version:
-            return {"status_message": "Minecraft version not specified", "status_color": "orange"}
-        
+            return {
+                "status_message": "Minecraft version not specified",
+                "status_color": "orange",
+            }
+
         return self.java_manager.get_java_status(self.minecraft_version)
-    
+
     def _verify_java_installation(self, java_path):
         """Verifica que la instalación de Java funciona correctamente."""
         try:
             result = subprocess.run(
-                [java_path, "-version"], 
-                capture_output=True, 
-                text=True, 
+                [java_path, "-version"],
+                capture_output=True,
+                text=True,
                 timeout=10,
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
             )
             if result.returncode != 0:
-                print(f"[DEBUG] Java Check Failed. Path: {java_path}, RC: {result.returncode}, Stderr: {result.stderr}")
+                print(
+                    f"[DEBUG] Java Check Failed. Path: {java_path}, RC: {result.returncode}, Stderr: {result.stderr}"
+                )
             return result.returncode == 0
         except Exception as e:
             print(f"[DEBUG] Java Check Exception. Path: {java_path}, Error: {e}")
@@ -151,7 +180,6 @@ class ServerHandler:
             self.output_callback(f"Error opening folder: {e}\n", "error")
             return False
 
-
     def install_forge_server(self, forge_version, minecraft_version, progress_callback):
         """Downloads and installs a Forge server."""
         # This is an example URL structure. You'll need to get the correct URLs.
@@ -161,18 +189,34 @@ class ServerHandler:
         download_url = f"https://maven.minecraftforge.net/net/minecraftforge/forge/{forge_full_version}/{file_name}"
         installer_path = os.path.join(self.server_path, file_name)
 
-        self.output_callback(f"Downloading Forge installer from {download_url}\n", "info")
+        self.output_callback(
+            f"Downloading Forge installer from {download_url}\n", "info"
+        )
         if not download_file_from_url(download_url, installer_path, progress_callback):
             self.output_callback("Failed to download Forge installer.\n", "error")
             return
 
         self.output_callback("Download complete. Running installer...\n", "info")
-        
+
         # Run the installer
         try:
-            install_command = [self.java_path, "-jar", installer_path, "--installServer"]
-            process = subprocess.Popen(install_command, cwd=self.server_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-            
+            install_command = [
+                self.java_path,
+                "-jar",
+                installer_path,
+                "--installServer",
+            ]
+            process = subprocess.Popen(
+                install_command,
+                cwd=self.server_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
+            )
+
             # Log stdout and stderr from the installer
             stdout, stderr = process.communicate()
             for line in stdout.splitlines():
@@ -181,18 +225,22 @@ class ServerHandler:
                 self.output_callback(f"[Installer] {line}\n", "error")
 
             if process.returncode != 0:
-                self.output_callback("Forge installer failed with a non-zero exit code.\n", "error")
+                self.output_callback(
+                    "Forge installer failed with a non-zero exit code.\n", "error"
+                )
             else:
                 self.output_callback("Forge installation successful.\n", "info")
                 # On Windows, a run.bat is created. On Linux/macOS, a run.sh.
                 # The server can now be started with the standard start() method.
-                
+
                 # Auto-configure so server is ready to run immediately
                 self._accept_eula()
                 self._create_default_server_properties()
 
         except Exception as e:
-            self.output_callback(f"An error occurred during Forge installation: {e}\n", "error")
+            self.output_callback(
+                f"An error occurred during Forge installation: {e}\n", "error"
+            )
         finally:
             # Clean up the installer and its log
             self.output_callback("Cleaning up installer files...\n", "info")
@@ -212,37 +260,39 @@ class ServerHandler:
         # If explicitly stopping, return stopping until process is dead
         if self.server_stopping:
             if self.server_process is None or self.server_process.poll() is not None:
-                self.server_stopping = False # Reset if actually dead
+                self.server_stopping = False  # Reset if actually dead
                 self.server_running = False
-                return 'offline'
-            return 'stopping'
+                return "offline"
+            return "stopping"
 
         # Prevents race condition: thread spawned but server_process not assigned yet
         if self.server_running and self.server_process is None:
-            return 'starting'
+            return "starting"
 
         if self.server_process is None or self.server_process.poll() is not None:
             self.server_running = False
             self.server_fully_started = False
-            return 'offline'
-            
+            return "offline"
+
         if self.server_fully_started:
-            return 'online'
-            
-        return 'starting'
+            return "online"
+
+        return "starting"
 
     def schedule_shutdown(self, minutes):
         """Schedules a server shutdown in X minutes."""
         if not self.is_running():
             return False, "Server must be online to schedule a shutdown."
-            
-        self.cancel_shutdown() # Cancel any existing timer
-        
+
+        self.cancel_shutdown()  # Cancel any existing timer
+
         seconds = minutes * 60
         self._shutdown_time_target = time.time() + seconds
-        
+
         def _perform_shutdown():
-            self._log(f"Scheduled shutdown triggered after {minutes} minute(s).\n", "warning")
+            self._log(
+                f"Scheduled shutdown triggered after {minutes} minute(s).\n", "warning"
+            )
             self.stop()
             self._shutdown_timer = None
             self._shutdown_time_target = None
@@ -250,7 +300,7 @@ class ServerHandler:
         self._shutdown_timer = threading.Timer(seconds, _perform_shutdown)
         self._shutdown_timer.daemon = True
         self._shutdown_timer.start()
-        
+
         self._log(f"Server shutdown scheduled in {minutes} minute(s).\n", "info")
         return True, f"Shutdown scheduled in {minutes} minutes."
 
@@ -271,37 +321,39 @@ class ServerHandler:
             return {
                 "scheduled": True,
                 "remaining_seconds": remaining,
-                "target_time": self._shutdown_time_target
+                "target_time": self._shutdown_time_target,
             }
         return {"scheduled": False}
 
     def is_starting(self):
-        return self.get_status() == 'starting'
+        return self.get_status() == "starting"
 
     def is_running(self):
-        return self.get_status() == 'online'
+        return self.get_status() == "online"
 
     def _accept_eula(self):
         """Checks for eula.txt and sets eula=true if found or creates it."""
-        eula_path = os.path.join(self.server_path, 'eula.txt')
+        eula_path = os.path.join(self.server_path, "eula.txt")
         try:
             if os.path.exists(eula_path):
-                with open(eula_path, 'r') as f:
+                with open(eula_path, "r") as f:
                     content = f.read()
-                if 'eula=true' not in content:
-                    with open(eula_path, 'w') as f:
-                        f.write('eula=true\n')
+                if "eula=true" not in content:
+                    with open(eula_path, "w") as f:
+                        f.write("eula=true\n")
                     self.output_callback("Accepted EULA automatically.\n", "info")
             else:
-                with open(eula_path, 'w') as f:
-                    f.write('eula=true\n')
+                with open(eula_path, "w") as f:
+                    f.write("eula=true\n")
                 self.output_callback("Created eula.txt and accepted EULA.\n", "info")
         except Exception as e:
-            self.output_callback(f"Warning: Could not accept EULA automatically: {e}\n", "warning")
+            self.output_callback(
+                f"Warning: Could not accept EULA automatically: {e}\n", "warning"
+            )
 
     def _create_default_server_properties(self):
         """Creates a default server.properties file if it doesn't exist."""
-        props_path = os.path.join(self.server_path, 'server.properties')
+        props_path = os.path.join(self.server_path, "server.properties")
         try:
             if not os.path.exists(props_path):
                 default_props = """#Minecraft server properties
@@ -317,11 +369,13 @@ gamemode=survival
 pvp=true
 allow-flight=false
 """
-                with open(props_path, 'w') as f:
+                with open(props_path, "w") as f:
                     f.write(default_props)
                 self.output_callback("Created default server.properties.\n", "info")
         except Exception as e:
-            self.output_callback(f"Warning: Could not create server.properties: {e}\n", "warning")
+            self.output_callback(
+                f"Warning: Could not create server.properties: {e}\n", "warning"
+            )
 
     def start(self):
         if self.is_running() or self.is_starting():
@@ -342,41 +396,74 @@ allow-flight=false
         self.server_fully_started = False
         self.server_stopping = False
         self.server_running = True
-        self.output_callback(f"Starting server with command: {' '.join(command)}\n", "info")
+        self.output_callback(
+            f"Starting server with command: {' '.join(command)}\n", "info"
+        )
         self.output_callback(f"Working Directory: {self.server_path}\n", "info")
-        threading.Thread(target=self._run_server, args=(command, env), daemon=True).start()
+        threading.Thread(
+            target=self._run_server, args=(command, env), daemon=True
+        ).start()
 
     def _get_start_command(self):
         # Verificar que tenemos una ruta de Java válida
         java_path = self.java_path
-        
+
         # Si tenemos versión de Minecraft y no hemos configurado Java específico, intentar configurarlo
         if self.minecraft_version and java_path == "java":
             self._setup_java_for_minecraft(self.minecraft_version)
             java_path = self.java_path
-        
+
         # Verificar que Java existe y funciona
         if not self._verify_java_installation(java_path):
-            self.output_callback(f"Error: Java is not working at: {java_path}. Attempting to repair...\n", "warning")
-            
+            self.output_callback(
+                f"Error: Java is not working at: {java_path}. Attempting to repair...\n",
+                "warning",
+            )
+
             # Intentar reparar buscando de nuevo
             new_path = self.ensure_java_compatibility(self.minecraft_version)
-            if new_path and new_path != java_path and self._verify_java_installation(new_path):
-                self.output_callback(f"Fixed: Using new Java path: {new_path}\n", "success")
+            if (
+                new_path
+                and new_path != java_path
+                and self._verify_java_installation(new_path)
+            ):
+                self.output_callback(
+                    f"Fixed: Using new Java path: {new_path}\n", "success"
+                )
                 java_path = new_path
                 self.java_path = new_path
             else:
                 # Último intento: usar simplemente "java" del sistema
                 if self._verify_java_installation("java"):
-                     self.output_callback("Fixed: Using system 'java' (PATH).\n", "success")
-                     java_path = "java"
-                     self.java_path = "java"
+                    self.output_callback(
+                        "Fixed: Using system 'java' (PATH).\n", "success"
+                    )
+                    java_path = "java"
+                    self.java_path = "java"
                 else:
-                    self.output_callback("Critical error: No working Java installation was found. Please install Java.\n", "error")
+                    self.output_callback(
+                        "Critical error: No working Java installation was found. Please install Java.\n",
+                        "error",
+                    )
                     return None, None
-        
-        # Prepare environment for startup (injecting JAVA_HOME and PATH)
+
+        # CRITICAL: Normalize server path
+        self.server_path = os.path.normpath(self.server_path)
+        java_path = os.path.normpath(java_path)
+
         logging.info(f"Handler: Preparing environment. Java Path: {java_path}")
+
+        # --- JAVA HEALTH CHECK ---
+        try:
+            logging.info("Handler: Running Java health check (-version)...")
+            java_check = subprocess.run(
+                [java_path, "-version"], capture_output=True, text=True, timeout=5
+            )
+            logging.info(f"Handler: Java Version Check Stdout: {java_check.stdout}")
+            logging.info(f"Handler: Java Version Check Stderr: {java_check.stderr}")
+        except Exception as je:
+            logging.error(f"Handler: Java Health Check FAILED: {je}")
+
         custom_env = os.environ.copy()
         custom_env["PYTHONIOENCODING"] = "utf-8"
         if java_path != "java":
@@ -385,39 +472,52 @@ allow-flight=false
             java_root = os.path.dirname(java_bin_dir)
             custom_env["JAVA_HOME"] = java_root
             # Prepend to PATH so scripts find this 'java' first
-            path_sep = ';' if sys.platform == "win32" else ':'
+            path_sep = ";" if sys.platform == "win32" else ":"
             custom_env["PATH"] = f"{java_bin_dir}{path_sep}{custom_env.get('PATH', '')}"
             logging.info(f"Handler: Injected Environment - JAVA_HOME={java_root}")
-        
+
         run_script = None
-        
+
         # Universal check for startup scripts
         if sys.platform == "win32":
-            script_path = os.path.join(self.server_path, 'run.bat')
+            script_path = os.path.join(self.server_path, "run.bat")
             logging.info(f"Handler: Checking for run.bat at {script_path}")
             if os.path.exists(script_path):
                 run_script = script_path
                 logging.info("Handler: run.bat FOUND")
-        else: # For macOS and Linux
-            script_path = os.path.join(self.server_path, 'run.sh')
+        else:  # For macOS and Linux
+            script_path = os.path.join(self.server_path, "run.sh")
             if os.path.exists(script_path):
                 run_script = script_path
 
         # If a run script is found, prioritize it
         if run_script:
-            self.output_callback(f"Detected startup script: {os.path.basename(run_script)}. Using it to launch.\n", "info")
-            return [run_script, '--nogui'], custom_env
+            self.output_callback(
+                f"Detected startup script: {os.path.basename(run_script)}. Using it to launch.\n",
+                "info",
+            )
+            return [run_script, "--nogui"], custom_env
 
         # Fallback to JAR-based startup if no script is found
-        self.output_callback("No startup script found. Using generic JAR startup method.\n", "info")
-        all_jars = glob.glob(os.path.join(self.server_path, '*.jar'))
+        self.output_callback(
+            "No startup script found. Using generic JAR startup method.\n", "info"
+        )
+        all_jars = glob.glob(os.path.join(self.server_path, "*.jar"))
         server_jar_path = None
-        
-        non_installer_jars = [j for j in all_jars if 'installer' not in os.path.basename(j).lower()]
-        
+
+        non_installer_jars = [
+            j for j in all_jars if "installer" not in os.path.basename(j).lower()
+        ]
+
         if non_installer_jars:
             # Look for common server jar names first
-            preferred_names = ['server.jar', 'minecraft_server.jar', 'paper.jar', 'spigot.jar', 'fabric-server-launch.jar']
+            preferred_names = [
+                "server.jar",
+                "minecraft_server.jar",
+                "paper.jar",
+                "spigot.jar",
+                "fabric-server-launch.jar",
+            ]
             for name in preferred_names:
                 for jar in non_installer_jars:
                     if os.path.basename(jar).lower() == name:
@@ -425,27 +525,37 @@ allow-flight=false
                         break
                 if server_jar_path:
                     break
-            
+
             # If no preferred name is found, take the first non-installer jar
             if not server_jar_path:
                 server_jar_path = non_installer_jars[0]
-        
-        elif all_jars: # Fallback if only installer jars are present for some reason
+
+        elif all_jars:  # Fallback if only installer jars are present for some reason
             server_jar_path = all_jars[0]
 
         if not server_jar_path:
-            self.output_callback("Error: No server .jar file or run script found in the directory.\n", "error")
+            # Audit directory before failing
+            try:
+                files = os.listdir(self.server_path)
+                logging.info(f"Handler: Server Directory Audit: {files}")
+            except Exception as ae:
+                logging.error(f"Handler: Directory Audit FAILED: {ae}")
+
+            self.output_callback(
+                "Error: No server .jar file or run script found in the directory.\n",
+                "error",
+            )
             return None, None
 
         min_ram_str = f"-Xms{self.ram_min}{self.ram_unit}"
         max_ram_str = f"-Xmx{self.ram_max}{self.ram_unit}"
-        
+
         # Base command with suppression flags
         command = [
-            java_path, 
-            max_ram_str, 
+            java_path,
+            max_ram_str,
             min_ram_str,
-            "--add-modules=jdk.incubator.vector", 
+            "--add-modules=jdk.incubator.vector",
             "--enable-native-access=ALL-UNNAMED",
             "-XX:+UnlockExperimentalVMOptions",
             # Forge/ModLauncher Java 16+ compatibility args
@@ -460,16 +570,16 @@ allow-flight=false
             "--add-opens=java.base/java.nio=ALL-UNNAMED",
             "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
             "--add-opens=java.management/sun.management=ALL-UNNAMED",
-            "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED"
+            "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
         ]
-        
+
         # Add any server-type specific arguments before the -jar flag
         # Example for future use:
         # if self.server_type == 'some_type':
         #     command.extend(['-Dsome.flag=true'])
 
-        command.extend(['-jar', os.path.basename(server_jar_path), '--nogui'])
-        
+        command.extend(["-jar", os.path.basename(server_jar_path), "--nogui"])
+
         return command, custom_env
 
     def _run_server(self, command, env):
@@ -479,29 +589,44 @@ allow-flight=false
         try:
             logging.info(f"Handler: Launching process in {self.server_path}...")
             self.server_process = subprocess.Popen(
-                command, 
-                cwd=self.server_path, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                stdin=subprocess.DEVNULL, 
-                text=False, 
-                bufsize=0, 
-                universal_newlines=False, 
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0, 
-                env=env
+                command,
+                cwd=self.server_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                text=False,
+                bufsize=0,
+                universal_newlines=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
+                env=env,
             )
             logging.info(f"Handler: Process spawned with PID {self.server_process.pid}")
-            
-            stdout_thread = threading.Thread(target=self._read_output, args=(self.server_process.stdout, "normal"), daemon=True)
-            stderr_thread = threading.Thread(target=self._read_output, args=(self.server_process.stderr, "error"), daemon=True)
+
+            stdout_thread = threading.Thread(
+                target=self._read_output,
+                args=(self.server_process.stdout, "normal"),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=self._read_output,
+                args=(self.server_process.stderr, "error"),
+                daemon=True,
+            )
             stdout_thread.start()
             stderr_thread.start()
 
             self.server_process.wait()
-            logging.info(f"Handler: Process exited with code {self.server_process.returncode}")
+            logging.info(
+                f"Handler: Process exited with code {self.server_process.returncode}"
+            )
         except FileNotFoundError:
             logging.error("Handler: Java or Script NOT FOUND during spawn")
-            self._log("Error: 'java' command not found. Is Java installed and in your PATH?\n", "error")
+            self._log(
+                "Error: 'java' command not found. Is Java installed and in your PATH?\n",
+                "error",
+            )
         except Exception as e:
             error_details = traceback.format_exc()
             logging.error(f"Handler: CRASH in _run_server thread:\n{error_details}")
@@ -510,14 +635,17 @@ allow-flight=false
             # Esperar a que los hilos de salida terminen de procesar los últimos logs
             # Esto evita que el estado se quede en 'stopping' si el log llega justo al final.
             try:
-                if stdout_thread: stdout_thread.join(timeout=2)
-                if stderr_thread: stderr_thread.join(timeout=2)
-            except: pass
+                if stdout_thread:
+                    stdout_thread.join(timeout=2)
+                if stderr_thread:
+                    stderr_thread.join(timeout=2)
+            except:
+                pass
 
             # --- CRITICAL FIX: ACTUALIZAR ESTADO INTERNO PRIMERO ---
             # Guardamos el estado previo para el log
             was_stopping = self.server_stopping
-            
+
             # 1. Marcar inmediatamente como detenido para que cualquier consulta a /status
             # devuelva "offline" y no "stopping" o "online".
             self.server_fully_started = False
@@ -534,54 +662,73 @@ allow-flight=false
             # 3. NOTIFICAR AL FRONTEND VIA WEBSOCKET (Explicit event)
             # Esto asegura que el frontend limpie cualquier estado 'stopping' residual.
             if self.output_callback:
-                self.output_callback({
-                    "type": "status_change",
-                    "status": "offline",
-                    "server_id": self.server_id
-                })
+                self.output_callback(
+                    {
+                        "type": "status_change",
+                        "status": "offline",
+                        "server_id": self.server_id,
+                    }
+                )
 
-    def _process_log_line(self, line, level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern):
-        line_no_ansi = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
-        
+    def _process_log_line(
+        self,
+        line,
+        level,
+        re,
+        join_pattern,
+        leave_pattern,
+        list_inline_pattern,
+        list_header_pattern,
+    ):
+        line_no_ansi = re.sub(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", line)
+
         # Check for standard server start completion messages
         is_done = False
-        if 'Done' in line_no_ansi and 'For help' in line_no_ansi:
+        if "Done" in line_no_ansi and "For help" in line_no_ansi:
             is_done = True
-        elif 'Done (' in line_no_ansi and ')!' in line_no_ansi:
+        elif "Done (" in line_no_ansi and ")!" in line_no_ansi:
             is_done = True
-        elif 'started on port' in line_no_ansi.lower():
+        elif "started on port" in line_no_ansi.lower():
             is_done = True
-            
+
         if is_done:
             self.server_fully_started = True
             self.server_stopping = False
             # Broadcast explicit status change to online
             if self.output_callback:
-                self.output_callback({
-                    "type": "status_change",
-                    "status": "online",
-                    "server_id": self.server_id
-                })
-        elif 'Stopping the server' in line_no_ansi or 'Stopping server' in line_no_ansi:
+                self.output_callback(
+                    {
+                        "type": "status_change",
+                        "status": "online",
+                        "server_id": self.server_id,
+                    }
+                )
+        elif "Stopping the server" in line_no_ansi or "Stopping server" in line_no_ansi:
             self.server_stopping = True
-        elif 'All dimensions are saved' in line_no_ansi or 'All chunks are saved' in line_no_ansi:
+        elif (
+            "All dimensions are saved" in line_no_ansi
+            or "All chunks are saved" in line_no_ansi
+        ):
             if self.server_stopping:
                 # Detect that the server HAS saved everything.
                 # If it doesn't close in 7 seconds, we force it.
                 def delayed_kill():
                     time.sleep(7)
-                    if self.get_status() == 'stopping':
-                        self._log("Server finished saving but hung. Forcing termination.\n", "warning")
+                    if self.get_status() == "stopping":
+                        self._log(
+                            "Server finished saving but hung. Forcing termination.\n",
+                            "warning",
+                        )
                         self._kill_process_tree()
-                
+
                 threading.Thread(target=delayed_kill, daemon=True).start()
-        
+
         # Detect player join/leave
         join_match = join_pattern.search(line_no_ansi)
         if join_match:
             player_name = join_match.group(1)
             self.tracked_players.add(player_name)
-            
+
         leave_match = leave_pattern.search(line_no_ansi)
         if leave_match:
             player_name = leave_match.group(1)
@@ -598,7 +745,9 @@ allow-flight=false
                     # Parse the content after 'players online:'
                     names_line = clean_line.split("players online:", 1)[1].strip()
                     if names_line:
-                        self.tracked_players = {p.strip() for p in names_line.split(",") if p.strip()}
+                        self.tracked_players = {
+                            p.strip() for p in names_line.split(",") if p.strip()
+                        }
                     else:
                         self.tracked_players = set()
                     self._expecting_player_list_next_line = False
@@ -614,62 +763,102 @@ allow-flight=false
                 if inline_match is not None:
                     names_part = (inline_match.group(1) or "").strip()
                     if names_part:
-                        self.tracked_players = {p.strip() for p in names_part.split(",") if p.strip()}
+                        self.tracked_players = {
+                            p.strip() for p in names_part.split(",") if p.strip()
+                        }
                     else:
                         self._expecting_player_list_next_line = True
                     suppress_from_console = True
                 elif list_header_pattern.search(clean_line) is not None:
                     self._expecting_player_list_next_line = True
                     suppress_from_console = True
-        
+
         if not suppress_from_console:
-            self._log(line + '\n', level)
+            self._log(line + "\n", level)
 
     def _read_output(self, pipe, level):
         import re
-        join_pattern = re.compile(r'\b([A-Za-z0-9_]{1,16})\b\s+joined the game', re.IGNORECASE)
-        leave_pattern = re.compile(r'\b([A-Za-z0-9_]{1,16})\b\s+left the game', re.IGNORECASE)
+
+        join_pattern = re.compile(
+            r"\b([A-Za-z0-9_]{1,16})\b\s+joined the game", re.IGNORECASE
+        )
+        leave_pattern = re.compile(
+            r"\b([A-Za-z0-9_]{1,16})\b\s+left the game", re.IGNORECASE
+        )
         # Allow any prefix (timestamp/logger) before the message
-        list_inline_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*(.*)", re.IGNORECASE)
-        list_header_pattern = re.compile(r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$", re.IGNORECASE)
+        list_inline_pattern = re.compile(
+            r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*(.*)",
+            re.IGNORECASE,
+        )
+        list_header_pattern = re.compile(
+            r".*There are\s+\d+\s+of\s+a\s+max\s+of\s+\d+\s+players\s+online:\s*$",
+            re.IGNORECASE,
+        )
 
         try:
-            logging.info(f"Handler: Log reader thread started for {level} (Chunked Binary mode)")
-            
+            logging.info(
+                f"Handler: Log reader thread started for {level} (Chunked Binary mode)"
+            )
+
             buffer = b""
             while True:
                 chunk = pipe.read(4096)
                 if not chunk:
                     # End of stream
                     if buffer:
-                        self._process_log_line(buffer.decode('utf-8', errors='replace'), level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern)
+                        self._process_log_line(
+                            buffer.decode("utf-8", errors="replace"),
+                            level,
+                            re,
+                            join_pattern,
+                            leave_pattern,
+                            list_inline_pattern,
+                            list_header_pattern,
+                        )
                     break
-                
+
                 buffer += chunk
-                while b'\n' in buffer or b'\r' in buffer:
+                logging.debug(
+                    f"Handler: Received chunk of {len(chunk)} bytes from {level}"
+                )
+                while b"\n" in buffer or b"\r" in buffer:
                     # Find the first line break
-                    idx_n = buffer.find(b'\n')
-                    idx_r = buffer.find(b'\r')
-                    
+                    idx_n = buffer.find(b"\n")
+                    idx_r = buffer.find(b"\r")
+
                     if idx_n != -1 and (idx_r == -1 or idx_n < idx_r):
                         idx = idx_n
                         sep_len = 1
                     else:
                         idx = idx_r
                         sep_len = 1
-                        if idx != -1 and idx + 1 < len(buffer) and buffer[idx+1] == ord('\n'):
-                            sep_len = 2 # Handle \r\n
-                    
+                        if (
+                            idx != -1
+                            and idx + 1 < len(buffer)
+                            and buffer[idx + 1] == ord("\n")
+                        ):
+                            sep_len = 2  # Handle \r\n
+
                     line_bytes = buffer[:idx]
-                    buffer = buffer[idx + sep_len:]
-                    
-                    line = line_bytes.decode('utf-8', errors='replace')
-                    self._process_log_line(line, level, re, join_pattern, leave_pattern, list_inline_pattern, list_header_pattern)
+                    buffer = buffer[idx + sep_len :]
+
+                    line = line_bytes.decode("utf-8", errors="replace")
+                    self._process_log_line(
+                        line,
+                        level,
+                        re,
+                        join_pattern,
+                        leave_pattern,
+                        list_inline_pattern,
+                        list_header_pattern,
+                    )
 
             logging.info(f"Handler: Log reader thread {level} finished normally")
         except Exception as e:
             error_details = traceback.format_exc()
-            logging.error(f"Handler: CRASH in _read_output ({level}) thread:\n{error_details}")
+            logging.error(
+                f"Handler: CRASH in _read_output ({level}) thread:\n{error_details}"
+            )
             self._log(f"Log reader failure ({level}): {e}\n", "error")
         finally:
             try:
@@ -697,7 +886,7 @@ allow-flight=false
             return
 
         self.server_stopping = True
-        
+
         if force:
             if not silent:
                 self._log("Force killing server process tree...\n", "warning")
@@ -705,20 +894,20 @@ allow-flight=false
             return
 
         self.tracked_players.clear()  # Clear player list on stop
-        
+
         if self.server_process:
             if not silent:
                 self._log("Attempting graceful stop...\n", "info")
             self.send_command("stop")
-            
-            # Cerrar stdin para señalar EOF (Fin de Archivo). 
+
+            # Cerrar stdin para señalar EOF (Fin de Archivo).
             # Esto ayuda a que Java sepa que la consola se ha cerrado y termine antes.
             try:
                 if self.server_process and self.server_process.stdin:
                     self.server_process.stdin.close()
             except Exception as e:
                 self._log(f"Warning closing stdin: {e}\n", "warning")
-            
+
             # Lanzar un hilo para vigilar si se cuelga
             threading.Thread(target=self._watchdog_stop, daemon=True).start()
 
@@ -726,21 +915,24 @@ allow-flight=false
         """Vigila si el servidor tarda demasiado en cerrarse y avisa."""
         time.sleep(30)
         if self.is_running():
-            self._log("Server is taking a long time to stop. You can force stop it now.\n", "warning")
+            self._log(
+                "Server is taking a long time to stop. You can force stop it now.\n",
+                "warning",
+            )
 
     def _kill_process_tree(self):
         """Mata el proceso del servidor y todos sus hijos."""
         if not self.server_process:
             return
-            
+
         pid = self.server_process.pid
         try:
             parent = psutil.Process(pid)
             children = parent.children(recursive=True)
             for child in children:
-                try: 
+                try:
                     child.kill()
-                except: 
+                except:
                     pass
             parent.kill()
         except psutil.NoSuchProcess:
@@ -749,23 +941,28 @@ allow-flight=false
             self.force_stop_state()
             self._log("Server process killed.\n", "error")
             if self.output_callback:
-                self.output_callback({
-                    "type": "status_change",
-                    "status": "offline",
-                    "server_id": self.server_id
-                })
+                self.output_callback(
+                    {
+                        "type": "status_change",
+                        "status": "offline",
+                        "server_id": self.server_id,
+                    }
+                )
 
     def wait_for_stop(self, timeout=30):
         """Blocks until the server process has exited or the timeout is reached."""
         if not self.server_process:
             return True
-            
+
         try:
             # Wait for the process to exit
             self.server_process.wait(timeout=timeout)
             return True
         except subprocess.TimeoutExpired:
-            self._log(f"Warning: Server did not stop within {timeout}s. Forcing termination.\n", "warning")
+            self._log(
+                f"Warning: Server did not stop within {timeout}s. Forcing termination.\n",
+                "warning",
+            )
             try:
                 self.server_process.kill()
             except:
@@ -776,7 +973,11 @@ allow-flight=false
             return False
 
     def send_command(self, command, silent: bool = False):
-        if self.server_process and self.server_process.poll() is None and self.server_process.stdin:
+        if (
+            self.server_process
+            and self.server_process.poll() is None
+            and self.server_process.stdin
+        ):
             try:
                 # Echo command to log history so Dashboard can see it
                 if not silent:
@@ -786,14 +987,20 @@ allow-flight=false
             except (IOError, ValueError) as e:
                 self.output_callback(f"Error sending command: {e}\n", "error")
         else:
-            self.output_callback("Cannot send command: server is not running or stdin is not available.\n", "warning")
+            self.output_callback(
+                "Cannot send command: server is not running or stdin is not available.\n",
+                "warning",
+            )
 
     def update_ram(self, ram_max, ram_min, ram_unit):
         self.ram_max = ram_max
         self.ram_min = ram_min
         self.ram_unit = ram_unit
-        self.output_callback(f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n", "info")
-    
+        self.output_callback(
+            f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n",
+            "info",
+        )
+
     def ensure_java_compatibility(self, minecraft_version):
         """
         Asegura que Java sea compatible con la versión de Minecraft especificada.
@@ -801,26 +1008,33 @@ allow-flight=false
         """
         if not self.java_manager:
             return self.java_path
-        
+
         try:
             # Intentar obtener Java compatible para este servidor
             # Si la ruta actual es sospechosa (Oracle javapath) forzamos descarga?
             force = False
             if self.java_path and "javapath" in self.java_path.lower():
-                 force = True
-                 
-            compatible_java = self.java_manager.get_java_for_server(self.server_path, minecraft_version, force_download=force)
-            
+                force = True
+
+            compatible_java = self.java_manager.get_java_for_server(
+                self.server_path, minecraft_version, force_download=force
+            )
+
             if compatible_java:
                 old_java = self.java_path
                 self.java_path = compatible_java
                 if old_java != compatible_java:
-                    self.output_callback(f"Java updated automatically: {compatible_java}\n", "info")
+                    self.output_callback(
+                        f"Java updated automatically: {compatible_java}\n", "info"
+                    )
                 return compatible_java
             else:
-                self.output_callback(f"Warning: Could not obtain compatible Java for Minecraft {minecraft_version}\n", "warning")
+                self.output_callback(
+                    f"Warning: Could not obtain compatible Java for Minecraft {minecraft_version}\n",
+                    "warning",
+                )
                 return self.java_path
-                
+
         except Exception as e:
             self.output_callback(f"Error checking Java compatibility: {e}\n", "error")
             return self.java_path
@@ -828,20 +1042,20 @@ allow-flight=false
     def get_pid(self):
         if self.server_process:
             return self.server_process.pid
-# ... (rest of the code remains the same)
+        # ... (rest of the code remains the same)
         return None
 
     def get_server_properties(self):
         """Parses server.properties into a dict."""
         props = {}
-        props_file = os.path.join(self.server_path, 'server.properties')
+        props_file = os.path.join(self.server_path, "server.properties")
         if os.path.exists(props_file):
             try:
-                with open(props_file, 'r') as f:
+                with open(props_file, "r") as f:
                     for line in f:
                         line = line.strip()
-                        if line and not line.startswith('#') and '=' in line:
-                            key, value = line.split('=', 1)
+                        if line and not line.startswith("#") and "=" in line:
+                            key, value = line.split("=", 1)
                             props[key.strip()] = value.strip()
             except Exception as e:
                 self.output_callback(f"Error reading server.properties: {e}\n", "error")
@@ -860,13 +1074,17 @@ allow-flight=false
 
         try:
             # Logic to find the actual Java process if we haven't already or if it died
-            if not hasattr(self, '_cached_process') or self._cached_process is None or not self._cached_process.is_running():
+            if (
+                not hasattr(self, "_cached_process")
+                or self._cached_process is None
+                or not self._cached_process.is_running()
+            ):
                 try:
                     parent = psutil.Process(self.server_process.pid)
                     # Get all descendants (expensive operation, done only once per start)
                     children = parent.children(recursive=True)
                     candidates = children + [parent]
-                    
+
                     best_proc = None
                     max_mem = -1
 
@@ -877,46 +1095,48 @@ allow-flight=false
                                 mem_info = p.memory_info()
                                 rss = mem_info.rss
                                 name = p.name().lower()
-                                
+
                             score = rss
-                            if 'java' in name or 'openjdk' in name:
-                                score += 1024 * 1024 * 1024 * 100 
-                            
+                            if "java" in name or "openjdk" in name:
+                                score += 1024 * 1024 * 1024 * 100
+
                             if score > max_mem:
                                 max_mem = score
                                 best_proc = p
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             continue
-                    
+
                     self._cached_process = best_proc if best_proc else parent
                 except psutil.NoSuchProcess:
-                    return self._stats_cache # Return last known good stats
+                    return self._stats_cache  # Return last known good stats
 
             proc = self._cached_process
-            
+
             # Use oneshot for faster retrieval
             with proc.oneshot():
-                cpu_percent = proc.cpu_percent(interval=None) / (psutil.cpu_count() or 1)
+                cpu_percent = proc.cpu_percent(interval=None) / (
+                    psutil.cpu_count() or 1
+                )
                 mem = proc.memory_info()
                 create_time = proc.create_time()
 
             # RAM
             ram_used_gb = mem.rss / (1024 * 1024 * 1024)
             ram_max_gb = float(self.ram_max)
-            
+
             # Uptime
             uptime_seconds = time.time() - create_time
             hours = int(uptime_seconds // 3600)
             minutes = int((uptime_seconds % 3600) // 60)
-            
+
             # Update cache
             self._stats_cache = {
                 "cpu": round(cpu_percent, 1),
                 "ram": f"{ram_used_gb:.1f}/{ram_max_gb:.1f} GB",
-                "uptime": f"{hours}h {minutes}m"
+                "uptime": f"{hours}h {minutes}m",
             }
             self._last_stats_time = current_time
-            
+
             return self._stats_cache
 
         except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
@@ -944,8 +1164,10 @@ allow-flight=false
         # URL for bore v0.5.0 for Windows
         bore_url = "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip"
         extract_dir = os.getcwd()
-        
-        self.output_callback("Downloading bore executable (this will only happen once)...\n", "info")
+
+        self.output_callback(
+            "Downloading bore executable (this will only happen once)...\n", "info"
+        )
 
         # Simple progress display via output_callback. A real progress bar would require more GUI integration.
         def progress_callback(p):
@@ -965,18 +1187,24 @@ allow-flight=false
             return
 
         if not self.is_bore_downloaded():
-            self.output_callback("Bore executable not found. Attempting to download...\n", "info")
+            self.output_callback(
+                "Bore executable not found. Attempting to download...\n", "info"
+            )
             if not self._download_bore():
-                self.output_callback("Could not start tunnel due to download failure.\n", "error")
+                self.output_callback(
+                    "Could not start tunnel due to download failure.\n", "error"
+                )
                 return
-        
+
         bore_path = self.get_bore_path()
         command = [bore_path, "local", str(port), "--to", "bore.pub"]
 
         self.output_callback("Starting tunnel...\n", "info")
 
         self.stop_tunnel_event.clear()
-        self.tunnel_thread = threading.Thread(target=self._run_tunnel, args=(command,), daemon=True)
+        self.tunnel_thread = threading.Thread(
+            target=self._run_tunnel, args=(command,), daemon=True
+        )
         self.tunnel_thread.start()
 
     def _run_tunnel(self, command):
@@ -987,37 +1215,48 @@ allow-flight=false
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding='utf-8',
-                errors='replace',
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                encoding="utf-8",
+                errors="replace",
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
             )
 
-            self.output_callback("Tunnel process started. Waiting for public URL...\n", "info")
+            self.output_callback(
+                "Tunnel process started. Waiting for public URL...\n", "info"
+            )
 
             # Read output line-by-line to find the URL
-            for line in iter(self.tunnel_process.stdout.readline, ''):
+            for line in iter(self.tunnel_process.stdout.readline, ""):
                 if self.stop_tunnel_event.is_set():
                     break
-                
+
                 line_stripped = line.strip()
                 if not line_stripped:
                     continue
 
                 self.output_callback(f"[Tunnel] {line_stripped}\n", "normal")
-                
+
                 # Clean the line of ANSI escape codes for reliable parsing
-                clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line_stripped)
+                clean_line = re.sub(
+                    r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", line_stripped
+                )
 
                 if "listening at" in clean_line and not self.public_url:
                     try:
                         url_part = clean_line.split("listening at")[1].strip()
                         self.public_url = url_part
-                        self.output_callback(f"PUBLIC_URL:{self.public_url}\n", "success")
+                        self.output_callback(
+                            f"PUBLIC_URL:{self.public_url}\n", "success"
+                        )
                         # URL found, break the reading loop and move to waiting
                         break
                     except IndexError:
-                        self.output_callback("Could not parse public URL from tunnel output.\n", "warning")
-            
+                        self.output_callback(
+                            "Could not parse public URL from tunnel output.\n",
+                            "warning",
+                        )
+
             # If we are here, we either found the URL, the process died, or we are stopping
             if self.stop_tunnel_event.is_set():
                 # We were asked to stop while searching for URL, which is handled in stop_tunnel
@@ -1028,19 +1267,25 @@ allow-flight=false
                 self.tunnel_process.wait()
             else:
                 # Loop finished but we have no URL, means process died before giving one
-                self.output_callback("Tunnel process exited before providing a public URL.\n", "warning")
+                self.output_callback(
+                    "Tunnel process exited before providing a public URL.\n", "warning"
+                )
 
         except FileNotFoundError:
-            self.output_callback(f"Error: bore.exe not found at {command[0]}\n", "error")
+            self.output_callback(
+                f"Error: bore.exe not found at {command[0]}\n", "error"
+            )
         except Exception as e:
-            self.output_callback(f"An error occurred while running the tunnel: {e}\n", "error")
+            self.output_callback(
+                f"An error occurred while running the tunnel: {e}\n", "error"
+            )
         finally:
             # This block now runs only when the process has truly terminated
             self.tunnel_process = None
             self.public_url = None
             if not self.stop_tunnel_event.is_set():
-                 self.output_callback("Tunnel stopped unexpectedly.\n", "error")
-            
+                self.output_callback("Tunnel stopped unexpectedly.\n", "error")
+
             # Always notify GUI to reset state
             self.output_callback("PUBLIC_URL_STOPPED\n", "info")
 
@@ -1048,7 +1293,7 @@ allow-flight=false
         """Stops the tunnel process."""
         if not self.is_tunnel_running():
             return
-            
+
         self.output_callback("Stopping tunnel...\n", "info")
         self.stop_tunnel_event.set()
         if self.tunnel_process:
@@ -1057,7 +1302,7 @@ allow-flight=false
                 self.tunnel_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.tunnel_process.kill()
-        
+
         if self.tunnel_thread:
             self.tunnel_thread.join(timeout=2)
 
@@ -1111,7 +1356,7 @@ allow-flight=false
         self._update_status_cache()
         if self.cached_status and self.cached_status.get("online"):
             return self.cached_status["players"]["max"]
-        
+
         # Fallback to properties if server is offline or query fails
         props = self.get_server_properties()
         return int(props.get("max-players", 20))
@@ -1125,7 +1370,7 @@ allow-flight=false
         # Primary: Use tracked_players from log parsing (more reliable)
         if self.tracked_players:
             return [{"name": name, "id": ""} for name in self.tracked_players]
-        
+
         # Fallback: Use SLP sample (may be empty)
         self._update_status_cache()
         if self.cached_status and self.cached_status.get("online"):
