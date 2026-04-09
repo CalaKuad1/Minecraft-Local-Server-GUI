@@ -1029,7 +1029,8 @@ def op_player(req: PlayerActionRequest):
         uuid = ""
         try:
             r = requests.get(
-                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}",
+                timeout=10,
             )
             if r.status_code == 200:
                 uuid = r.json().get("id")
@@ -1083,7 +1084,8 @@ def whitelist_add(req: PlayerActionRequest):
         uuid = ""
         try:
             r = requests.get(
-                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}",
+                timeout=10,
             )
             if r.status_code == 200:
                 uuid = r.json().get("id")
@@ -1133,7 +1135,8 @@ def ban_player(req: PlayerActionRequest):
         uuid = ""
         try:
             r = requests.get(
-                f"https://api.mojang.com/users/profiles/minecraft/{req.name}"
+                f"https://api.mojang.com/users/profiles/minecraft/{req.name}",
+                timeout=10,
             )
             if r.status_code == 200:
                 uuid = r.json().get("id")
@@ -2191,6 +2194,7 @@ def install_plugin(req: PluginInstallRequest):
             response = requests.get(
                 f"https://api.modrinth.com/v2/version/{req.version_id}",
                 headers={"User-Agent": "MinecraftLocalServerGUI/1.0"},
+                timeout=10,
             )
             response.raise_for_status()
             version_data = response.json()
@@ -2212,7 +2216,7 @@ def install_plugin(req: PluginInstallRequest):
 
             progress(10, f"Downloading {filename}...")
 
-            with requests.get(url, stream=True) as r:
+            with requests.get(url, stream=True, timeout=30) as r:
                 r.raise_for_status()
                 with open(file_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):

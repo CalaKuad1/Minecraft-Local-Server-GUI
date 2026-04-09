@@ -39,8 +39,11 @@ export const api = {
     // ... existing ... 
     getStatus: async () => {
         try {
-            return await fetchJson(`${API_URL}/status`);
-        } catch (e) { return { status: 'offline' }; }
+            return await fetchJson(`${API_URL}/status`, {}, 15000);
+        } catch (e) { 
+            console.error("Status check failed:", e);
+            throw e; // Throw so App.jsx knows it failed and doesn't override with offline!
+        }
     },
     start: async () => {
         await fetchJson(`${API_URL}/start`, { method: 'POST' });

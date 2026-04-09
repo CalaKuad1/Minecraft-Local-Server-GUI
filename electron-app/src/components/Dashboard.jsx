@@ -394,7 +394,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 };
 
                 if (data.type === 'batch' && Array.isArray(data.items)) {
-                    data.items.forEach(item => processItem(item, true));
+                    const logsBatch = data.items.filter(i => i.message !== undefined || i.level).map(i => {
+                        return { ...i, message: typeof i.message === 'string' ? i.message : JSON.stringify(i.message || '') };
+                    });
+                    if (logsBatch.length > 0) {
+                        setLocalLogs(prev => {
+                            const newLogs = [...prev, ...logsBatch];
+                            return newLogs.length > 50 ? newLogs.slice(-50) : newLogs;
+                        });
+                    }
                 } else {
                     processItem(data, false);
                 }
