@@ -983,9 +983,10 @@ allow-flight=false
                 # Echo command to log history so Dashboard can see it
                 if not silent:
                     self._log(f"> {command}", "input")
-                self.server_process.stdin.write(f"{command}\n")
+                # Send command as bytes since stdin is binary
+                self.server_process.stdin.write(f"{command}\n".encode("utf-8"))
                 self.server_process.stdin.flush()
-            except (IOError, ValueError) as e:
+            except (IOError, ValueError, TypeError) as e:
                 self.output_callback(f"Error sending command: {e}\n", "error")
         else:
             self.output_callback(

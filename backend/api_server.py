@@ -1056,12 +1056,30 @@ def get_player_lists():
     # Get Online Players via ServerHandler (uses status_query)
     online_players = []
     if state.server_handler:
-        raw_sample = state.server_handler.get_active_players_list()
-        # Convert SLP format {name, id} to frontend expected {name, uuid}
-        for player in raw_sample:
-            online_players.append(
-                {"name": player.get("name", "Unknown"), "uuid": player.get("id", "")}
-            )
+        try:
+            raw_sample = state.server_handler.get_active_players_list()
+            # Convert SLP format {name, id} to frontend expected {name, uuid}
+            if raw_sample and isinstance(raw_sample, list):
+                for player in raw_sample:
+                    if isinstance(player, dict):
+                        online_players.append(
+                            {
+                                "name": player.get("name", "Unknown"),
+                                "uuid": player.get("id") or player.get("uuid", ""),
+                            }
+                        )
+                    else:
+                        # Fallback for non-dict objects (some libraries return objects)
+                        online_players.append(
+                            {
+                                "name": getattr(player, "name", str(player)),
+                                "uuid": getattr(
+                                    player, "id", getattr(player, "uuid", "")
+                                ),
+                            }
+                        )
+        except Exception as e:
+            logging.error(f"Error processing online players list: {e}")
 
     return {
         "online": online_players,
