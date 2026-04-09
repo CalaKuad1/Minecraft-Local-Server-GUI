@@ -466,6 +466,13 @@ allow-flight=false
 
         custom_env = os.environ.copy()
         custom_env["PYTHONIOENCODING"] = "utf-8"
+        # Inyectar propiedades de Java globalmente para que run.bat/run.sh también las usen
+        java_tools = (
+            "-Djline.terminal=jline.UnsupportedTerminal -Dorg.jline.terminal.dumb=true"
+        )
+        existing_tools = custom_env.get("JAVA_TOOL_OPTIONS", "")
+        custom_env["JAVA_TOOL_OPTIONS"] = f"{java_tools} {existing_tools}".strip()
+
         if java_path != "java":
             # Extract installation root (assuming path/to/java-21/bin/java.exe)
             java_bin_dir = os.path.dirname(java_path)

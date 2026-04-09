@@ -909,7 +909,7 @@ async def websocket_console(websocket: WebSocket):
         state.active_websockets.append(websocket)
         # Replay history
         try:
-            history = state.log_history[-200:]
+            history = list(state.log_history)[-200:]
             if history:
                 await websocket.send_json({"type": "batch", "items": history})
         except Exception as e:
