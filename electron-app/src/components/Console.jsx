@@ -73,44 +73,47 @@ export default function Console() {
                 console.error('WS Error:', err);
                 // The onerror event usually precedes onclose, so we let onclose handle the retry
             };
-
-            // Polling Fallback (Every 1s)
-            // This ensures logs appear even if WS fails (common on Windows with Reset errors)
-            const intervalId = setInterval(async () => {
-                try {
-                    const status = await api.getStatus();
-                    if (status.recent_logs && Array.isArray(status.recent_logs)) {
-                        setLogs((prev) => {
-                            // Simple merge strategy to avoid flicker
-                            if (status.recent_logs.length === 0) return prev;
-
-                            const lastPoll = status.recent_logs[status.recent_logs.length - 1];
-                            const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
-
-                            // Update if local is empty OR last message differs OR poll has more logs
-                            if (!lastLocal || lastLocal.message !== lastPoll.message || status.recent_logs.length > prev.length) {
-                                return status.recent_logs;
-                            }
-                            return prev;
-                        });
-
-                        // Also update connection status heuristic
-                        if (status.status === 'online' || status.status === 'starting') {
-                            if (isMounted) setIsConnected(true);
-                        }
-                    }
-                } catch (e) {
-                    // Ignore polling errors
-                }
-            }, 1000);
-
-            return () => clearInterval(intervalId);
         };
+
+        // Polling Fallback (Every 1s)
+        // This ensures logs appear even if WS fails (common on Windows with Reset errors)
+        const intervalId = setInterval(async () => {
+            try {
+                // If WS is perfectly connected, we can skip updating from polling to prevent flickering
+                if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+                    return;
+                }
+                const status = await api.getStatus();
+                if (status.recent_logs && Array.isArray(status.recent_logs)) {
+                    setLogs((prev) => {
+                        // Simple merge strategy to avoid flicker
+                        if (status.recent_logs.length === 0) return prev;
+
+                        const lastPoll = status.recent_logs[status.recent_logs.length - 1];
+                        const lastLocal = prev.length > 0 ? prev[prev.length - 1] : null;
+
+                        // Update if local is empty OR last message differs OR poll has more logs
+                        if (!lastLocal || lastLocal.message !== lastPoll.message || status.recent_logs.length > prev.length) {
+                            return status.recent_logs;
+                        }
+                        return prev;
+                    });
+
+                    // Also update connection status heuristic
+                    if (status.status === 'online' || status.status === 'starting') {
+                        if (isMounted) setIsConnected(true);
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }, 1000);
 
         connect();
 
         return () => {
             isMounted = false;
+            clearInterval(intervalId);
             // Clear reconnection timeout
             if (timeoutId) clearTimeout(timeoutId);
 

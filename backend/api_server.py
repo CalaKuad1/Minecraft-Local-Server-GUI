@@ -27,6 +27,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
+from contextlib import asynccontextmanager
 import json
 import logging
 from queue import Queue
@@ -74,7 +75,24 @@ from utils.api_client import (
 )
 from utils.mods_manager import ModsManager
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Suppress WinError 10054 on Windows asyncio loop
+    if sys.platform == "win32":
+        loop = asyncio.get_running_loop()
+
+        def custom_exception_handler(loop, context):
+            if "WinError 10054" in str(context.get("exception", "")):
+                return
+            loop.default_exception_handler(context)
+
+        loop.set_exception_handler(custom_exception_handler)
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Enable CORS
 app.add_middleware(
@@ -929,6 +947,9 @@ async def websocket_console(websocket: WebSocket):
                 state.server_handler.send_command(data)
     except WebSocketDisconnect:
         # logging.info("WebSocket disconnected")
+        if state and websocket in state.active_websockets:
+            state.active_websockets.remove(websocket)
+    except ConnectionResetError:
         if state and websocket in state.active_websockets:
             state.active_websockets.remove(websocket)
     except Exception as e:

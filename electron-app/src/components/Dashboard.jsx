@@ -262,24 +262,16 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             }
 
             // Polling Fallback for Logs (If WS is dead/unstable)
-            if (serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
+            const isWsConnected = ws.current && ws.current.readyState === WebSocket.OPEN;
+            if (!isWsConnected && serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
-                    // Update if local is empty
-                    if (prev.length === 0) return serverStatus.recent_logs.slice(-100);
-
-                    // If the last log from polling isn't in our local logs (or differs from our last log),
-                    // it means we missed something or are out of sync.
+                    if (prev.length === 0) return serverStatus.recent_logs.slice(-50);
                     const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
                     const lastLocal = prev[prev.length - 1];
 
                     if (lastPoll && (!lastLocal || lastPoll.message !== lastLocal.message)) {
-                        // Check if it's really new (isn't already in the last few local logs)
-                        const isRepetition = prev.slice(-5).some(l => l.message === lastPoll.message && l.time === lastPoll.time);
-                        if (!isRepetition) {
-                            return serverStatus.recent_logs.slice(-100);
-                        }
+                        return serverStatus.recent_logs.slice(-50);
                     }
-
                     return prev;
                 });
             }
@@ -323,96 +315,109 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     // --- WebSocket for Real-time Logs & Status Updates ---
     useEffect(() => {
-        // Clear previous logs on mount or server switch
-        setLocalLogs([]);
+        let timeoutId;
+        let isMounted = true;
 
-        ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
+        const connect = () => {
+            if (ws.current) {
+                ws.current.onclose = null;
+                ws.current.close();
+            }
 
-        ws.current.onopen = () => {
-            // console.log("Dashboard WS Connected");
-        };
+            ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
 
-        ws.current.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+            ws.current.onopen = () => {};
 
-                const processItem = (item, isHistory = false) => {
-                    // 1. Handle explicit status change events from Backend (Fixes stuck on Stopping)
-                    if (item.type === 'status_change') {
-                        setLocalStatus(item.status);
-                        setLoading(false);
-                        if (item.status === 'offline') {
-                            isStoppingRef.current = false;
-                            if (onRefresh) onRefresh();
-                        } else if (item.status === 'online') {
-                            if (onRefresh) onRefresh();
-                        }
-                        return;
-                    }
+            ws.current.onmessage = (event) => {
+                if (!isMounted) return;
+                try {
+                    const data = JSON.parse(event.data);
 
-                    // 2. Handle Tunnel Events
-                    if (item.type === 'tunnel_connected') {
-                        setTunnelAddress(item.address);
-                        setTunnelConnecting(false);
-                        return;
-                    }
-                    if (item.type === 'tunnel_disconnected') {
-                        setTunnelAddress(null);
-                        setTunnelConnecting(false);
-                        return;
-                    }
-
-                    // Logs - ensure message is a string
-                    if (item.message !== undefined || item.level) {
-                        const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
-
-                        setLocalLogs(prev => {
-                            // OPTIMIZACIÓN: Reducir buffer visual en Dashboard
-                            // En PCs lentos, renderizar 100 elementos complejos cuesta mucho.
-                            // Bajamos a 50 para la vista rápida (mini consola).
-                            const newLogs = [...prev, { ...item, message: msgText }];
-                            if (newLogs.length > 50) {
-                                return newLogs.slice(newLogs.length - 50);
-                            }
-                            return newLogs;
-                        });
-
-                        // Fallback: Detect status from log text (Skip for historical logs)
-                        if (isHistory) return;
-
-                        const msg = msgText.toString();
-                        if (msg.includes("Done") && msg.includes("For help")) {
-                            setLocalStatus('online');
+                    const processItem = (item, isHistory = false) => {
+                        if (item.type === 'status_change') {
+                            setLocalStatus(item.status);
                             setLoading(false);
-                            isStoppingRef.current = false;
-                            if (onRefresh) onRefresh();
-                        } else if (msg.includes("Stopping server") || msg.includes("Stopping the server")) {
-                            setLocalStatus('stopping');
-                            isStoppingRef.current = true;
+                            if (item.status === 'offline') {
+                                isStoppingRef.current = false;
+                                if (onRefresh) onRefresh();
+                            } else if (item.status === 'online') {
+                                if (onRefresh) onRefresh();
+                            }
+                            return;
                         }
-                    }
-                };
 
-                if (data.type === 'batch' && Array.isArray(data.items)) {
-                    const logsBatch = data.items.filter(i => i.message !== undefined || i.level).map(i => {
-                        return { ...i, message: typeof i.message === 'string' ? i.message : JSON.stringify(i.message || '') };
-                    });
-                    if (logsBatch.length > 0) {
-                        setLocalLogs(prev => {
-                            const newLogs = [...prev, ...logsBatch];
-                            return newLogs.length > 50 ? newLogs.slice(-50) : newLogs;
+                        if (item.type === 'tunnel_connected') {
+                            setTunnelAddress(item.address);
+                            setTunnelConnecting(false);
+                            return;
+                        }
+                        if (item.type === 'tunnel_disconnected') {
+                            setTunnelAddress(null);
+                            setTunnelConnecting(false);
+                            return;
+                        }
+
+                        if (item.message !== undefined || item.level) {
+                            const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
+
+                            setLocalLogs(prev => {
+                                const newLogs = [...prev, { ...item, message: msgText }];
+                                return newLogs.length > 50 ? newLogs.slice(newLogs.length - 50) : newLogs;
+                            });
+
+                            if (isHistory) return;
+
+                            const msg = msgText.toString();
+                            if (msg.includes("Done") && msg.includes("For help")) {
+                                setLocalStatus('online');
+                                setLoading(false);
+                                isStoppingRef.current = false;
+                                if (onRefresh) onRefresh();
+                            } else if (msg.includes("Stopping server") || msg.includes("Stopping the server")) {
+                                setLocalStatus('stopping');
+                                isStoppingRef.current = true;
+                            }
+                        }
+                    };
+
+                    if (data.type === 'batch' && Array.isArray(data.items)) {
+                        const logsBatch = data.items.filter(i => i.message !== undefined || i.level).map(i => {
+                            return { ...i, message: typeof i.message === 'string' ? i.message : JSON.stringify(i.message || '') };
                         });
+                        if (logsBatch.length > 0) {
+                            setLocalLogs(prev => {
+                                const newLogs = [...prev, ...logsBatch];
+                                return newLogs.length > 50 ? newLogs.slice(-50) : newLogs;
+                            });
+                        }
+                    } else {
+                        processItem(data, false);
                     }
-                } else {
-                    processItem(data, false);
+                } catch (e) { }
+            };
+
+            ws.current.onclose = () => {
+                if (isMounted) {
+                    timeoutId = setTimeout(connect, 3000);
                 }
-            } catch (e) { }
+            };
+
+            ws.current.onerror = (err) => {
+                console.error('WS Error:', err);
+            };
         };
+
+        connect();
 
         return () => {
-            if (ws.current) ws.current.close();
+            isMounted = false;
+            clearTimeout(timeoutId);
+            if (ws.current) {
+                ws.current.onclose = null;
+                ws.current.close();
+            }
         };
-    }, []); // Empty dependency array ensures this runs once per mount (which happens on server switch due to App.jsx key)
+    }, []);
 
     // Robust Auto-scroll logs
     useEffect(() => {

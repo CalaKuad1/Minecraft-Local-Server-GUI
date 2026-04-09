@@ -42,7 +42,7 @@ export const api = {
             return await fetchJson(`${API_URL}/status`, {}, 15000);
         } catch (e) { 
             console.error("Status check failed:", e);
-            throw e; // Throw so App.jsx knows it failed and doesn't override with offline!
+            return { status: 'offline', cpu: 0, ram: 0, players: 0 };
         }
     },
     start: async () => {
