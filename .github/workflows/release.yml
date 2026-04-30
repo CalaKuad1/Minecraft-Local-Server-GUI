@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   verify-build:
     name: Verify Build (${{ matrix.os }})
@@ -72,29 +75,17 @@ jobs:
           cd electron-app
           npm run build
 
-      - name: Build Electron App
+      - name: Build Electron App (no publish)
         run: |
           cd electron-app
-          npm run electron:build
+          npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ matrix.os }}
-          path: |
-            electron-app/release/**/*.exe
-            electron-app/release/**/*.AppImage
-            electron-app/release/**/*.deb
-          if-no-files-found: warn
 
   release:
     name: Publish Release (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: verify-build
-    permissions:
-      contents: write
 
     strategy:
       matrix:
