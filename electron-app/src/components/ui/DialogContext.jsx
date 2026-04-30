@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle, Info } from './PixelIcons';
 
 const DialogContext = createContext();
 
@@ -67,26 +67,26 @@ export const DialogProvider = ({ children }) => {
 
                             {/* Modal */}
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                initial={{ opacity: 0, scale: 0.98, y: 10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                exit={{ opacity: 0, scale: 0.98, y: 10 }}
                                 transition={{ duration: 0.2 }}
-                                className="bg-[#0f0f0f] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
+                                className="bg-[#18181b]/80 border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4 backdrop-blur-2xl"
                             >
                                 {/* Header */}
-                                <div className="p-6 pb-2">
+                                <div className="p-8 pb-2">
                                     <div className="flex items-start gap-4">
-                                        <div className={`p-3 rounded-xl bg-opacity-10 
-                                            ${dialog.variant === 'warning' || dialog.variant === 'destructive' ? 'bg-red-500 text-red-500' :
-                                                dialog.variant === 'success' ? 'bg-green-500 text-green-500' :
-                                                    'bg-blue-500 text-primary'}`}>
+                                        <div className={`mt-0.5
+                                            ${dialog.variant === 'warning' || dialog.variant === 'destructive' ? 'text-red-500' :
+                                                dialog.variant === 'success' ? 'text-emerald-500' :
+                                                    'text-white'}`}>
                                             {dialog.variant === 'warning' || dialog.variant === 'destructive' ? <AlertTriangle size={24} /> :
                                                 dialog.variant === 'success' ? <CheckCircle size={24} /> :
                                                     <Info size={24} />}
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="text-lg font-bold text-white">{dialog.title}</h3>
-                                            <div className="mt-2 text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
+                                            <h3 className="text-xl font-minecraft tracking-widest text-white uppercase">{dialog.title}</h3>
+                                            <div className="mt-3 text-zinc-400 text-xs font-medium leading-relaxed whitespace-pre-wrap uppercase tracking-wider">
                                                 {dialog.message}
                                             </div>
                                         </div>
@@ -94,21 +94,21 @@ export const DialogProvider = ({ children }) => {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="p-4 bg-white/5 flex justify-end gap-3 mt-4">
+                                <div className="p-6 bg-transparent flex justify-end gap-3 mt-4 border-t border-white/5">
                                     {(dialog.type === 'confirm') && (
                                         <button
                                             onClick={() => dialog.onClose(false)}
-                                            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                            className="px-6 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase text-zinc-500 border border-white/5 hover:border-white/10 hover:text-white hover:bg-white/5 transition-all"
                                         >
                                             {dialog.cancelLabel || 'Cancel'}
                                         </button>
                                     )}
                                     <button
                                         onClick={() => dialog.onClose(true)}
-                                        className={`px-6 py-2 rounded-lg text-sm font-bold text-white transition-all shadow-lg hover:shadow-primary/20
-                                            ${dialog.variant === 'destructive' ? 'bg-red-600 hover:bg-red-500' :
-                                                dialog.variant === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500' :
-                                                    'bg-primary hover:bg-primary/80'}`}
+                                        className={`px-8 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all shadow-lg hover:opacity-90 border
+                                            ${dialog.variant === 'destructive' ? 'bg-transparent border-red-500/50 text-red-500 hover:bg-red-500/10' :
+                                                dialog.variant === 'warning' ? 'bg-transparent border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10' :
+                                                    'bg-white border-white text-black'}`}
                                     >
                                         {dialog.type === 'confirm' ? (dialog.confirmLabel || 'Confirm') : (dialog.confirmLabel || 'Okay')}
                                     </button>

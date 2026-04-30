@@ -2,49 +2,84 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { Select, useSelectOptions } from './ui/Select';
-import { Check, ChevronRight, Folder, Download, Server, Loader2, ArrowLeft, Coffee, Cpu, Box } from 'lucide-react';
+import { Check, ChevronRight, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Cpu, Box, HardDrive, Terminal, Monitor } from './ui/PixelIcons';
+import fabricLogo from '../assets/engines/fabric.png';
+import forgeLogo from '../assets/engines/forge.png';
+import neoforgeLogo from '../assets/engines/neoforge.png';
+import paperLogo from '../assets/engines/Paper_JE2_BE2.webp';
+import spigotLogo from '../assets/engines/spigot.png';
+import vanillaLogo from '../assets/engines/vanilla.webp';
+
+function EngineIcon({ type, size = 16, className = "" }) {
+    const t = (type || '').toLowerCase();
+    let src = null;
+    if (t.includes('paper')) src = paperLogo;
+    else if (t.includes('neoforge')) src = neoforgeLogo;
+    else if (t.includes('forge')) src = forgeLogo;
+    else if (t.includes('fabric')) src = fabricLogo;
+    else if (t.includes('spigot')) src = spigotLogo;
+    else if (t.includes('vanilla')) src = vanillaLogo;
+
+    if (src) {
+        return (
+            <div className={`flex items-center justify-center overflow-hidden ${className}`} style={{ width: size, height: size }}>
+                <img src={src} className="w-full h-full object-contain brightness-0 invert" alt={type} />
+            </div>
+        );
+    }
+    return <Server size={size} className={className} />;
+}
+
+function StepItem({ icon, label, active, completed }) {
+    return (
+        <div className={`flex items-center gap-3 transition-all ${active ? 'opacity-100' : completed ? 'opacity-60' : 'opacity-30'}`}>
+            <div className={`w-8 h-8 rounded-sm border flex items-center justify-center transition-all ${
+                active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 
+                completed ? 'bg-white/5 border-white/10 text-white' : 
+                'bg-black/20 border-white/5 text-gray-500'
+            }`}>
+                {completed ? <Check size={14} /> : icon}
+            </div>
+            <span className={`text-[10px] uppercase tracking-widest font-minecraft ${active ? 'text-white' : 'text-gray-600'}`}>{label}</span>
+        </div>
+    );
+}
 
 export default function SetupWizard({ onComplete, onCancel }) {
     const [step, setStep] = useState(1);
     const [mode, setMode] = useState('install');
 
-    // Form Data
+    // Engine Data
     const [serverType, setServerType] = useState('vanilla');
     const [version, setVersion] = useState('');
     const [versionsList, setVersionsList] = useState([]);
     const [loadingVersions, setLoadingVersions] = useState(false);
+    const [loaderVersionsList, setLoaderVersionsList] = useState([]);
+    const [loaderVersion, setLoaderVersion] = useState('');
+    const [allVersionData, setAllVersionData] = useState(null);
 
+    // Configuration Data
     const [parentPath, setParentPath] = useState('C:/MinecraftServers');
     const [folderName, setFolderName] = useState('my-server');
     const [existingPath, setExistingPath] = useState('');
+    
+    // RAM config
+    const [ramPreset, setRamPreset] = useState("4"); // Default 4GB
+    const [eulaAccepted, setEulaAccepted] = useState(false);
 
+    // Java status
+    const [javaStatus, setJavaStatus] = useState(null);
+    const [javaLoading, setJavaLoading] = useState(false);
+
+    // Install State
     const [installing, setInstalling] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [statusMessage, setStatusMessage] = useState('Initializing...');
+    const [statusMessage, setStatusMessage] = useState('Initializing deployment...');
     const ws = useRef(null);
     const completedRef = useRef(false);
     const installedServerId = useRef(null);
 
-    // Java Info (Visual only now)
-    const [javaStatus, setJavaStatus] = useState(null);
-
-    // Initial default path check
-    useEffect(() => {
-        // Try to set a sensible default path based on platform if possible, 
-        // otherwise default state handles it.
-    }, []);
-
-    // Check Java capability (Just for information)
-    const checkJava = async (ver) => {
-        if (!ver) return;
-        setJavaStatus(null);
-        try {
-            const status = await api.checkJava(ver);
-            setJavaStatus(status);
-        } catch (e) { console.error(e); }
-    };
-
-    // Load versions
+    // Load versions when step 2 is active
     useEffect(() => {
         if (step === 2 && mode === 'install') {
             setLoadingVersions(true);
@@ -54,8 +89,19 @@ export default function SetupWizard({ onComplete, onCancel }) {
             api.getVersions(serverType).then(data => {
                 if (data.versions && data.versions.length > 0) {
                     setVersionsList(data.versions);
-                    setVersion(data.versions[0]); // Default to latest
-                    checkJava(data.versions[0]);
+                    setVersion(data.versions[0]);
+                    setFolderName(`${serverType}-${data.versions[0]}`);
+                    
+                    if (data.all_data) {
+                        setAllVersionData(data.all_data);
+                        const subVersions = data.all_data[data.versions[0]] || [];
+                        setLoaderVersionsList(subVersions);
+                        if (subVersions.length > 0) setLoaderVersion(subVersions[0]);
+                    } else {
+                        setAllVersionData(null);
+                        setLoaderVersionsList([]);
+                        setLoaderVersion('');
+                    }
                 }
             }).finally(() => setLoadingVersions(false));
         }
@@ -63,15 +109,28 @@ export default function SetupWizard({ onComplete, onCancel }) {
 
     const handleVersionChange = (ver) => {
         setVersion(ver);
-        checkJava(ver);
-        // Auto update folder name suggestion
         setFolderName(`${serverType}-${ver}`);
+        
+        if (allVersionData) {
+            const subVersions = allVersionData[ver] || [];
+            setLoaderVersionsList(subVersions);
+            if (subVersions.length > 0) setLoaderVersion(subVersions[0]);
+            else setLoaderVersion('');
+        }
     };
+
+    useEffect(() => {
+        if (!version) return;
+        setJavaLoading(true);
+        api.checkJava(version)
+            .then(data => setJavaStatus(data))
+            .catch(() => setJavaStatus(null))
+            .finally(() => setJavaLoading(false));
+    }, [version]);
 
     // WebSocket + Polling logic for installation progress
     useEffect(() => {
         if (step === 4 && installing) {
-            // 1. WebSocket Connection (Real-time)
             if (ws.current) ws.current.close();
             ws.current = new WebSocket('ws://127.0.0.1:8000/ws/console');
 
@@ -80,17 +139,17 @@ export default function SetupWizard({ onComplete, onCancel }) {
                     setProgress(d.value);
                     setStatusMessage(d.message);
                     if (d.error) {
-                        setStatusMessage(`Error: ${d.error}`);
+                        setStatusMessage(`Deployment Failed: ${d.error}`);
                         setInstalling(false);
                     }
                     if (d.server_id) installedServerId.current = d.server_id;
                     if (d.value >= 100 && !completedRef.current) {
                         completedRef.current = true;
-                        setTimeout(() => onComplete && onComplete(installedServerId.current), 1000);
+                        setTimeout(() => onComplete && onComplete(installedServerId.current), 1500);
                     }
                 }
                 if (d.type === 'java_progress') {
-                    setStatusMessage(d.message || "Setting up Java...");
+                    setStatusMessage(d.message || "Resolving dependencies...");
                 }
             };
 
@@ -102,33 +161,20 @@ export default function SetupWizard({ onComplete, onCancel }) {
                 } catch (e) { }
             };
 
-            // 2. Polling Fallback (Every 1s) - Robustness for unstable WS
             const intervalId = setInterval(async () => {
                 if (completedRef.current) return;
                 try {
                     const data = await api.getInstallProgress();
                     if (data && typeof data.value === 'number') {
-                        // Only update if value is meaningful to avoid jitter
                         setProgress(prev => Math.max(prev, data.value));
                         if (data.message) setStatusMessage(data.message);
-
                         if (data.error) {
-                            setStatusMessage(`Error: ${data.error}`);
+                            setStatusMessage(`Deployment Failed: ${data.error}`);
                             setInstalling(false);
                             clearInterval(intervalId);
                         }
-
-                        if (data.server_id) installedServerId.current = data.server_id;
-
-                        if (data.value >= 100 && !completedRef.current) {
-                            completedRef.current = true;
-                            clearInterval(intervalId);
-                            setTimeout(() => onComplete && onComplete(installedServerId.current), 1000);
-                        }
                     }
-                } catch (e) {
-                    // Ignore polling errors, just wait for next tick
-                }
+                } catch (e) { }
             }, 1000);
 
             return () => {
@@ -136,321 +182,386 @@ export default function SetupWizard({ onComplete, onCancel }) {
                 clearInterval(intervalId);
             };
         }
-    }, [step, installing]);
+    }, [step, installing, onComplete]);
 
-    const handleInstall = async () => {
-        setStep(4);
+    const handleDeploy = async () => {
         setInstalling(true);
+        setStep(4);
         setProgress(0);
-        setStatusMessage("Starting engine...");
-
-        // Small delay to ensure WebSocket is established and ready
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        await api.installServer({
-            server_type: serverType,
-            version: version,
-            parent_path: parentPath,
-            folder_name: folderName
-        });
+        completedRef.current = false;
+        
+        try {
+            await api.installServer({
+                server_type: serverType,
+                version: version,
+                parent_path: parentPath,
+                folder_name: folderName,
+                forge_version: serverType === 'forge' ? loaderVersion : null,
+                neoforge_version: serverType === 'neoforge' ? loaderVersion : null,
+                ram_max: ramPreset,
+                ram_min: "2",
+                ram_unit: "G"
+            });
+        } catch (err) {
+            console.error("Installation failed to start", err);
+            setStatusMessage(`Error: ${err.message}`);
+            setInstalling(false);
+        }
     };
 
-    const handleExisting = async () => {
-        const val = await api.validatePath(existingPath);
-        if (!val.valid) {
-            alert("Invalid path");
-            return;
+    const handleImport = async () => {
+        if (!existingPath) return;
+        try {
+            const result = await api.importServer(existingPath);
+            if (result && result.id) {
+                onComplete(result.id);
+            }
+        } catch (err) {
+            console.error("Import failed", err);
         }
-        const name = existingPath.split(/[\\/]/).pop() || "Imported Server";
-        await api.addServer({
-            name: name,
-            path: existingPath,
-            type: 'unknown',
-            version: 'unknown',
-            ram_min: "2", ram_max: "4", ram_unit: "G"
-        });
-        onComplete();
     };
 
     return (
-        <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto animate-in fade-in zoom-in duration-500 relative">
+        <div className="flex flex-col h-full w-full bg-transparent animate-in fade-in duration-500 relative">
+            
+            {/* Main Wizard Container */}
+            <div className="w-full flex-1 flex overflow-hidden">
+                
+                {/* Sidebar */}
+                <div className="w-64 bg-[#0a0a0a]/80 border-r border-white/10 flex flex-col backdrop-blur-xl shadow-2xl z-10 flex-shrink-0">
+                    <div className="p-8">
+                        <div className="flex items-center gap-3 text-emerald-400 mb-10">
+                            <Terminal size={20} />
+                            <span className="font-minecraft text-lg tracking-wide uppercase">Setup</span>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            <StepItem icon={<Box size={14} />} label="Mode" active={step === 1} completed={step > 1} />
+                            <StepItem icon={<Cpu size={14} />} label="Engine" active={step === 2} completed={step > 2} />
+                            <StepItem icon={<HardDrive size={14} />} label="Config" active={step === 3} completed={step > 3} />
+                            <StepItem icon={<Terminal size={14} />} label="Status" active={step === 4} />
+                        </div>
+                    </div>
 
-            {/* Header */}
-            <div className="text-center mb-8 w-full">
-                <button
-                    onClick={onCancel}
-                    className="absolute top-0 left-0 text-gray-500 hover:text-white flex items-center gap-2 transition-colors p-2 rounded-lg hover:bg-white/5"
-                >
-                    <ArrowLeft size={20} />
-                </button>
-                <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-primary shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-                    <Server size={32} />
+                    <div className="mt-auto p-8 border-t border-white/5 opacity-40">
+                        <div className="flex items-center gap-3">
+                            <Monitor size={14} className="text-gray-400" />
+                            <div className="text-[9px] uppercase tracking-widest font-minecraft text-gray-500">Provisioning</div>
+                        </div>
+                    </div>
                 </div>
-                <h1 className="text-3xl font-bold text-white">
-                    {step === 4 ? "Installing Server" : "Create Server"}
-                </h1>
-                <p className="text-gray-500 mt-2">
-                    {step === 1 && "Choose how you want to start."}
-                    {step === 2 && "Select your software and version."}
-                    {step === 3 && "Where should we put the files?"}
-                    {step === 4 && "Sit tight, we're building your world."}
-                </p>
-            </div>
 
-            <AnimatePresence mode="wait">
-                {/* STEP 1: MODE */}
-                {step === 1 && (
-                    <motion.div
-                        key="step1"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="grid grid-cols-2 gap-4 w-full"
-                    >
-                        <button
-                            onClick={() => { setMode('install'); setStep(2); }}
-                            className="p-6 bg-surface/50 border border-white/10 hover:border-primary/50 hover:bg-surface-hover rounded-2xl text-left group transition-all"
-                        >
-                            <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 mb-4 group-hover:scale-110 transition-transform">
-                                <Download size={24} />
-                            </div>
-                            <h3 className="text-lg font-bold text-white">New Installation</h3>
-                            <p className="text-sm text-gray-500 mt-1">Download Vanilla, Paper, Forge or Fabric automatically.</p>
-                        </button>
-
-                        <button
-                            onClick={() => { setMode('existing'); setStep(2); }}
-                            className="p-6 bg-surface/50 border border-white/10 hover:border-primary/50 hover:bg-surface-hover rounded-2xl text-left group transition-all"
-                        >
-                            <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center text-green-400 mb-4 group-hover:scale-110 transition-transform">
-                                <Folder size={24} />
-                            </div>
-                            <h3 className="text-lg font-bold text-white">Import Existing</h3>
-                            <p className="text-sm text-gray-500 mt-1">Add a server you already have on your computer.</p>
-                        </button>
-                    </motion.div>
-                )}
-
-                {/* STEP 2: DETAILS */}
-                {step === 2 && mode === 'install' && (
-                    <motion.div
-                        key="step2"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="w-full space-y-6 bg-surface/30 p-8 rounded-3xl border border-white/5"
-                    >
-                        {/* Server Type Grid */}
-                        <div className="grid grid-cols-4 gap-3">
-                            {[
-                                { id: 'vanilla', label: 'Vanilla', icon: Box },
-                                { id: 'paper', label: 'Paper', icon: Cpu },
-                                { id: 'forge', label: 'Forge', icon: Server },
-                                { id: 'fabric', label: 'Fabric', icon: Box }
-                            ].map((type) => (
-                                <button
-                                    key={type.id}
-                                    onClick={() => setServerType(type.id)}
-                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${serverType === type.id
-                                        ? 'bg-primary/20 border-primary text-white shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                        : 'bg-black/20 border-white/5 text-gray-400 hover:bg-white/5'
-                                        }`}
-                                >
-                                    <type.icon size={20} className="mb-2" />
-                                    <span className="text-xs font-bold">{type.label}</span>
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Version Select */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-400 ml-1">Minecraft Version</label>
-                            <Select
-                                value={version}
-                                onChange={handleVersionChange}
-                                options={useSelectOptions(versionsList)}
-                                placeholder={loadingVersions ? "Fetching versions..." : "Select Version"}
-                                disabled={loadingVersions}
-                            />
-                        </div>
-
-                        {/* Java Info Box - Non-interactive now, just informative */}
-                        {version && javaStatus && (
-                            <div className={`p-4 rounded-xl border flex items-center gap-4 ${javaStatus.needs_download
-                                ? 'bg-blue-500/10 border-blue-500/20'
-                                : 'bg-green-500/10 border-green-500/20'
-                                }`}>
-                                <div className={`p-2 rounded-lg ${javaStatus.needs_download ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
-                                    <Coffee size={20} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="font-bold text-sm text-white">
-                                        {javaStatus.needs_download ? `Java ${javaStatus.required_version} Required` : "Java Ready"}
-                                    </div>
-                                    <div className="text-xs text-gray-400">
-                                        {javaStatus.needs_download
-                                            ? "We will download and install it automatically for this server."
-                                            : "Compatible Java version detected on your system."}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setStep(1)}
-                                className="px-6 py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all"
+                {/* Content Area */}
+                <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]/70 backdrop-blur-md">
+                    <AnimatePresence mode="wait">
+                        
+                        {/* STEP 1: PROJECT TYPE */}
+                        {step === 1 && (
+                            <motion.div
+                                key="step1"
+                                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                className="flex-1 flex flex-col p-10 justify-center max-w-3xl"
                             >
-                                Back
-                            </button>
-                            <button
-                                onClick={() => setStep(3)}
-                                disabled={!version || loadingVersions}
-                                className="flex-1 py-4 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-primary/20"
-                            >
-                                Continue <ChevronRight size={18} />
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
+                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Deploy Server</h2>
+                                <p className="text-gray-500 text-xs mb-8 tracking-wide">Choose deployment architecture.</p>
 
-                {/* STEP 3: FOLDER */}
-                {step === 3 && mode === 'install' && (
-                    <motion.div
-                        key="step3"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="w-full space-y-6 bg-surface/30 p-8 rounded-3xl border border-white/5"
-                    >
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-400 ml-1">Installation Folder</label>
-                                <div className="flex gap-2 mt-1">
-                                    <input
-                                        type="text"
-                                        value={parentPath}
-                                        onChange={(e) => setParentPath(e.target.value)}
-                                        className="flex-1 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-colors font-mono text-sm"
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
                                     <button
-                                        onClick={async () => {
-                                            const path = await api.openDirectoryPicker();
-                                            if (path) setParentPath(path);
-                                        }}
-                                        className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                                        onClick={() => { setMode('install'); setStep(2); }}
+                                        className="p-6 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm text-left transition-all group"
                                     >
-                                        <Folder size={20} className="text-gray-400" />
+                                        <Download size={24} className="text-emerald-500/60 mb-4" />
+                                        <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">New Profile</h3>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed">Install a fresh Minecraft server engine.</p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setMode('existing'); setStep(3); }}
+                                        className="p-6 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm text-left transition-all group"
+                                    >
+                                        <Folder size={24} className="text-emerald-500/60 mb-4" />
+                                        <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">Import local</h3>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed">Link an existing server folder.</p>
                                     </button>
                                 </div>
-                            </div>
+                                
+                                <div className="mt-12 flex justify-start">
+                                    <button onClick={onCancel} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors flex items-center gap-2">
+                                        <ArrowLeft size={12} /> Exit setup
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
 
-                            <div>
-                                <label className="text-sm font-medium text-gray-400 ml-1">Server Name (Folder)</label>
-                                <input
-                                    type="text"
-                                    value={folderName}
-                                    onChange={(e) => setFolderName(e.target.value)}
-                                    className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-colors font-medium mt-1"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="pt-2">
-                            <button
-                                onClick={handleInstall}
-                                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-green-500/20"
+                        {/* STEP 2: ENGINE SELECTION */}
+                        {step === 2 && mode === 'install' && (
+                            <motion.div
+                                key="step2"
+                                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                className="flex-1 flex flex-col p-10 max-w-4xl"
                             >
-                                <Download size={20} />
-                                Install Server
-                            </button>
-                            <button
-                                onClick={() => setStep(2)}
-                                className="w-full mt-3 py-2 text-gray-500 hover:text-white text-sm font-medium transition-colors text-center"
-                            >
-                                Back
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
+                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Configure Engine</h2>
+                                <p className="text-gray-500 text-xs mb-10 tracking-wide">Select framework and target version.</p>
 
-                {/* STEP 4: INSTALLING */}
-                {step === 4 && (
-                    <motion.div
-                        key="step4"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="w-full space-y-8 text-center"
-                    >
-                        <div className="relative mx-auto w-32 h-32">
-                            <svg className="w-full h-full transform -rotate-90">
-                                <circle
-                                    cx="64" cy="64" r="60"
-                                    stroke="currentColor" strokeWidth="8" fill="transparent"
-                                    className="text-white/5"
-                                />
-                                <circle
-                                    cx="64" cy="64" r="60"
-                                    stroke="currentColor" strokeWidth="8" fill="transparent"
-                                    strokeDasharray={377}
-                                    strokeDashoffset={377 - (377 * progress) / 100}
-                                    className="text-primary transition-all duration-500 ease-out"
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                <span className="text-3xl font-bold text-white">{Math.round(progress)}%</span>
-                            </div>
-                        </div>
+                                <div className="space-y-8">
+                                    <div>
+                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Framework</label>
+                                        <div className="grid grid-cols-5 gap-3">
+                                            {['vanilla', 'paper', 'forge', 'neoforge', 'fabric'].map((type) => (
+                                                <button
+                                                    key={type}
+                                                    onClick={() => setServerType(type)}
+                                                    className={`py-4 px-2 flex flex-col items-center justify-center rounded-sm border transition-all gap-3 ${
+                                                        serverType === type 
+                                                            ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' 
+                                                            : 'bg-black/30 border-white/5 text-gray-500 hover:border-white/10'
+                                                    }`}
+                                                >
+                                                    <EngineIcon 
+                                                        type={type} 
+                                                        size={24} 
+                                                        className={`transition-opacity ${serverType === type ? "opacity-100" : "opacity-30"}`} 
+                                                    />
+                                                    <span className={`capitalize text-[10px] font-minecraft tracking-widest ${serverType === type ? "text-emerald-400" : "text-gray-600"}`}>{type}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
 
-                        <div className="space-y-2">
-                            <h3 className="text-xl font-bold text-white animate-pulse">Installing...</h3>
-                            <p className="text-gray-400 max-w-xs mx-auto break-words text-sm h-10">{statusMessage}</p>
-                        </div>
-                    </motion.div>
-                )}
+                                    <div>
+                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Minecraft Version</label>
+                                        <div className="max-w-xs">
+                                            <Select
+                                                value={version}
+                                                onChange={handleVersionChange}
+                                                options={useSelectOptions(versionsList)}
+                                                placeholder={loadingVersions ? "Loading..." : "Select version"}
+                                                disabled={loadingVersions}
+                                                className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
+                                            />
+                                        </div>
+                                    </div>
 
-                {/* Existing Server Mode */}
-                {step === 2 && mode === 'existing' && (
-                    <motion.div className="w-full space-y-4 bg-surface/30 p-8 rounded-3xl border border-white/5">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-400 ml-1">Server Path</label>
-                            <div className="flex gap-2 mt-1">
-                                <input
-                                    type="text"
-                                    value={existingPath}
-                                    onChange={(e) => setExistingPath(e.target.value)}
-                                    placeholder="C:/Path/To/Server"
-                                    className="flex-1 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-colors font-mono text-sm"
-                                />
-                                <button
-                                    onClick={async () => {
-                                        const path = await api.openDirectoryPicker();
-                                        if (path) setExistingPath(path);
-                                    }}
-                                    className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-colors"
-                                >
-                                    <Folder size={20} className="text-gray-400" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex gap-3 mt-4">
-                            <button
-                                onClick={() => setStep(1)}
-                                className="px-6 py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all"
+                                    {(serverType === 'forge' || serverType === 'neoforge') && version && (
+                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">
+                                                {serverType === 'forge' ? 'Forge' : 'NeoForge'} Version
+                                            </label>
+                                            <div className="max-w-xs">
+                                                <Select
+                                                    value={loaderVersion}
+                                                    onChange={setLoaderVersion}
+                                                    options={useSelectOptions(loaderVersionsList)}
+                                                    placeholder="Select loader version"
+                                                    className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
+                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button 
+                                        onClick={() => setStep(3)} 
+                                        disabled={!version || loadingVersions}
+                                        className="ml-auto px-6 py-2.5 bg-white text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-colors hover:bg-gray-200 disabled:opacity-30 flex items-center gap-2"
+                                    >
+                                        Next <ArrowRight size={14} />
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                        
+                        {/* STEP 3: CONFIGURATION (INSTALL) */}
+                        {step === 3 && mode === 'install' && (
+                            <motion.div
+                                key="step3"
+                                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                className="flex-1 flex flex-col p-10 max-w-4xl"
                             >
-                                Back
-                            </button>
-                            <button
-                                onClick={handleExisting}
-                                className="flex-1 py-4 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold shadow-lg hover:shadow-primary/20 transition-all"
+                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Parameters</h2>
+                                <p className="text-gray-500 text-xs mb-10 tracking-wide">Environment details.</p>
+
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Name</label>
+                                            <input
+                                                type="text"
+                                                value={folderName}
+                                                onChange={(e) => setFolderName(e.target.value)}
+                                                className="w-full bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[11px] text-white focus:border-emerald-500/40 outline-none font-minecraft tracking-wider"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Directory</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={parentPath}
+                                                    onChange={(e) => setParentPath(e.target.value)}
+                                                    className="flex-1 bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[10px] text-gray-400 font-mono outline-none truncate"
+                                                />
+                                                <button onClick={async () => {
+                                                    const path = await api.openDirectoryPicker();
+                                                    if (path) setParentPath(path);
+                                                }} className="px-3 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm transition-colors">
+                                                    <Folder size={14} className="text-gray-500" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">RAM Allocation</label>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {[
+                                                { val: "2", label: "2 GB" },
+                                                { val: "4", label: "4 GB" },
+                                                { val: "8", label: "8 GB" }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.val}
+                                                    onClick={() => setRamPreset(opt.val)}
+                                                    className={`p-3 text-center border rounded-sm transition-all ${
+                                                        ramPreset === opt.val 
+                                                            ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400' 
+                                                            : 'border-white/5 bg-black/20 text-gray-600 hover:border-white/10'
+                                                    }`}
+                                                >
+                                                    <div className="text-[10px] font-minecraft uppercase tracking-widest">{opt.label}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-white/5">
+                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Java Runtime</label>
+                                        {javaLoading ? (
+                                            <div className="text-[10px] text-gray-600 font-minecraft uppercase tracking-widest flex items-center gap-2">
+                                                <Loader2 size={12} className="animate-spin" /> Checking...
+                                            </div>
+                                        ) : javaStatus ? (
+                                            <div className={`p-3 rounded-sm border ${
+                                                javaStatus.status_color === 'green' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                                                javaStatus.status_color === 'orange' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                                                'bg-red-500/5 border-red-500/20'
+                                            }`}>
+                                                <div className={`text-[10px] font-minecraft uppercase tracking-widest ${
+                                                    javaStatus.status_color === 'green' ? 'text-emerald-400' :
+                                                    javaStatus.status_color === 'orange' ? 'text-yellow-400' :
+                                                    'text-red-400'
+                                                }`}>
+                                                    {javaStatus.status_color === 'green' ? 'Ready' : javaStatus.status_color === 'orange' ? 'Update Needed' : 'Missing'}
+                                                </div>
+                                                <div className="text-[10px] text-gray-500 mt-1">
+                                                    Requires Java {javaStatus.required_version} — {
+                                                        javaStatus.local_java_available ? 'Already installed' :
+                        javaStatus.system_java ? `System has Java ${javaStatus.system_java[0]}` :
+                        'Will be downloaded during setup'
+                                                    }
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-[10px] text-gray-600 font-minecraft">Java {version ? 'check unavailable' : 'not selected'}</div>
+                                        )}
+                                    </div>
+
+                                    <div className="pt-4 border-t border-white/5">
+                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                            <div className={`w-4 h-4 rounded-sm flex items-center justify-center border transition-all ${eulaAccepted ? 'bg-emerald-500 border-emerald-500' : 'bg-black/40 border-white/5 group-hover:border-white/20'}`}>
+                                                {eulaAccepted && <Check size={12} className="text-black" />}
+                                            </div>
+                                            <input type="checkbox" className="hidden" checked={eulaAccepted} onChange={(e) => setEulaAccepted(e.target.checked)} />
+                                            <span className="text-[10px] text-gray-500 group-hover:text-gray-400 select-none uppercase tracking-widest font-minecraft transition-colors">Accept Minecraft EULA</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
+                                    <button onClick={() => setStep(2)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button 
+                                        onClick={handleDeploy} 
+                                        disabled={!eulaAccepted}
+                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30"
+                                    >
+                                        {javaStatus && !javaStatus.local_java_available && javaStatus.needs_download ? 'Download & Deploy' : 'Deploy'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 3: CONFIGURATION (IMPORT) */}
+                        {step === 3 && mode === 'existing' && (
+                            <motion.div
+                                key="step3_existing"
+                                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                className="flex-1 flex flex-col p-10 max-w-4xl justify-center"
                             >
-                                Import Server
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Mount Repository</h2>
+                                <p className="text-gray-500 text-xs mb-8 tracking-wide">Import existing server files.</p>
+
+                                <div className="space-y-4">
+                                    <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Source Path</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={existingPath}
+                                            onChange={(e) => setExistingPath(e.target.value)}
+                                            placeholder="/path/to/server"
+                                            className="flex-1 bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[10px] text-white font-mono outline-none focus:border-emerald-500/40"
+                                        />
+                                        <button onClick={async () => {
+                                            const path = await api.openDirectoryPicker();
+                                            if (path) setExistingPath(path);
+                                        }} className="px-3 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm transition-colors flex items-center justify-center">
+                                            <Folder size={16} className="text-emerald-500/60" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-12 flex gap-4">
+                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button 
+                                        onClick={handleImport} 
+                                        disabled={!existingPath}
+                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30"
+                                    >
+                                        Link Project
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 4: DEPLOYING */}
+                        {step === 4 && (
+                            <motion.div
+                                key="step4"
+                                initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+                                className="flex-1 flex flex-col items-center justify-center p-10 text-center"
+                            >
+                                <div className="w-12 h-12 rounded-sm bg-black border border-white/10 flex items-center justify-center mb-6 shadow-xl relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />
+                                    <Terminal size={20} className="text-emerald-400 relative z-10" />
+                                </div>
+                                <h3 className="text-sm font-minecraft tracking-widest text-white mb-2 uppercase">Deploying...</h3>
+                                <p className="text-gray-500 text-[10px] h-4 font-mono truncate max-w-xs mb-8">{statusMessage}</p>
+
+                                <div className="w-64 max-w-full bg-black/40 rounded-sm h-1 overflow-hidden border border-white/5">
+                                    <motion.div 
+                                        className="h-full bg-emerald-500"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progress}%` }}
+                                        transition={{ ease: "easeOut" }}
+                                    />
+                                </div>
+                                <div className="mt-3 text-[9px] font-minecraft text-emerald-500/40 uppercase tracking-widest">{Math.round(progress)}%</div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
         </div>
     );
 }

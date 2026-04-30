@@ -7,19 +7,20 @@ export default {
     theme: {
         extend: {
             colors: {
-                background: "#0a0a0a",
-                surface: "#1a1a1a",
-                "surface-hover": "#252525",
-                primary: "#6366f1", // Indigo 500
-                "primary-hover": "#4f46e5",
-                secondary: "#ec4899", // Pink 500
-                accent: "#06b6d4",   // Cyan 500
+                background: "#09090b",
+                surface: "#18181b",
+                "surface-hover": "#27272a",
+                primary: "#10b981", 
+                "primary-hover": "#059669",
+                secondary: "#64748b",
+                accent: "#38bdf8",   
                 success: "#22c55e",
                 warning: "#eab308",
                 error: "#ef4444",
             },
             fontFamily: {
                 sans: ['Inter', 'system-ui', 'sans-serif'],
+                minecraft: ['"Pixelify Sans"', 'cursive', 'system-ui', 'sans-serif'],
             },
             animation: {
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

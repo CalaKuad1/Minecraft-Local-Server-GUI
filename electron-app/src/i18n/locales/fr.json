@@ -1,0 +1,218 @@
+{
+    "nav": {
+        "dashboard": "Tableau de Bord",
+        "console": "Console",
+        "players": "Joueurs",
+        "worlds": "Mondes",
+        "mods": "Mods",
+        "plugins": "Plugins",
+        "settings": "Paramètres",
+        "back_to_library": "Retour à la Bibliothèque"
+    },
+    "status": {
+        "online": "En ligne",
+        "offline": "Hors ligne",
+        "starting": "Démarrage",
+        "stopping": "Arrêt",
+        "not_configured": "Non configuré",
+        "system_online": "Système en ligne",
+        "system_idle": "Système en veille"
+    },
+    "dashboard": {
+        "recent_logs": "Logs Récents",
+        "players_online": "Joueurs en ligne",
+        "server_type": "Type de Serveur",
+        "minecraft_version": "Version Minecraft",
+        "cpu_usage": "Utilisation CPU",
+        "ram_usage": "Utilisation RAM",
+        "uptime": "Temps d'activité",
+        "uptime_sub": "Depuis le dernier redémarrage",
+        "ram_sub": "Utilisation / Alloué",
+        "cpu_sub": "Total Système",
+        "waiting_logs": "En attente de la sortie du serveur...",
+        "sys_event_log": "Journal des événements système",
+        "start": "Démarrer",
+        "stop": "Arrêter",
+        "restart": "Redémarrer",
+        "open_folder": "Ouvrir le dossier",
+        "address": "Adresse du Serveur",
+        "public_server": {
+            "title": "Rendre le serveur public",
+            "desc": "Expérimental : Propulsé par Pinggy.io",
+            "info_title": "Serveur Public",
+            "info_desc": "Votre serveur sera accessible depuis Internet via un tunnel sécurisé.",
+            "experimental_warn": "Cette fonctionnalité est expérimentale et l'adresse changera à chaque redémarrage.",
+            "services": {
+                "pinggy_desc": "Expérimental. Tunnel rapide via SSH. Aucune installation requise."
+            }
+        },
+        "shutdown_timer": {
+            "title": "Planifier l'arrêt",
+            "desc": "Minuteur d'arrêt automatique",
+            "set_duration": "Définir la durée",
+            "minutes": "minutes",
+            "presets": "Préréglages rapides",
+            "timer_active": "Minuteur actif",
+            "starts_in": "Arrêt prévu dans ~{min} minutes.",
+            "cancel": "Annuler le minuteur",
+            "start": "Démarrer le minuteur"
+        },
+        "playit": {
+            "claim_title": "Configuration Playit.gg",
+            "claim_desc": "Autorisation Requise",
+            "click_link": "Cliquez sur le lien ci-dessous pour relier ce serveur à votre compte Playit.gg. Une fois autorisé, le tunnel se connectera automatiquement.",
+            "open_browser": "Ouvrir dans le navigateur",
+            "waiting": "En attente d'autorisation..."
+        }
+    },
+    "library": {
+        "title": "Bibliothèque de Serveurs",
+        "new_server": "Nouveau Serveur",
+        "recently_opened": "Vus Récemment",
+        "all_servers": "Toute l'Infrastructure",
+        "stats": {
+            "total": "Nombre total de serveurs",
+            "active": "Actif maintenant",
+            "plugin_ready": "Prêt pour les plugins"
+        },
+        "search": "Rechercher...",
+        "boot": "Démarrer",
+        "manage": "Gérer",
+        "delete": "Supprimer"
+    },
+    "settings": {
+        "title": "Paramètres",
+        "general": "Général",
+        "language": "Langue",
+        "appearance": "Apparence",
+        "about": "À propos",
+        "save": "Enregistrer",
+        "saved": "Enregistré !",
+        "auto_start": {
+            "title": "Démarrage Automatique",
+            "desc": "Démarrer automatiquement le dernier serveur au lancement."
+        },
+        "notifications": {
+            "title": "Notifications Bureau",
+            "desc": "Alertes sur l'état et les événements du serveur."
+        },
+        "general_settings": {
+            "title": "Paramètres Généraux",
+            "desc": "Configurer le comportement de l'application."
+        },
+        "language_settings": {
+            "title": "Langue",
+            "desc": "Sélectionnez votre langue d'affichage."
+        },
+        "appearance_settings": {
+            "title": "Apparence",
+            "desc": "Personnalisez l'apparence de l'application."
+        },
+        "about_settings": {
+            "title": "À propos",
+            "desc": "Informations sur l'application."
+        },
+        "version": "Version",
+        "developer": "Développeur",
+        "framework": "Framework",
+        "license": "Licence",
+        "view_github": "Voir sur GitHub"
+    },
+    "common": {
+        "back": "Retour",
+        "next": "Suivant",
+        "cancel": "Annuler",
+        "confirm": "Confirmer",
+        "loading": "Chargement...",
+        "retry": "Réessayer",
+        "made_by": "Fait par"
+    },
+    "server_settings": {
+        "title": "Config Serveur",
+        "subtitle": "Paramètres Système",
+        "loading": "Chargement des paramètres...",
+        "error_title": "Erreur lors du chargement des paramètres",
+        "error_loading": "Échec du chargement des paramètres",
+        "error_saving": "Échec de l'enregistrement",
+        "saving": "Écriture...",
+        "save_config": "Enregistrer la config",
+        "open_directory": "Ouvrir le dossier",
+        "sections": {
+            "general": "Général & Monde",
+            "gameplay": "Règles de jeu",
+            "network": "Performance & Réseau",
+            "security": "Sécurité & Avancé",
+            "appearance": "Apparence & MOTD",
+            "system": "Ressources Système"
+        },
+        "props": {
+            "server_port": "Port du serveur",
+            "level_type": "Type de niveau",
+            "world_seed": "Graine du monde",
+            "world_seed_placeholder": "Laisser vide pour une graine aléatoire",
+            "level_types": {
+                "default": "Par défaut",
+                "flat": "Plat",
+                "large_biomes": "Grands Biomes",
+                "amplified": "Amplifié"
+            },
+            "difficulty": "Difficulté",
+            "difficulties": {
+                "peaceful": "Paisible",
+                "easy": "Facile",
+                "normal": "Normal",
+                "hard": "Difficile"
+            },
+            "gamemode": "Mode de jeu par défaut",
+            "gamemodes": {
+                "survival": "Survie",
+                "creative": "Créatif",
+                "adventure": "Aventure",
+                "spectator": "Spectateur"
+            },
+            "pvp": "PvP Autorisé",
+            "hardcore": "Mode Hardcore",
+            "allow_nether": "Autoriser le Nether",
+            "allow_flight": "Autoriser le vol",
+            "enable_command_block": "Blocs de commande",
+            "spawn_animals": "Apparition d'animaux",
+            "spawn_monsters": "Apparition de monstres",
+            "max_players": "Joueurs Max",
+            "view_distance": "Distance de vue (Chunks)",
+            "simulation_distance": "Distance de simulation (Chunks)",
+            "online_mode": "Mode en ligne",
+            "whitelist": "Whitelist",
+            "enforce_whitelist": "Forcer Whitelist",
+            "force_gamemode": "Forcer Mode de Jeu"
+        },
+        "props_desc": {
+            "pvp": "Les joueurs peuvent se blesser",
+            "hardcore": "Banni en cas de mort",
+            "allow_nether": "Activer la dimension nether",
+            "allow_flight": "Autoriser le vol en survie",
+            "enable_command_block": "Activer les blocs de commande",
+            "spawn_animals": "Apparition naturelle d'animaux",
+            "spawn_monsters": "Apparition naturelle de monstres",
+            "online_mode": "Vérifier les utilisateurs avec Mojang",
+            "whitelist": "Seuls les joueurs listés peuvent rejoindre",
+            "enforce_whitelist": "Kick les non-listés même s'ils sont connectés",
+            "force_gamemode": "Forcer le mode par défaut à la connexion"
+        },
+        "raw_config": {
+            "title": "Configuration Brute",
+            "desc": "Accéder à toutes les propriétés brutes de server.properties",
+            "button": "Ouvrir l'éditeur de propriétés"
+        },
+        "appearance": {
+            "upload_icon": "Upload Icone",
+            "motd_label": "Message du jour (MOTD)"
+        },
+        "system": {
+            "host_ram": "Hôte : {ram} Go RAM",
+            "max_ram": "Allocation RAM Max",
+            "min_ram": "Configuration RAM Initiale (Min)",
+            "java_path": "Chemin de l'exécutable Java",
+            "java_path_desc": "Chemin explicite ou variables d'environnement."
+        }
+    }
+}

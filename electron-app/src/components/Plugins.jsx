@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Trash2, Package, Search, Upload, HardDrive, RefreshCw, Download } from 'lucide-react';
+import { Trash2, Package, Search, Upload, HardDrive, RefreshCw, Download } from './ui/PixelIcons';
 import { useDialog } from './ui/DialogContext';
+import { Select } from './ui/Select';
 
 export default function Plugins({ status }) {
     const dialog = useDialog();
@@ -125,11 +127,11 @@ export default function Plugins({ status }) {
     if (!isPaper) {
         return (
             <div className="h-full flex flex-col justify-center items-center text-center p-8 animate-in fade-in zoom-in duration-500">
-                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 max-w-md">
-                    <h2 className="text-xl font-bold text-white mb-2">Paper/Spigot Required</h2>
-                    <p className="text-gray-400 mb-4">
+                <div className="p-6 rounded-md bg-white/5 border border-white/10 max-w-md">
+                    <h2 className="text-xl font-minecraft text-emerald-400 uppercase tracking-widest mb-2">Paper/Spigot Required</h2>
+                    <p className="text-zinc-400 mb-4 text-sm">
                         Plugins are only available for Paper, Spigot, or Bukkit servers.<br />
-                        Your current server type is: <span className="text-primary font-mono">{serverType || 'Unknown'}</span>
+                        Your current server type is: <span className="text-emerald-400 font-mono text-xs uppercase tracking-wider">{serverType || 'Unknown'}</span>
                     </p>
                 </div>
             </div>
@@ -139,28 +141,36 @@ export default function Plugins({ status }) {
     return (
         <div className="h-full flex flex-col animate-in fade-in zoom-in duration-500">
             {error && (
-                <div className="mb-4 p-3 rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 text-sm">
+                <div className="mb-4 p-3 rounded-md border border-red-500/20 bg-red-500/10 text-red-200 text-sm">
                     {error}
                 </div>
             )}
 
             {/* Header / Tabs */}
-            <div className="flex items-center gap-4 mb-6">
-                <button
-                    onClick={() => setActiveTab('browse')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'browse' ? 'bg-primary text-white shadow-lg shadow-primary/25' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                >
-                    Browse Plugins
-                </button>
-                <button
-                    onClick={() => { setActiveTab('installed'); loadPlugins(); }}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'installed' ? 'bg-primary text-white shadow-lg shadow-primary/25' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                >
-                    Installed ({plugins.length})
-                </button>
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center bg-[#0a0a0a] border border-white/5 p-1 rounded-md max-w-fit shadow-inner">
+                    <button
+                        onClick={() => setActiveTab('browse')}
+                        className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider text-sm transition-colors relative flex items-center justify-center gap-2 z-10 uppercase ${activeTab === 'browse' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        {activeTab === 'browse' && (
+                            <motion.div layoutId="pluginsTab" className="absolute inset-0 bg-white/10 rounded-sm -z-10 shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                        )}
+                        <span className={`relative z-10 ${activeTab === 'browse' ? 'font-bold' : ''}`}>Browse</span>
+                    </button>
+                    <button
+                        onClick={() => { setActiveTab('installed'); loadPlugins(); }}
+                        className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider text-sm transition-colors relative flex items-center justify-center gap-2 z-10 uppercase ${activeTab === 'installed' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        {activeTab === 'installed' && (
+                            <motion.div layoutId="pluginsTab" className="absolute inset-0 bg-white/10 rounded-sm -z-10 shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                        )}
+                        <span className={`relative z-10 ${activeTab === 'installed' ? 'font-bold' : ''}`}>Installed ({plugins.length})</span>
+                    </button>
+                </div>
                 <button
                     onClick={() => api.openServerFolder()}
-                    className="px-4 py-2 rounded-lg font-medium bg-zinc-800 text-zinc-400 hover:text-white hover:bg-primary/20 transition-all flex items-center gap-2 ml-auto"
+                    className="px-4 py-2 border border-transparent hover:border-white/10 rounded-md font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 ml-auto"
                     title="Open Plugins Folder"
                 >
                     <HardDrive size={18} />
@@ -170,37 +180,43 @@ export default function Plugins({ status }) {
 
             {activeTab === 'browse' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex gap-2 mb-4">
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50 text-sm"
-                        >
-                            <option value="relevance">Relevance</option>
-                            <option value="downloads">Downloads</option>
-                            <option value="newest">Newest</option>
-                            <option value="updated">Updated</option>
-                        </select>
+                    <div className="flex gap-2 mb-4 h-10">
+                        <div className="w-40">
+                            <Select
+                                value={sortBy}
+                                onChange={setSortBy}
+                                options={[
+                                    { value: 'relevance', label: 'Relevance' },
+                                    { value: 'downloads', label: 'Downloads' },
+                                    { value: 'newest', label: 'Newest' },
+                                    { value: 'updated', label: 'Updated' }
+                                ]}
+                                className="h-full bg-black/40 border-white/5 rounded-sm text-[11px] font-minecraft tracking-widest"
+                            />
+                        </div>
 
-                        <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white/80 focus:outline-none focus:border-primary/50 text-sm"
-                        >
-                            <option value="all">All Categories</option>
-                            <option value="economy">Economy</option>
-                            <option value="game-mechanics">Game Mechanics</option>
-                            <option value="utility">Utility</option>
-                            <option value="management">Management</option>
-                            <option value="social">Social</option>
-                        </select>
+                        <div className="w-48">
+                            <Select
+                                value={category}
+                                onChange={setCategory}
+                                options={[
+                                    { value: 'all', label: 'All Categories' },
+                                    { value: 'economy', label: 'Economy' },
+                                    { value: 'game-mechanics', label: 'Game Mechanics' },
+                                    { value: 'utility', label: 'Utility' },
+                                    { value: 'management', label: 'Management' },
+                                    { value: 'social', label: 'Social' }
+                                ]}
+                                className="h-full bg-black/40 border-white/5 rounded-sm text-[11px] font-minecraft tracking-widest"
+                            />
+                        </div>
 
                         <input
                             type="text"
                             placeholder="Search plugins..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary/50 transition-colors"
+                            className="flex-1 bg-black/40 border border-white/10 rounded-sm px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50 transition-colors font-minecraft text-xs tracking-widest uppercase"
                         />
                     </div>
 
@@ -212,19 +228,19 @@ export default function Plugins({ status }) {
                             </div>
                         )}
                         {searchResults.map((plugin) => (
-                            <div key={plugin.slug} className="bg-surface/40 border border-white/5 p-4 rounded-xl flex gap-4 hover:bg-surface/60 transition-colors">
+                            <div key={plugin.slug} className="bg-black/20 border border-white/5 p-4 rounded-md flex gap-4 hover:bg-white/5 hover:border-white/10 transition-colors">
                                 <img
                                     src={plugin.icon_url || 'https://cdn.modrinth.com/assets/logo.svg'}
                                     alt={plugin.title}
-                                    className="w-16 h-16 rounded-xl object-contain bg-black/20 p-2"
+                                    className="w-16 h-16 rounded-md object-contain bg-black/40 p-2"
                                 />
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
-                                        <h3 className="font-bold text-lg text-white">{plugin.title}</h3>
+                                        <h3 className="font-bold text-lg text-emerald-400 font-minecraft">{plugin.title}</h3>
                                         <button
                                             onClick={() => handleInstall(plugin)}
                                             disabled={installing[plugin.slug]}
-                                            className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
+                                            className="p-2 border border-transparent hover:border-white/10 rounded-md transition-colors group"
                                             title="Install Latest"
                                         >
                                             <Download className={`w-5 h-5 ${installing[plugin.slug] ? 'text-yellow-500 animate-pulse' : 'text-gray-400 group-hover:text-white'}`} />
@@ -259,17 +275,17 @@ export default function Plugins({ status }) {
                                 placeholder="Search installed plugins..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-primary/50 transition-colors"
+                                className="w-full bg-black/40 border border-white/10 rounded-md pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500/50 transition-colors font-mono"
                             />
                         </div>
-                        <label className={`bg-primary hover:bg-primary-hover text-white px-6 py-2 rounded-xl flex items-center gap-2 font-medium transition-all shadow-lg shadow-primary/25 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            <Upload size={18} />
+                        <label className={`bg-transparent hover:bg-white/5 border border-white/10 text-emerald-400 font-minecraft tracking-wider uppercase text-xs px-6 py-2 rounded-md flex items-center justify-center gap-2 transition-all cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <Upload size={16} />
                             <span>{uploading ? 'Uploading...' : 'Upload'}</span>
                             <input type="file" className="hidden" accept=".jar" onChange={handleUpload} disabled={uploading} />
                         </label>
                         <button
                             onClick={loadPlugins}
-                            className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition-colors"
+                            className="p-3 bg-transparent hover:bg-white/5 border border-white/10 rounded-md text-zinc-500 hover:text-white transition-colors"
                             title="Refresh List"
                         >
                             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
@@ -286,13 +302,13 @@ export default function Plugins({ status }) {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {filteredPlugins.map((plugin) => (
-                                    <div key={plugin.filename} className="bg-surface/40 border border-white/5 p-4 rounded-xl flex items-center justify-between group hover:bg-surface/60 transition-colors">
+                                    <div key={plugin.filename} className="bg-black/20 border border-white/5 p-4 rounded-md flex items-center justify-between group hover:bg-white/5 transition-colors hover:border-white/10">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400">
+                                            <div className="w-10 h-10 rounded-md bg-white/5 border border-white/5 flex items-center justify-center text-emerald-500 drop-shadow-md">
                                                 <Package size={20} />
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="text-white font-medium truncate max-w-[200px] md:max-w-[300px]" title={plugin.filename}>
+                                                <div className="text-white font-mono text-sm truncate max-w-[200px] md:max-w-[300px]" title={plugin.filename}>
                                                     {plugin.filename}
                                                 </div>
                                                 <div className="text-xs text-gray-500">{plugin.size}</div>
@@ -300,7 +316,7 @@ export default function Plugins({ status }) {
                                         </div>
                                         <button
                                             onClick={() => handleDelete(plugin.filename)}
-                                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                            className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
                                             title="Delete"
                                         >
                                             <Trash2 size={18} />

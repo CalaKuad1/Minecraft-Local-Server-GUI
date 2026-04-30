@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from 'lucide-react';
+import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
 import { Select } from './ui/Select';
 import AdvancedSettingsModal from './AdvancedSettingsModal';
 import MotdPreview from './MotdPreview';
-import { Palette, Upload } from 'lucide-react';
+import { Palette, Upload } from './ui/PixelIcons';
+import { useTranslation } from '../contexts/LanguageContext';
 
 export default function Settings() {
-    const [activeTab, setActiveTab] = useState('server');
+    const { t } = useTranslation();
+    const [activeTab, setActiveTab] = useState('general');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
-    const [systemInfo, setSystemInfo] = useState(null); // { total_ram_gb, max_recommended_ram_gb }
+    const [systemInfo, setSystemInfo] = useState(null);
 
-    // State for Server Properties
     const [serverProps, setServerProps] = useState({});
-
-    // State for App Settings
     const [appSettings, setAppSettings] = useState({
         ram_min: "2",
         ram_max: "4",
@@ -26,7 +26,7 @@ export default function Settings() {
     });
 
     const [iconTs, setIconTs] = useState(Date.now());
-    const API_BASE = "http://127.0.0.1:8000"; // Should be imported or context
+    const API_BASE = "http://127.0.0.1:8000";
 
     useEffect(() => {
         loadSettings();
@@ -40,14 +40,12 @@ export default function Settings() {
             const app = await api.getAppSettings();
             setServerProps(props);
             setAppSettings(app);
-            // Fetch system info for RAM validation
             try {
                 const res = await fetch('http://127.0.0.1:8000/system/info');
                 if (res.ok) setSystemInfo(await res.json());
-            } catch (_) { /* System info not critical */ }
+            } catch (_) {}
         } catch (e) {
-            console.error("Failed to load settings", e);
-            setError(e?.message || 'Failed to load settings');
+            setError(e?.message || t('server_settings.error_loading'));
         }
         setLoading(false);
     };
@@ -56,17 +54,12 @@ export default function Settings() {
         setSaving(true);
         setError(null);
         try {
-            if (activeTab === 'server') {
-                await api.updateServerProperties(serverProps);
-            } else {
-                await api.updateAppSettings(appSettings);
-            }
+            await api.updateServerProperties(serverProps);
+            await api.updateAppSettings(appSettings);
         } catch (e) {
-            console.error("Failed to save", e);
-            setError(e?.message || 'Failed to save');
+            setError(e?.message || t('server_settings.error_saving'));
         }
         setSaving(false);
-        // Reload to ensure consistency
         setTimeout(loadSettings, 500);
     };
 
@@ -81,10 +74,9 @@ export default function Settings() {
     const handleIconUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         try {
             await api.uploadServerIcon(file);
-            setIconTs(Date.now()); // Refresh image
+            setIconTs(Date.now());
         } catch (err) {
             setError("Failed to upload icon: " + err.message);
         }
@@ -93,364 +85,230 @@ export default function Settings() {
     const insertColorCode = (code) => {
         const textarea = document.getElementById('motd-input');
         if (!textarea) return;
-
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const text = serverProps['motd'] || '';
         const newText = text.substring(0, start) + '&' + code + text.substring(end);
-
         handlePropChange('motd', newText);
-
-        // Restore focus and position (rough)
         setTimeout(() => {
             textarea.focus();
             textarea.setSelectionRange(start + 2, start + 2);
         }, 0);
     };
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Loading settings...</div>;
+    if (loading) return <div className="p-8 text-center text-zinc-500 font-minecraft tracking-widest uppercase">{t('server_settings.loading')}</div>;
 
     if (error) {
         return (
             <div className="p-8 text-center">
-                <div className="text-red-400 font-medium mb-2">Error loading Settings</div>
+                <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('server_settings.error_title')}</div>
                 <div className="text-gray-500 text-sm mb-4">{error}</div>
-                <button
-                    onClick={loadSettings}
-                    className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg transition-colors border border-white/10"
-                >
-                    Retry
-                </button>
+                <button onClick={loadSettings} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-md transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
             </div>
         );
     }
 
     return (
-        <div className="animate-in fade-in zoom-in duration-500 max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h2 className="text-3xl font-bold text-white mb-2">Settings</h2>
-                    <p className="text-gray-400">Manage server properties and application configuration.</p>
-                </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => api.openServerFolder()}
-                        className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors border border-white/10"
-                    >
-                        <FolderOpen size={18} />
-                        <span>Open Server Folder</span>
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="bg-primary hover:bg-primary-hover text-white px-6 py-2 rounded-xl flex items-center gap-2 font-medium transition-all shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]"
-                    >
-                        <Save size={18} />
-                        <span>{saving ? 'Saving...' : 'Save Changes'}</span>
-                    </button>
-                </div>
-            </div>
+        <div className="animate-in fade-in zoom-in duration-500 w-full h-full">
+            <div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto items-start h-full pb-10">
+                
+                {/* Left Navigation Rails */}
+                <div className="w-full md:w-64 shrink-0 flex flex-col gap-2 sticky top-0">
+                    <div className="mb-6">
+                        <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('server_settings.title')}</h2>
+                        <p className="text-zinc-500 text-sm font-medium">{t('server_settings.subtitle')}</p>
+                    </div>
 
-            <div className="flex gap-2 border-b border-white/5 mb-8">
-                {['server', 'appearance', 'system'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-6 py-3 rounded-t-xl font-medium transition-colors relative flex items-center gap-2 ${activeTab === tab
-                            ? 'text-white bg-white/5'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                            }`}
-                    >
-                        {tab === 'server' && <CircuitBoard size={18} />}
-                        {tab === 'appearance' && <Palette size={18} />}
-                        {tab === 'system' && <Cpu size={18} />}
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        {activeTab === tab && (
-                            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary"></div>
+                    <div className="flex flex-col gap-1">
+                        {[
+                            { id: 'general', label: t('server_settings.sections.general') },
+                            { id: 'gameplay', label: t('server_settings.sections.gameplay') },
+                            { id: 'network', label: t('server_settings.sections.network') },
+                            { id: 'security', label: t('server_settings.sections.security') },
+                            { id: 'appearance', label: t('server_settings.sections.appearance') },
+                            { id: 'system', label: t('server_settings.sections.system') },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`w-full text-left px-4 py-3 rounded-md font-minecraft tracking-wider uppercase text-sm transition-all duration-200 border-l-2 ${
+                                    activeTab === tab.id
+                                        ? 'bg-white/10 text-emerald-400 border-emerald-400 shadow-sm'
+                                        : 'border-transparent text-zinc-500 hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-white/5 space-y-3">
+                        <button
+                            onClick={() => api.openServerFolder()}
+                            className="w-full bg-transparent hover:bg-white/5 text-zinc-400 hover:text-white px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-colors border border-white/10 font-minecraft uppercase tracking-wider text-xs"
+                        >
+                            <FolderOpen size={16} /> {t('server_settings.open_directory')}
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="w-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-all border border-emerald-500/30 font-minecraft uppercase tracking-wider text-xs group shadow-[0_0_15px_max(0px,rgba(16,185,129,0.1))] hover:shadow-[0_0_20px_max(0px,rgba(16,185,129,0.4))]"
+                        >
+                            <Save size={16} className="group-hover:animate-bounce" /> {saving ? t('server_settings.saving') : t('server_settings.save_config')}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Right Content Pane */}
+                <div className="flex-1 w-full min-w-0">
+                    <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 p-8 rounded-md min-h-[600px] shadow-2xl relative overflow-hidden">
+                        
+                        {/* Removed background glow per user feedback */}
+
+                        {activeTab === 'general' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.general')}</h3>
+                                
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <SettingInput label={t('server_settings.props.server_port')} value={serverProps['server-port'] || '25565'} onChange={(v) => handlePropChange('server-port', v)} type="number" />
+                                        <div className="flex flex-col">
+                                            <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.level_type')}</label>
+                                            <Select
+                                                value={serverProps['level-type'] || 'default'}
+                                                onChange={(val) => handlePropChange('level-type', val)}
+                                                options={[
+                                                    { value: 'default', label: t('server_settings.props.level_types.default') },
+                                                    { value: 'flat', label: t('server_settings.props.level_types.flat') },
+                                                    { value: 'large_biomes', label: t('server_settings.props.level_types.large_biomes') },
+                                                    { value: 'amplified', label: t('server_settings.props.level_types.amplified') }
+                                                ]}
+                                            />
+                                        </div>
+                                    </div>
+                                    <SettingInput label={t('server_settings.props.world_seed')} placeholder={t('server_settings.props.world_seed_placeholder')} value={serverProps['level-seed'] || ''} onChange={(v) => handlePropChange('level-seed', v)} />
+                                </div>
+                            </div>
                         )}
-                    </button>
-                ))}
-            </div>
 
-            {activeTab === 'server' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-left-4 duration-300 pb-10">
-
-                    {/* General Settings */}
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl h-fit">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <FolderOpen size={20} className="text-primary" />
-                            General & World
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Server Port</label>
-                                <input
-                                    type="number"
-                                    value={serverProps['server-port'] || '25565'}
-                                    onChange={(e) => handlePropChange('server-port', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">MOTD (Server Name)</label>
-                                <textarea
-                                    value={serverProps['motd'] || 'A Minecraft Server'}
-                                    onChange={(e) => handlePropChange('motd', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors h-20 resize-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">World Seed</label>
-                                <input
-                                    type="text"
-                                    placeholder="Leave empty for random"
-                                    value={serverProps['level-seed'] || ''}
-                                    onChange={(e) => handlePropChange('level-seed', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Level Type</label>
-                                <Select
-                                    value={serverProps['level-type'] || 'default'}
-                                    onChange={(val) => handlePropChange('level-type', val)}
-                                    options={[
-                                        { value: 'default', label: 'Default' },
-                                        { value: 'flat', label: 'Flat' },
-                                        { value: 'large_biomes', label: 'Large Biomes' },
-                                        { value: 'amplified', label: 'Amplified' }
-                                    ]}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Gameplay Settings */}
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl h-fit">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <CircuitBoard size={20} className="text-accent" />
-                            Gameplay
-                        </h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Difficulty</label>
-                                    <Select
-                                        value={serverProps['difficulty'] || 'easy'}
-                                        onChange={(val) => handlePropChange('difficulty', val)}
-                                        options={[
-                                            { value: 'peaceful', label: 'Peaceful' },
-                                            { value: 'easy', label: 'Easy' },
-                                            { value: 'normal', label: 'Normal' },
-                                            { value: 'hard', label: 'Hard' }
-                                        ]}
-                                    />
+                        {activeTab === 'gameplay' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.gameplay')}</h3>
+                                
+                                <div className="grid grid-cols-2 gap-6 mb-6">
+                                    <div className="flex flex-col">
+                                        <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.difficulty')}</label>
+                                        <Select
+                                            value={serverProps['difficulty'] || 'easy'}
+                                            onChange={(val) => handlePropChange('difficulty', val)}
+                                            options={[
+                                                { value: 'peaceful', label: t('server_settings.props.difficulties.peaceful') },
+                                                { value: 'easy', label: t('server_settings.props.difficulties.easy') },
+                                                { value: 'normal', label: t('server_settings.props.difficulties.normal') },
+                                                { value: 'hard', label: t('server_settings.props.difficulties.hard') }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.gamemode')}</label>
+                                        <Select
+                                            value={serverProps['gamemode'] || 'survival'}
+                                            onChange={(val) => handlePropChange('gamemode', val)}
+                                            options={[
+                                                { value: 'survival', label: t('server_settings.props.gamemodes.survival') },
+                                                { value: 'creative', label: t('server_settings.props.gamemodes.creative') },
+                                                { value: 'adventure', label: t('server_settings.props.gamemodes.adventure') },
+                                                { value: 'spectator', label: t('server_settings.props.gamemodes.spectator') }
+                                            ]}
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Gamemode</label>
-                                    <Select
-                                        value={serverProps['gamemode'] || 'survival'}
-                                        onChange={(val) => handlePropChange('gamemode', val)}
-                                        options={[
-                                            { value: 'survival', label: 'Survival' },
-                                            { value: 'creative', label: 'Creative' },
-                                            { value: 'adventure', label: 'Adventure' },
-                                            { value: 'spectator', label: 'Spectator' }
-                                        ]}
-                                    />
+
+                                <div className="space-y-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <LabelToggle label={t('server_settings.props.pvp')} desc={t('server_settings.props_desc.pvp')} checked={serverProps['pvp'] === 'true'} onChange={(v) => handlePropChange('pvp', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.hardcore')} desc={t('server_settings.props_desc.hardcore')} color="text-red-400" checked={serverProps['hardcore'] === 'true'} onChange={(v) => handlePropChange('hardcore', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.allow_nether')} desc={t('server_settings.props_desc.allow_nether')} checked={serverProps['allow-nether'] !== 'false'} onChange={(v) => handlePropChange('allow-nether', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.allow_flight')} desc={t('server_settings.props_desc.allow_flight')} checked={serverProps['allow-flight'] === 'true'} onChange={(v) => handlePropChange('allow-flight', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.enable_command_block')} desc={t('server_settings.props_desc.enable_command_block')} checked={serverProps['enable-command-block'] === 'true'} onChange={(v) => handlePropChange('enable-command-block', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.spawn_animals')} desc={t('server_settings.props_desc.spawn_animals')} checked={serverProps['spawn-animals'] !== 'false'} onChange={(v) => handlePropChange('spawn-animals', v.toString())} />
+                                    <LabelToggle label={t('server_settings.props.spawn_monsters')} desc={t('server_settings.props_desc.spawn_monsters')} checked={serverProps['spawn-monsters'] !== 'false'} onChange={(v) => handlePropChange('spawn-monsters', v.toString())} />
                                 </div>
                             </div>
+                        )}
 
-                            <div className="space-y-2 pt-2">
-                                <LabelToggle
-                                    label="PvP Allowed"
-                                    desc="Players can hurt each other"
-                                    checked={serverProps['pvp'] === 'true'}
-                                    onChange={(v) => handlePropChange('pvp', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Hardcore Mode"
-                                    desc="Banned upon death"
-                                    color="text-red-400"
-                                    checked={serverProps['hardcore'] === 'true'}
-                                    onChange={(v) => handlePropChange('hardcore', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Allow Nether"
-                                    desc="Enable nether dimension"
-                                    checked={serverProps['allow-nether'] !== 'false'}
-                                    onChange={(v) => handlePropChange('allow-nether', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Allow Flight"
-                                    desc="Allow flying in survival"
-                                    checked={serverProps['allow-flight'] === 'true'}
-                                    onChange={(v) => handlePropChange('allow-flight', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Command Blocks"
-                                    desc="Enable command blocks"
-                                    checked={serverProps['enable-command-block'] === 'true'}
-                                    onChange={(v) => handlePropChange('enable-command-block', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Spawn Animals"
-                                    desc="Natural animal spawning"
-                                    checked={serverProps['spawn-animals'] !== 'false'}
-                                    onChange={(v) => handlePropChange('spawn-animals', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Spawn Monsters"
-                                    desc="Natural monster spawning"
-                                    checked={serverProps['spawn-monsters'] !== 'false'}
-                                    onChange={(v) => handlePropChange('spawn-monsters', v.toString())}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Performance & Network */}
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl h-fit">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <Cpu size={20} className="text-blue-400" />
-                            Performance & Network
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Max Players</label>
-                                <input
-                                    type="number"
-                                    value={serverProps['max-players'] || '20'}
-                                    onChange={(e) => handlePropChange('max-players', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">View Distance (Chunks)</label>
-                                <input
-                                    type="number"
-                                    min="2" max="32"
-                                    value={serverProps['view-distance'] || '10'}
-                                    onChange={(e) => handlePropChange('view-distance', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Simulation Distance (Chunks)</label>
-                                <input
-                                    type="number"
-                                    min="2" max="32"
-                                    value={serverProps['simulation-distance'] || '10'}
-                                    onChange={(e) => handlePropChange('simulation-distance', e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Security & Advanced */}
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl h-fit">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <HardDrive size={20} className="text-orange-400" />
-                            Security & Advanced
-                        </h3>
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <LabelToggle
-                                    label="Online Mode"
-                                    desc="Verify users with Mojang"
-                                    checked={serverProps['online-mode'] === 'true'}
-                                    onChange={(v) => handlePropChange('online-mode', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Whitelist"
-                                    desc="Only listed players can join"
-                                    checked={serverProps['white-list'] === 'true'}
-                                    onChange={(v) => handlePropChange('white-list', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Enforce Whitelist"
-                                    desc="Kick unlisted even if already on"
-                                    checked={serverProps['enforce-whitelist'] === 'true'}
-                                    onChange={(v) => handlePropChange('enforce-whitelist', v.toString())}
-                                />
-                                <LabelToggle
-                                    label="Force Gamemode"
-                                    desc="Force default gamemode on join"
-                                    checked={serverProps['force-gamemode'] === 'true'}
-                                    onChange={(v) => handlePropChange('force-gamemode', v.toString())}
-                                />
-                            </div>
-
-                            <div className="pt-4 border-t border-white/5">
-                                <button
-                                    onClick={() => setShowAdvanced(true)}
-                                    className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all border border-white/5 hover:border-white/10 flex items-center justify-center gap-2 group"
-                                >
-                                    <SettingsIcon size={18} className="group-hover:rotate-45 transition-transform duration-500" />
-                                    Open Advanced Configuration
-                                </button>
-                                <p className="text-center text-xs text-gray-500 mt-2">Access all server.properties</p>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            )}
-
-            {activeTab === 'appearance' && (
-                <div className="animate-in slide-in-from-left-4 duration-300 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Icon Editor */}
-                        <div className="bg-surface border border-white/5 p-6 rounded-2xl">
-                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                <Monitor size={20} className="text-blue-400" />
-                                Server Icon
-                            </h3>
-                            <div className="flex flex-col items-center justify-center p-6 bg-black/20 rounded-xl border border-white/5 border-dashed hover:border-primary/50 transition-colors group">
-                                <div className="w-[64px] h-[64px] mb-4 relative drop-shadow-2xl">
-                                    <img
-                                        src={`${API_BASE}/server/icon/image?t=${iconTs}`}
-                                        onError={(e) => e.target.src = "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png"}
-                                        className="w-full h-full object-contain pixelated rounded-sm"
-                                    />
+                        {activeTab === 'network' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.network')}</h3>
+                                <div className="space-y-6 max-w-lg">
+                                    <SettingInput label={t('server_settings.props.max_players')} value={serverProps['max-players'] || '20'} onChange={(v) => handlePropChange('max-players', v)} type="number" />
+                                    <SettingInput label={t('server_settings.props.view_distance')} value={serverProps['view-distance'] || '10'} onChange={(v) => handlePropChange('view-distance', v)} type="number" min="2" max="32" />
+                                    <SettingInput label={t('server_settings.props.simulation_distance')} value={serverProps['simulation-distance'] || '10'} onChange={(v) => handlePropChange('simulation-distance', v)} type="number" min="2" max="32" />
                                 </div>
-                                <p className="text-sm text-gray-400 mb-4 text-center">
-                                    Upload a 64x64 PNG image.<br />It will be resized automatically.
-                                </p>
-                                <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                                    <Upload size={16} />
-                                    <span>Choose File</span>
-                                    <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={handleIconUpload} />
-                                </label>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Visual Preview */}
-                        <div className="bg-surface border border-white/5 p-6 rounded-2xl">
-                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                <Globe size={20} className="text-green-400" />
-                                LIVE Preview
-                            </h3>
-                            <div className="bg-[url('https://assets.mcmaster.net/bg-dirt-dark.png')] p-4 rounded-xl flex items-center justify-center min-h-[160px]">
-                                <MotdPreview
-                                    motd={serverProps['motd']}
-                                    iconUrl={`${API_BASE}/server/icon/image?t=${iconTs}`}
-                                />
+                        {activeTab === 'security' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.security')}</h3>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                        <LabelToggle label={t('server_settings.props.online_mode')} desc={t('server_settings.props_desc.online_mode')} checked={serverProps['online-mode'] === 'true'} onChange={(v) => handlePropChange('online-mode', v.toString())} />
+                                        <LabelToggle label={t('server_settings.props.whitelist')} desc={t('server_settings.props_desc.whitelist')} checked={serverProps['white-list'] === 'true'} onChange={(v) => handlePropChange('white-list', v.toString())} />
+                                        <LabelToggle label={t('server_settings.props.enforce_whitelist')} desc={t('server_settings.props_desc.enforce_whitelist')} checked={serverProps['enforce-whitelist'] === 'true'} onChange={(v) => handlePropChange('enforce-whitelist', v.toString())} />
+                                        <LabelToggle label={t('server_settings.props.force_gamemode')} desc={t('server_settings.props_desc.force_gamemode')} checked={serverProps['force-gamemode'] === 'true'} onChange={(v) => handlePropChange('force-gamemode', v.toString())} />
+                                    </div>
+
+                                    <div className="p-6 border border-white/5 bg-black/20 rounded-md">
+                                        <div className="mb-4">
+                                            <h4 className="text-white font-minecraft uppercase tracking-wider mb-1">{t('server_settings.raw_config.title')}</h4>
+                                            <p className="text-xs text-zinc-500">{t('server_settings.raw_config.desc')}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowAdvanced(true)}
+                                            className="w-full md:w-auto px-6 py-3 bg-transparent border border-white/20 hover:border-white/40 text-white rounded-md font-minecraft uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 group"
+                                        >
+                                            <SettingsIcon size={16} className="group-hover:rotate-90 transition-transform duration-500" />
+                                            {t('server_settings.raw_config.button')}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2 text-center">This is how your server appears in the multiplayer list.</p>
-                        </div>
-                    </div>
+                        )}
 
-                    {/* MOTD Editor */}
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <Zap size={20} className="text-yellow-400" />
-                            Message of the Day (MOTD)
-                        </h3>
+                        {activeTab === 'appearance' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">Appearance & Icon</h3>
+                                
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <div className="space-y-4">
+                                        <div className="flex flex-col items-center justify-center p-6 bg-black/30 rounded-md border border-white/5 border-dashed hover:border-emerald-500/50 transition-colors group">
+                                            <div className="w-[64px] h-[64px] mb-6 relative drop-shadow-2xl">
+                                                <img
+                                                    src={`${API_BASE}/server/icon/image?t=${iconTs}`}
+                                                    onError={(e) => e.target.src = "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png"}
+                                                    className="w-full h-full object-contain pixelated rounded-sm"
+                                                    alt="Server Icon"
+                                                />
+                                            </div>
+                                            <label className="cursor-pointer bg-transparent border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors font-minecraft uppercase tracking-wider text-xs">
+                                                <Upload size={14} />
+                                                <span>{t('server_settings.appearance.upload_icon')}</span>
+                                                <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={handleIconUpload} />
+                                            </label>
+                                        </div>
+                                        
+                                        <div className="bg-black/80 p-4 rounded-sm flex items-center justify-center min-h-[140px] border border-white/5 relative overflow-hidden">
+                                            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/images/Dirt_background_BE1.webp')", backgroundSize: '64px' }} />
+                                            <div className="relative z-10 w-full flex justify-center">
+                                                <MotdPreview motd={serverProps['motd']} iconUrl={`${API_BASE}/server/icon/image?t=${iconTs}`} />
+                                            </div>
+                                        </div>
+                                    </div>
 
-                        {/* Color Palette */}
-                        <div className="flex flex-wrap gap-2 mb-4 p-3 bg-black/20 rounded-lg">
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.appearance.motd_label')}</label>
+                                        
+                        <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-sm border border-white/5">
                             {[
                                 { c: '0', bg: '#000000', n: 'Black' }, { c: '1', bg: '#0000AA', n: 'Dark Blue' },
                                 { c: '2', bg: '#00AA00', n: 'Dark Green' }, { c: '3', bg: '#00AAAA', n: 'Dark Aqua' },
@@ -462,22 +320,19 @@ export default function Settings() {
                                 { c: 'e', bg: '#FFFF55', n: 'Yellow' }, { c: 'f', bg: '#FFFFFF', n: 'White' }
                             ].map(col => (
                                 <button
-                                    key={col.c}
-                                    onClick={() => insertColorCode(col.c)}
-                                    className="w-6 h-6 rounded hover:scale-110 transition-transform shadow-sm border border-white/10"
-                                    style={{ backgroundColor: col.bg }}
-                                    title={`&${col.c} - ${col.n}`}
+                                    key={col.c} onClick={() => insertColorCode(col.c)}
+                                    className="w-5 h-5 rounded-sm hover:scale-110 transition-transform shadow-sm border border-white/20"
+                                    style={{ backgroundColor: col.bg }} title={`&${col.c} - ${col.n}`}
                                 />
                             ))}
-                            <div className="w-px h-6 bg-white/10 mx-1"></div>
+                            <div className="w-px h-5 bg-white/10 mx-2"></div>
                             {[
                                 { c: 'l', l: 'B', s: 'font-bold' }, { c: 'o', l: 'I', s: 'italic' },
                                 { c: 'n', l: 'U', s: 'underline' }, { c: 'm', l: 'S', s: 'line-through' }
                             ].map(style => (
                                 <button
-                                    key={style.c}
-                                    onClick={() => insertColorCode(style.c)}
-                                    className={`w-6 h-6 rounded bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:text-white transition-colors text-xs font-serif ${style.s} border border-white/5`}
+                                    key={style.c} onClick={() => insertColorCode(style.c)}
+                                    className={`w-5 h-5 rounded-sm bg-transparent text-gray-400 hover:text-white hover:bg-white/10 transition-colors text-xs font-serif ${style.s} border border-transparent`}
                                     title={`&${style.c}`}
                                 >
                                     {style.l}
@@ -485,132 +340,125 @@ export default function Settings() {
                             ))}
                         </div>
 
-                        <textarea
-                            id="motd-input"
-                            value={serverProps['motd'] || ''}
-                            onChange={(e) => handlePropChange('motd', e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-colors font-mono text-lg h-32"
-                            placeholder="A Minecraft Server"
-                        />
-                        <p className="text-sm text-gray-500 mt-2">Use the color buttons above or type <code>&code</code> to add colors.</p>
+                                        <textarea
+                                            id="motd-input"
+                                            value={serverProps['motd'] || ''}
+                                            onChange={(e) => handlePropChange('motd', e.target.value)}
+                                            className="w-full bg-black/50 border border-white/10 rounded-md px-4 py-3 text-emerald-400 focus:border-emerald-500 outline-none transition-colors font-minecraft text-lg h-32 resize-none"
+                                            placeholder="A Minecraft Server"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'system' && (
+                            <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 relative z-10 w-full max-w-xl">
+                                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                                    <h3 className="text-xl font-minecraft text-white uppercase tracking-wider">{t('server_settings.sections.system')}</h3>
+                                    {systemInfo && (
+                                        <span className="text-xs font-minecraft text-zinc-500 uppercase tracking-widest">
+                                            {t('server_settings.system.host_ram').replace('{ram}', systemInfo.total_ram_gb)}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-end mb-4">
+                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.max_ram')}</label>
+                                        <span className="text-3xl font-minecraft text-emerald-400 tracking-wider shadow-emerald-500 drop-shadow-md">{appSettings.ram_max} GB</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max={systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 32}
+                                        step="1"
+                                        value={appSettings.ram_max || 4}
+                                        onChange={(e) => handleAppChange('ram_max', e.target.value)}
+                                        className="w-full h-2 bg-black/60 rounded-sm appearance-none cursor-pointer ram-slider border border-white/10"
+                                    />
+                                    
+                                    {systemInfo && Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.5 && (
+                                        <div className={`mt-4 px-4 py-3 rounded-md text-sm font-medium flex items-center gap-3 border ${
+                                            Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
+                                                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                                                : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                        }`}>
+                                            <span>{Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75 ? '⚠️' : '⚡'}</span>
+                                            <span className="font-mono text-xs">
+                                                {Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
+                                                    ? `CRITICAL OVERALLOCATION: Leaves insufficient RAM for host OS.`
+                                                    : `Warning: Using ${Math.round(Number(appSettings.ram_max) / systemInfo.total_ram_gb * 100)}% memory.`
+                                                }
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-end mb-4">
+                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.min_ram')}</label>
+                                        <span className="text-xl font-minecraft text-zinc-300 tracking-wider">{appSettings.ram_min} GB</span>
+                                    </div>
+                                    <input
+                                        type="range" min="1" max={appSettings.ram_max || 16} step="1"
+                                        value={appSettings.ram_min || 2}
+                                        onChange={(e) => handleAppChange('ram_min', e.target.value)}
+                                        className="w-full h-2 bg-black/60 rounded-sm appearance-none cursor-pointer ram-slider border border-white/10"
+                                    />
+                                </div>
+
+                                <div className="pt-6 border-t border-white/5">
+                                    <SettingInput label={t('server_settings.system.java_path')} value={appSettings.java_path} onChange={(v) => handleAppChange('java_path', v)} placeholder="java" />
+                                    <p className="text-[10px] text-zinc-600 uppercase tracking-widest mt-2">{t('server_settings.system.java_path_desc')}</p>
+                                </div>
+                            </div>
+                        )}
+                        
                     </div>
                 </div>
-            )}
+
+            </div>
 
             {showAdvanced && (
                 <AdvancedSettingsModal
                     onClose={() => setShowAdvanced(false)}
                     properties={serverProps}
-                    onSave={(newProps) => {
-                        setServerProps(newProps);
-                        // Optional: Trigger auto-save or just rely on the main Save button
-                    }}
+                    onSave={(newProps) => setServerProps(newProps)}
                 />
-            )}
-
-            {activeTab === 'system' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="bg-surface border border-white/5 p-6 rounded-2xl">
-                        <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
-                            <HardDrive size={20} className="text-purple-400" />
-                            Resources
-                            {systemInfo && (
-                                <span className="text-xs font-normal text-gray-500 ml-auto">
-                                    System: {systemInfo.total_ram_gb} GB RAM
-                                </span>
-                            )}
-                        </h3>
-
-                        <div className="mb-8">
-                            <div className="flex justify-between items-end mb-4">
-                                <label className="text-sm font-medium text-gray-300">RAM Allocation (Max)</label>
-                                <span className="text-2xl font-bold text-primary font-mono">{appSettings.ram_max} GB</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="2"
-                                max={systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 16}
-                                step="1"
-                                value={appSettings.ram_max}
-                                onChange={(e) => handleAppChange('ram_max', e.target.value)}
-                                className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-primary"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 mt-2">
-                                <span>2 GB</span>
-                                <span>{systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb / 2) : 8} GB</span>
-                                <span>{systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 16} GB</span>
-                            </div>
-                            {systemInfo && Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.5 && (
-                                <div className={`mt-3 px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                                    Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
-                                        ? 'bg-red-500/10 border border-red-500/30 text-red-400'
-                                        : 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400'
-                                }`}>
-                                    <span>{Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75 ? '⚠️' : '💡'}</span>
-                                    <span>
-                                        {Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
-                                            ? `Warning: Allocating ${appSettings.ram_max}GB of ${systemInfo.total_ram_gb}GB may freeze your system. Leave at least 4GB for the OS.`
-                                            : `Using ${Math.round(Number(appSettings.ram_max) / systemInfo.total_ram_gb * 100)}% of system RAM. Consider leaving headroom for the OS.`
-                                        }
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="mb-4">
-                            <div className="flex justify-between items-end mb-4">
-                                <label className="text-sm font-medium text-gray-300">RAM Allocation (Min)</label>
-                                <span className="text-xl font-bold text-gray-400 font-mono">{appSettings.ram_min} GB</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="1"
-                                max={appSettings.ram_max}
-                                step="1"
-                                value={appSettings.ram_min}
-                                onChange={(e) => handleAppChange('ram_min', e.target.value)}
-                                className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-gray-500"
-                            />
-                            <p className="text-xs text-gray-500 mt-2">Initial memory allocation. Should be lower than Max.</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-surface border border-white/5 p-6 rounded-2xl">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <Cpu size={20} className="text-orange-400" />
-                            Java Configuration
-                        </h3>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-400 mb-1 uppercase">Java Executable Path</label>
-                            <input
-                                type="text"
-                                value={appSettings.java_path}
-                                onChange={(e) => handleAppChange('java_path', e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none transition-colors font-mono text-sm"
-                                placeholder="java"
-                            />
-                            <p className="text-xs text-gray-500 mt-2">Path to your Java installation. Leave as 'java' to use system default.</p>
-                        </div>
-                    </div>
-                </div>
             )}
         </div>
     );
 }
 
-function LabelToggle({ label, desc, checked, onChange, color = "text-gray-300" }) {
+// Utility Components
+function SettingInput({ label, value, onChange, type = "text", placeholder, min, max }) {
     return (
-        <div className="flex items-center justify-between p-3 bg-black/20 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
-            <div className="flex flex-col">
-                <span className={`font-medium ${color}`}>{label}</span>
-                {desc && <span className="text-xs text-gray-500">{desc}</span>}
-            </div>
+        <div className="flex flex-col">
+            <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{label}</label>
             <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) => onChange(e.target.checked)}
-                className="w-5 h-5 accent-primary bg-black/40 border-white/10 rounded cursor-pointer"
+                type={type}
+                min={min} max={max}
+                value={value}
+                placeholder={placeholder}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-md px-4 py-2 text-white focus:border-emerald-500 focus:bg-black/60 outline-none transition-all font-mono text-sm"
             />
+        </div>
+    );
+}
+
+function LabelToggle({ label, desc, checked, onChange, color = "text-zinc-200" }) {
+    return (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/20 rounded-md border border-white/5 hover:border-white/10 transition-colors gap-4">
+            <div className="flex flex-col">
+                <span className={`font-minecraft uppercase tracking-wider text-sm ${color}`}>{label}</span>
+                {desc && <span className="text-xs text-zinc-500 font-medium">{desc}</span>}
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+                <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-sm peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-sm after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 drop-shadow-sm"></div>
+            </label>
         </div>
     );
 }

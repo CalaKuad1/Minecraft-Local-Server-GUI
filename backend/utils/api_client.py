@@ -71,6 +71,77 @@ def get_forge_versions():
         logging.error(f"Failed to fetch or parse Forge versions: {e}")
         return {}
 
+def get_neoforge_versions():
+    """Fetches and parses NeoForge versions from the official Maven repository."""
+    url = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        
+        root = ET.fromstring(response.content)
+        versions_node = root.find('versioning/versions')
+        if versions_node is None:
+            return {}
+
+        structured_versions = defaultdict(list)
+        
+        # NeoForge versioning: 
+        # 20.1.x -> 1.20.1
+        # 20.4.x -> 1.20.4
+        # 21.0.x -> 1.21
+        # 21.1.x -> 1.21.1
+        
+        for version_tag in versions_node.findall('version'):
+            version_str = version_tag.text
+            if not version_str: continue
+            
+            parts = version_str.split('.')
+            if len(parts) >= 2:
+                major = parts[0]
+                minor = parts[1]
+                
+                mc_version = ""
+                if major == "20":
+                    mc_version = f"1.20.{minor}"
+                    if minor == "1": mc_version = "1.20.1"
+                    elif minor == "2": mc_version = "1.20.2"
+                    elif minor == "3": mc_version = "1.20.3"
+                    elif minor == "4": mc_version = "1.20.4"
+                    elif minor == "5": mc_version = "1.20.5"
+                    elif minor == "6": mc_version = "1.20.6"
+                elif major == "21":
+                    if minor == "0": mc_version = "1.21"
+                    elif minor == "1": mc_version = "1.21.1"
+                    else: mc_version = f"1.21.{minor}"
+                
+                if mc_version:
+                    structured_versions[mc_version].append(version_str)
+        
+        def version_key(v_str):
+            parts = re.split(r'[.-]', v_str)
+            key = []
+            for part in parts:
+                try:
+                    key.append(int(part))
+                except ValueError:
+                    key.append(part.lower())
+            return key
+
+        sorted_mc_versions = sorted(structured_versions.keys(), key=version_key, reverse=True)
+        
+        sorted_structured_versions = {}
+        for mc in sorted_mc_versions:
+            # Sort NeoForge versions for each MC version (newest first)
+            sorted_nf_versions = sorted(structured_versions[mc], key=version_key, reverse=True)
+            sorted_structured_versions[mc] = sorted_nf_versions
+
+        return sorted_structured_versions
+
+    except (requests.RequestException, ET.ParseError) as e:
+        logging.error(f"Failed to fetch or parse NeoForge versions: {e}")
+        return {}
+
+
 def fetch_player_avatar_image(player_identifier, size=(24, 24)):
     """Fetches a player's avatar from Mineskin API and returns a PIL Image object."""
     try:

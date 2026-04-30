@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Globe, HardDrive, Check, FolderPlus, Clock, Archive, RefreshCw } from 'lucide-react';
+import { Globe, HardDrive, Check, FolderPlus, Clock, Archive, RefreshCw } from './ui/PixelIcons';
 
 export default function Worlds() {
     const [worlds, setWorlds] = useState([]);
@@ -123,10 +123,10 @@ export default function Worlds() {
             </div>
 
             {/* Backups */}
-            <div className="mb-8 bg-surface/40 border border-white/5 rounded-2xl p-5">
+            <div className="mb-8 bg-surface/40 border border-white/5 rounded-md p-5">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                        <Archive size={18} className="text-primary" />
+                        <Archive size={18} className="text-white" />
                         <div>
                             <div className="text-lg font-bold text-white">Backups</div>
                             <div className="text-xs text-gray-500">World: <span className="font-mono">{activeWorld || '-'}</span></div>
@@ -137,7 +137,7 @@ export default function Worlds() {
                         <button
                             onClick={() => activeWorld && loadBackups(activeWorld)}
                             disabled={backupsLoading || !activeWorld}
-                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-sm flex items-center gap-2 disabled:opacity-50"
+                            className="px-3 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-sm flex items-center gap-2 disabled:opacity-50"
                             title="Refresh"
                         >
                             <RefreshCw size={14} className={backupsLoading ? 'animate-spin' : ''} />
@@ -146,7 +146,7 @@ export default function Worlds() {
                         <button
                             onClick={handleCreateBackup}
                             disabled={creatingBackup || !activeWorld}
-                            className="px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/20 text-primary text-sm font-medium disabled:opacity-50"
+                            className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white text-sm font-medium disabled:opacity-50"
                         >
                             {creatingBackup ? 'Creating...' : 'Create backup'}
                         </button>
@@ -160,7 +160,7 @@ export default function Worlds() {
                 ) : (
                     <div className="space-y-2">
                         {backups.slice(0, 8).map((b) => (
-                            <div key={b.name} className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/20 border border-white/5">
+                            <div key={b.name} className="flex items-center justify-between px-3 py-2 rounded-md bg-black/20 border border-white/5">
                                 <div className="min-w-0">
                                     <div className="text-sm text-white font-medium truncate">{b.name}</div>
                                     <div className="text-xs text-gray-500">{b.size} • {formatDate(b.created)}</div>
@@ -175,17 +175,17 @@ export default function Worlds() {
                 {worlds.map((world) => (
                     <div
                         key={world.name}
-                        className={`group relative bg-surface border rounded-2xl p-5 transition-all duration-300 ${activeWorld === world.name
-                                ? 'border-primary/50 bg-primary/5 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
-                                : 'border-white/5 hover:border-white/20 hover:bg-surface-hover'
+                        className={`group relative bg-surface border rounded-md p-5 transition-all duration-300 ${activeWorld === world.name
+                                ? 'border-white/20 bg-white/5'
+                                : 'border-white/5 hover:border-white/10 hover:bg-surface-hover'
                             }`}
                     >
                         <div className="flex items-start justify-between mb-4">
-                            <div className={`p-3 rounded-xl ${activeWorld === world.name ? 'bg-primary/20 text-primary' : 'bg-black/40 text-gray-400 group-hover:text-white'}`}>
+                            <div className={`p-3 rounded-xl ${activeWorld === world.name ? 'bg-white/10 text-white' : 'bg-black/40 text-gray-400 group-hover:text-white'}`}>
                                 <Globe size={24} />
                             </div>
                             {activeWorld === world.name && (
-                                <span className="flex items-center gap-1 text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full border border-primary/20">
+                                <span className="flex items-center gap-1 text-xs font-bold text-white bg-white/10 px-3 py-1 rounded-full border border-white/20">
                                     <Check size={12} />
                                     ACTIVE
                                 </span>
@@ -221,7 +221,7 @@ export default function Worlds() {
                 ))}
             </div>
 
-            <div className="mt-8 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex gap-3 text-yellow-200/80 text-sm">
+            <div className="mt-8 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-md flex gap-3 text-yellow-200/80 text-sm">
                 <div className="shrink-0 mt-0.5">⚠️</div>
                 <p>Changing the active world requires a server restart to take effect.</p>
             </div>

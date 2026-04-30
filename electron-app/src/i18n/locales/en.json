@@ -1,0 +1,224 @@
+{
+    "nav": {
+        "dashboard": "Dashboard",
+        "console": "Console",
+        "players": "Players",
+        "worlds": "Worlds",
+        "mods": "Mods",
+        "plugins": "Plugins",
+        "settings": "Settings",
+        "back_to_library": "Back to Library"
+    },
+    "status": {
+        "online": "Online",
+        "offline": "Offline",
+        "starting": "Starting",
+        "stopping": "Stopping",
+        "not_configured": "Not Configured",
+        "system_online": "System Online",
+        "system_idle": "System Idle"
+    },
+    "dashboard": {
+        "recent_logs": "Recent Logs",
+        "players_online": "Players Online",
+        "server_type": "Server Type",
+        "minecraft_version": "Minecraft Version",
+        "cpu_usage": "CPU Usage",
+        "ram_usage": "RAM Usage",
+        "start": "Start Server",
+        "stop": "Stop Server",
+        "restart": "Restart",
+        "open_folder": "Open Folder",
+        "address": "Server Address",
+        "uptime": "Uptime",
+        "uptime_sub": "Since last restart",
+        "ram_sub": "Usage / Allocated",
+        "cpu_sub": "System Total",
+        "waiting_logs": "Waiting for server output...",
+        "sys_event_log": "System Event Log",
+        "public_server": {
+            "title": "Make Server Public",
+            "desc": "Experimental: Powered by Pinggy.io",
+            "info_title": "Public Server",
+            "info_desc": "Your server will be accessible from the Internet using a secure tunnel.",
+            "experimental_warn": "This feature is experimental and the address will change every time you restart.",
+            "services": {
+                "pinggy_desc": "Experimental. Quick tunnel via SSH. No installation needed."
+            }
+        },
+        "shutdown_timer": {
+            "title": "Schedule Shutdown",
+            "desc": "Auto-stop server timer",
+            "set_duration": "Set Timer Duration",
+            "minutes": "minutes",
+            "presets": "Quick Presets",
+            "timer_active": "Timer Active",
+            "starts_in": "Shutdown scheduled in ~{min} minutes.",
+            "cancel": "Cancel Timer",
+            "start": "Start Timer"
+        },
+        "playit": {
+            "claim_title": "Playit.gg Setup",
+            "claim_desc": "Authorization Required",
+            "click_link": "Click the link below to link this server to your Playit.gg account. Once authorized, the tunnel will connect automatically.",
+            "open_browser": "Open in Browser",
+            "waiting": "Waiting for authorization..."
+        }
+    },
+    "library": {
+        "title": "Server Library",
+        "new_server": "New Server",
+        "recently_opened": "Recently Viewed",
+        "all_servers": "All Infrastructure",
+        "stats": {
+            "total": "Total Servers",
+            "active": "Active Now",
+            "plugin_ready": "Plugin-Ready"
+        },
+        "search": "Search servers...",
+        "boot": "Boot",
+        "manage": "Manage",
+        "delete": "Delete",
+        "grid_view": "Grid View",
+        "detailed_view": "Detailed",
+        "search_results": "Search Results",
+        "no_matches": "No matches found",
+        "empty_infrastructure": "Infrastructure empty",
+        "quick_filters": "Quick Filters"
+    },
+    "settings": {
+        "title": "App Settings",
+        "general": "General",
+        "language": "Language",
+        "appearance": "Appearance",
+        "about": "About",
+        "save": "Save Settings",
+        "saved": "Saved!",
+        "auto_start": {
+            "title": "Auto-Start Last Server",
+            "desc": "Automatically boot the last active server on launch."
+        },
+        "notifications": {
+            "title": "Desktop Notifications",
+            "desc": "Alerts for server status and events."
+        },
+        "general_settings": {
+            "title": "General Settings",
+            "desc": "Configure core application behavior."
+        },
+        "language_settings": {
+            "title": "Language",
+            "desc": "Select your preferred display language."
+        },
+        "appearance_settings": {
+            "title": "Appearance",
+            "desc": "Customize the look and feel of the application."
+        },
+        "about_settings": {
+            "title": "About",
+            "desc": "Application information and credits."
+        },
+        "version": "Version",
+        "developer": "Developer",
+        "framework": "Framework",
+        "license": "License",
+        "view_github": "View on GitHub"
+    },
+    "common": {
+        "back": "Back",
+        "next": "Next",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "loading": "Loading...",
+        "retry": "Retry",
+        "made_by": "Made by"
+    },
+    "server_settings": {
+        "title": "Server Config",
+        "subtitle": "System Parameters",
+        "loading": "Loading Settings...",
+        "error_title": "Error loading Settings",
+        "error_loading": "Failed to load settings",
+        "error_saving": "Failed to save",
+        "saving": "Writing...",
+        "save_config": "Save Config",
+        "open_directory": "Open Directory",
+        "sections": {
+            "general": "General & World",
+            "gameplay": "Gameplay Rules",
+            "network": "Performance & Net",
+            "security": "Security & Advanced",
+            "appearance": "Appearance & MOTD",
+            "system": "System Resources"
+        },
+        "props": {
+            "server_port": "Server Port",
+            "level_type": "Level Type",
+            "world_seed": "World Seed",
+            "world_seed_placeholder": "Leave empty for random seed",
+            "level_types": {
+                "default": "Default",
+                "flat": "Flat",
+                "large_biomes": "Large Biomes",
+                "amplified": "Amplified"
+            },
+            "difficulty": "Difficulty",
+            "difficulties": {
+                "peaceful": "Peaceful",
+                "easy": "Easy",
+                "normal": "Normal",
+                "hard": "Hard"
+            },
+            "gamemode": "Default Gamemode",
+            "gamemodes": {
+                "survival": "Survival",
+                "creative": "Creative",
+                "adventure": "Adventure",
+                "spectator": "Spectator"
+            },
+            "pvp": "PvP Allowed",
+            "hardcore": "Hardcore Mode",
+            "allow_nether": "Allow Nether",
+            "allow_flight": "Allow Flight",
+            "enable_command_block": "Command Blocks",
+            "spawn_animals": "Spawn Animals",
+            "spawn_monsters": "Spawn Monsters",
+            "max_players": "Max Players",
+            "view_distance": "View Distance (Chunks)",
+            "simulation_distance": "Simulation Distance (Chunks)",
+            "online_mode": "Online Mode",
+            "whitelist": "Whitelist",
+            "enforce_whitelist": "Enforce Whitelist",
+            "force_gamemode": "Force Gamemode"
+        },
+        "props_desc": {
+            "pvp": "Players can hurt each other",
+            "hardcore": "Banned upon death",
+            "allow_nether": "Enable nether dimension",
+            "allow_flight": "Allow flying in survival",
+            "enable_command_block": "Enable command blocks",
+            "spawn_animals": "Natural animal spawning",
+            "spawn_monsters": "Natural monster spawning",
+            "online_mode": "Verify users with Mojang",
+            "whitelist": "Only listed players can join",
+            "enforce_whitelist": "Kick unlisted even if already on",
+            "force_gamemode": "Force default gamemode on join"
+        },
+        "raw_config": {
+            "title": "Raw Configuration",
+            "desc": "Access all raw properties stored securely in server.properties",
+            "button": "Open Properties Editor"
+        },
+        "appearance": {
+            "upload_icon": "Upload Icon",
+            "motd_label": "Message of the Day (MOTD)"
+        },
+        "system": {
+            "host_ram": "Host: {ram} GB RAM",
+            "max_ram": "Max RAM Allocation",
+            "min_ram": "Initial RAM Setup (Min)",
+            "java_path": "Java Executable Path",
+            "java_path_desc": "Explicit path or system environment variables."
+        }
+    }
+}

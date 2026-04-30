@@ -1,7 +1,7 @@
 {
   "name": "minecraft-server-gui",
   "private": true,
-  "version": "1.1.9",
+  "version": "1.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git"
@@ -18,11 +18,12 @@
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
+    "clsx": "^2.1.0",
+    "framer-motion": "^10.16.0",
+    "lucide-react": "^0.300.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "lucide-react": "^0.300.0",
-    "framer-motion": "^10.16.0",
-    "clsx": "^2.1.0",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^2.2.0"
   },
   "devDependencies": {

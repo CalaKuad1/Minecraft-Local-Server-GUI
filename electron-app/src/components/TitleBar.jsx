@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Square, X } from './ui/PixelIcons';
 
 const TitleBar = () => {
     const handleMinimize = async () => {
@@ -15,7 +15,7 @@ const TitleBar = () => {
     };
 
     return (
-        <div className="h-8 bg-[#0f0f0f] flex items-center justify-between select-none fixed top-0 left-0 right-0 z-[100] border-b border-white/5" style={{ WebkitAppRegion: 'drag' }}>
+        <div className="h-8 bg-black/20 backdrop-blur-sm flex items-center justify-between select-none fixed top-0 left-0 right-0 z-[100] border-b border-white/5" style={{ WebkitAppRegion: 'drag' }}>
             {/* Title / Logo Area */}
             <div className="px-4 flex items-center gap-2">
                 <div className="w-3 h-3 bg-primary rounded-sm rotate-45" />

@@ -46,10 +46,10 @@ export const api = {
         }
     },
     start: async () => {
-        await fetchJson(`${API_URL}/start`, { method: 'POST' });
+        await fetchJson(`${API_URL}/start`, { method: 'POST' }, 30000);
     },
     stop: async (force = false) => {
-        await fetchJson(`${API_URL}/stop?force=${force}`, { method: 'POST' });
+        await fetchJson(`${API_URL}/stop?force=${force}`, { method: 'POST' }, 15000);
     },
     sendCommand: async (command) => {
         await fetchJson(`${API_URL}/command`, {
@@ -72,49 +72,45 @@ export const api = {
         // ... (placeholder if needed or remove if used differently)
     },
     getVersions: async (type) => {
-        const res = await fetch(`http://127.0.0.1:8000/setup/versions/${type}`);
-        return await res.json();
+        return await fetchJson(`${API_URL}/setup/versions/${type}`);
     },
     validatePath: async (path) => {
-        const res = await fetch('http://127.0.0.1:8000/setup/validate-path', {
+        return await fetchJson(`${API_URL}/setup/validate-path`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path })
         });
-        return await res.json();
+    },
+    detectServer: async (path) => {
+        return await fetchJson(`${API_URL}/setup/detect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
     },
     installServer: async (data) => {
-        await fetch('http://127.0.0.1:8000/setup/install', {
+        await fetchJson(`${API_URL}/setup/install`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
-        });
+        }, 60000);
     },
     getInstallProgress: async () => {
-        return await fetchJson('http://127.0.0.1:8000/setup/install/progress');
-    },
-    detectServer: async (path) => {
-        const res = await fetch('http://127.0.0.1:8000/setup/detect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path })
-        });
-        return await res.json();
+        return await fetchJson(`${API_URL}/setup/install/progress`);
     },
     // --- Java Management ---
     checkJava: async (minecraftVersion) => {
-        const res = await fetch(`http://127.0.0.1:8000/setup/java/check/${minecraftVersion}`);
-        return await res.json();
+        return await fetchJson(`${API_URL}/setup/java/check/${minecraftVersion}`);
     },
     installJava: async (minecraftVersion) => {
-        await fetch('http://127.0.0.1:8000/setup/java/install', {
+        await fetchJson(`${API_URL}/setup/java/install`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ minecraft_version: minecraftVersion })
-        });
+        }, 60000);
     },
     configure: async (config) => {
-        await fetch('http://127.0.0.1:8000/configure', {
+        await fetchJson(`${API_URL}/configure`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -186,12 +182,13 @@ export const api = {
             body: JSON.stringify(props)
         });
     },
+    // App Settings point to the global state
     getAppSettings: async () => {
-        return await fetchJson(`${API_URL}/settings/app`);
+        return await fetchJson(`${API_URL}/app-settings`);
     },
     updateAppSettings: async (settings) => {
-        await fetchJson(`${API_URL}/settings/app`, {
-            method: 'POST',
+        return await fetchJson(`${API_URL}/app-settings`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
@@ -238,6 +235,8 @@ export const api = {
         await fetchJson(url, { method: 'DELETE' });
     },
 
+    // (Consolidated above)
+
     // --- System ---
     openDirectoryPicker: async () => {
         if (window.electron && window.electron.openDirectory) {
@@ -253,11 +252,18 @@ export const api = {
     getTunnelStatus: async () => {
         return await fetchJson(`${API_URL}/tunnel/status`);
     },
-    startTunnel: async (region = "eu") => {
-        return await fetchJson(`${API_URL}/tunnel/start?region=${region}`, { method: 'POST' });
+    startTunnel: async (region = "eu", provider = "pinggy") => {
+        return await fetchJson(`${API_URL}/tunnel/start?region=${region}&provider=${provider}`, { method: 'POST' }, 30000);
     },
     stopTunnel: async () => {
-        return await fetchJson(`${API_URL}/tunnel/stop`, { method: 'POST' });
+        return await fetchJson(`${API_URL}/tunnel/stop`, { method: 'POST' }, 15000);
+    },
+    setTunnelAddress: async (address) => {
+        return await fetchJson(`${API_URL}/tunnel/set-address`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
     },
 
     // --- Mods ---
@@ -297,15 +303,10 @@ export const api = {
     uploadServerIcon: async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch(`${API_URL}/server/icon`, {
+        return await fetchJson(`${API_URL}/server/icon`, {
             method: 'POST',
             body: formData
-        });
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || 'Upload failed');
-        }
-        return await res.json();
+        }, 30000);
     },
     getServerIconStatus: async () => {
         // Just checking if it exists
@@ -319,15 +320,10 @@ export const api = {
     uploadPlugin: async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch(`${API_URL}/server/plugins`, {
+        return await fetchJson(`${API_URL}/server/plugins`, {
             method: 'POST',
             body: formData
-        });
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || 'Upload failed');
-        }
-        return await res.json();
+        }, 30000);
     },
     deletePlugin: async (filename) => {
         return await fetchJson(`${API_URL}/server/plugins/${filename}`, { method: 'DELETE' });

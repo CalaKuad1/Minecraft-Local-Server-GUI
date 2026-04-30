@@ -71,6 +71,7 @@ from utils.server_detector import ServerDetector
 from utils.api_client import (
     get_server_versions,
     get_forge_versions,
+    get_neoforge_versions,
     download_server_jar,
 )
 from utils.mods_manager import ModsManager
@@ -103,9 +104,6 @@ async def lifespan(app: FastAPI):
 
     yield
     logging.info("Lifespan shutting down...")
-
-
-app = FastAPI(lifespan=lifespan)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -443,6 +441,10 @@ class InstallRequest(BaseModel):
     parent_path: str
     folder_name: str
     forge_version: Optional[str] = None
+    neoforge_version: Optional[str] = None
+    ram_min: str = "2"
+    ram_max: str = "4"
+    ram_unit: str = "G"
 
 
 class ValidatePathRequest(BaseModel):
@@ -482,7 +484,32 @@ async def list_servers():
         else:
             s["status"] = "offline"
 
+        # Ensure version compatibility
+        if "version" not in s and "minecraft_version" in s:
+            s["version"] = s["minecraft_version"]
+        elif "minecraft_version" not in s and "version" in s:
+            s["minecraft_version"] = s["version"]
+
     return servers
+
+
+@app.get("/app-settings")
+async def get_app_settings():
+    if not state:
+        return {}
+    return state.config_manager.config.get("app_settings", {})
+
+
+@app.put("/app-settings")
+async def update_app_settings(request: Request):
+    if not state:
+        raise HTTPException(status_code=500, detail="Backend not initialized")
+    body = await request.json()
+    if "app_settings" not in state.config_manager.config:
+        state.config_manager.config["app_settings"] = {}
+    state.config_manager.config["app_settings"].update(body)
+    state.config_manager.save()
+    return state.config_manager.config["app_settings"]
 
 
 @app.post("/servers")
@@ -508,6 +535,13 @@ async def select_server(req: SelectServerRequest):
             state.app_log_history.clear()
 
         config = state.load_server(req.server_id)
+
+        # Guardar marca de tiempo de apertura para la sección "Recently Opened"
+        from datetime import datetime
+
+        state.config_manager.update_server(
+            req.server_id, {"last_opened": datetime.now().isoformat()}
+        )
 
         # Devolver estado inmediato para evitar lag visual
         status_response = get_status()
@@ -574,6 +608,7 @@ def get_status():
         "server_id": state.server_handler.server_id,
         "server_type": state.server_handler.server_type,
         "minecraft_version": state.server_handler.minecraft_version,
+        "version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],
         "ram": stats["ram"],
         "players": players_count,
@@ -675,6 +710,9 @@ def getting_versions(server_type: str):
     if server_type.lower() == "forge":
         # Return a simplified list or the structured dict
         versions = get_forge_versions()
+        return {"versions": list(versions.keys()), "all_data": versions}
+    elif server_type.lower() == "neoforge":
+        versions = get_neoforge_versions()
         return {"versions": list(versions.keys()), "all_data": versions}
     else:
         # returns list of dicts {version: "1.20.1", ...}
@@ -911,6 +949,46 @@ def install_server(req: InstallRequest):
                     forge_ver, req.version, forge_progress
                 )
 
+            elif req.server_type.lower() == "neoforge":
+                # NeoForge logic
+                temp_handler = ServerHandler(
+                    install_path,
+                    "neoforge",
+                    "1",
+                    "2",
+                    "G",
+                    output_callback=lambda m, l: state.broadcast_log_sync(m, l),
+                    minecraft_version=req.version,
+                    java_path=java_path,
+                )
+
+                def neoforge_progress(p):
+                    scaled = 50 + (p * 0.4)
+                    send_progress(
+                        scaled, "Running NeoForge Installer (this may take a while)..."
+                    )
+
+                neoforge_ver = req.neoforge_version
+                if not neoforge_ver:
+                    send_progress(
+                        15, f"Fetching latest NeoForge version for {req.version}..."
+                    )
+                    from utils.api_client import get_neoforge_versions
+
+                    versions = get_neoforge_versions()
+                    if req.version in versions and versions[req.version]:
+                        neoforge_ver = versions[req.version][0]
+                        state.broadcast_log_sync(
+                            f"Auto-selected NeoForge version: {neoforge_ver}", "info"
+                        )
+                    else:
+                        raise Exception(
+                            f"No NeoForge version found for Minecraft {req.version}"
+                        )
+
+                # Ejecutar instalador
+                temp_handler.install_neoforge_server(neoforge_ver, neoforge_progress)
+
             else:
                 # Vanilla / Paper / Fabric logic
                 jar_path = os.path.join(install_path, "server.jar")
@@ -929,9 +1007,9 @@ def install_server(req: InstallRequest):
                 "path": install_path,
                 "type": req.server_type,
                 "version": req.version,
-                "ram_min": "2",
-                "ram_max": "4",
-                "ram_unit": "G",
+                "ram_min": req.ram_min,
+                "ram_max": req.ram_max,
+                "ram_unit": req.ram_unit,
                 "java_path": java_path,  # Guardar la ruta de Java detectada en la config
             }
 
@@ -1617,7 +1695,9 @@ def get_tunnel_status():
 
 
 @app.post("/tunnel/start")
-def start_tunnel(request: Request, region: str = Query("eu")):
+def start_tunnel(
+    request: Request, region: str = Query("eu"), provider: str = Query("pinggy")
+):
     try:
         if not state:
             raise HTTPException(status_code=500, detail="App state not initialized")
@@ -1733,6 +1813,204 @@ def start_tunnel(request: Request, region: str = Query("eu")):
             except Exception as e:
                 logging.error(f"Failed to generate SSH key: {e}")
                 return None
+
+        def run_playit_tunnel():
+            import subprocess
+            import re
+            import urllib.request
+
+            import sys
+            import stat
+
+            try:
+                is_windows = sys.platform == "win32"
+                exe_name = "playit.exe" if is_windows else "playit"
+                playit_exe = os.path.join(state.app_data_dir, exe_name)
+
+                if not os.path.exists(playit_exe):
+                    logging.info("Downloading playit agent...")
+                    state.broadcast_log_sync(
+                        "🌐 Downloading Playit.gg agent...", "info"
+                    )
+                    download_url = (
+                        "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-windows-x86_64-signed.exe"
+                        if is_windows
+                        else "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-amd64"
+                    )
+                    urllib.request.urlretrieve(download_url, playit_exe)
+                    if not is_windows:
+                        os.chmod(playit_exe, os.stat(playit_exe).st_mode | stat.S_IEXEC)
+                    state.broadcast_log_sync("✅ Playit.gg downloaded.", "success")
+
+                logging.info("Starting Playit.gg tunnel...")
+                state.broadcast_log_sync("🌐 Starting Playit.gg tunnel...", "info")
+
+                state.tunnel_process = subprocess.Popen(
+                    [playit_exe, "--stdout"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if sys.platform == "win32"
+                    else 0,
+                )
+
+                connected_emitted = False
+                claim_required = False
+                fallback_emitted = False
+
+                for line in iter(state.tunnel_process.stdout.readline, ""):
+                    if not line:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    # Print raw output to help debug and let user see the connection string
+                    if (
+                        "playit" in line.lower()
+                        or "tunnel" in line.lower()
+                        or "port" in line.lower()
+                        or ".gg" in line.lower()
+                        or "connected" in line.lower()
+                    ):
+                        state.broadcast_log_sync(f"[Playit Agent]: {line}", "info")
+
+                    # Intercept Claim Link
+                    claim_match = re.search(
+                        r"Visit link to setup (https://playit\.gg/claim/[a-zA-Z0-9]+)",
+                        line,
+                    )
+                    if claim_match:
+                        claim_link = claim_match.group(1)
+                        claim_required = True
+                        state.broadcast_log_sync(
+                            {"type": "playit_claim", "link": claim_link}
+                        )
+                        state.broadcast_log_sync(
+                            "⚠️ Playit authorization required. Check the UI pop-up.",
+                            "warning",
+                        )
+
+                    # Also intercept manual setup links if present
+                    setup_match = re.search(
+                        r"(https://playit\.gg/manage/tunnels)",
+                        line,
+                    )
+                    if setup_match and not claim_required:
+                        state.broadcast_log_sync(
+                            {"type": "playit_claim", "link": setup_match.group(1)}
+                        )
+                        state.broadcast_log_sync(
+                            "⚠️ Tunnel setup required in Playit dashboard. Check the UI pop-up.",
+                            "warning",
+                        )
+
+                    # Intercept assigned domain if printed by the agent
+                    ip_match = re.search(
+                        r"([a-zA-Z0-9-]+\.(?:[a-zA-Z0-9-]+\.)*(?:playit\.gg|playit\.site|joinmc\.link)(?::\d+)?)",
+                        line,
+                    )
+
+                    playit_cache_file = os.path.join(
+                        state.app_data_dir, "playit_cache.json"
+                    )
+
+                    if ip_match:
+                        domain = ip_match.group(1)
+                        state.tunnel_address = domain
+                        logging.info(f"Playit tunnel established: {domain}")
+
+                        # Cache the domain so we have it for next time
+                        try:
+                            import json
+
+                            with open(playit_cache_file, "w") as f:
+                                json.dump({"domain": domain}, f)
+                        except Exception as e:
+                            logging.error(f"Failed to cache playit domain: {e}")
+
+                        state.broadcast_log_sync(
+                            f"✅ Public server active via Playit! Address: {domain}",
+                            "success",
+                        )
+                        state.broadcast_log_sync(
+                            {
+                                "type": "tunnel_connected",
+                                "address": state.tunnel_address,
+                            }
+                        )
+                        connected_emitted = True
+                        claim_required = False
+                        continue
+
+                    # Fallback Detect Connection True if we don't catch the IP immediately
+                    if (
+                        (
+                            "agent registered" in line
+                            or "secret key valid" in line
+                            or "tunnel running" in line
+                        )
+                        and not connected_emitted
+                        and not claim_required
+                        and not fallback_emitted
+                    ):
+                        fallback_emitted = True
+                        cached_domain = "Check Playit.gg Dashboard"
+
+                        # Try to read the domain from cache
+                        try:
+                            import json
+
+                            if os.path.exists(playit_cache_file):
+                                with open(playit_cache_file, "r") as f:
+                                    data = json.load(f)
+                                    if "domain" in data:
+                                        cached_domain = data["domain"]
+                        except Exception as e:
+                            logging.error(f"Failed to read playit domain cache: {e}")
+
+                        state.tunnel_address = cached_domain
+                        logging.info("Playit tunnel established using fallback.")
+
+                        if cached_domain == "Check Playit.gg Dashboard":
+                            # We don't have the IP in cache. To help the user, let's also show the dashboard pop-up
+                            # so they can see their IP and manage their tunnels directly from the app.
+                            state.broadcast_log_sync(
+                                {
+                                    "type": "playit_claim",
+                                    "link": "https://playit.gg/manage/tunnels",
+                                }
+                            )
+                            state.broadcast_log_sync(
+                                "✅ Tunnel connected! Check the Playit.gg panel to configure it.",
+                                "success",
+                            )
+                        else:
+                            state.broadcast_log_sync(
+                                f"✅ Public server active! Address: {cached_domain}",
+                                "success",
+                            )
+
+                        state.broadcast_log_sync(
+                            {
+                                "type": "tunnel_connected",
+                                "address": state.tunnel_address,
+                            }
+                        )
+                        # Do not set connected_emitted = True so we can still catch the domain if it prints later
+                        continue
+
+            except Exception as e:
+                logging.exception(f"Tunnel error: {e}")
+                state.broadcast_log_sync(f"❌ Playit tunnel error: {e}", "error")
+                state.tunnel_address = None
+
+        if provider.lower() == "playit":
+            threading.Thread(target=run_playit_tunnel, daemon=True).start()
+            return {"message": "Playit tunnel starting...", "status": "connecting"}
 
         def run_tunnel():
             import subprocess
@@ -1885,6 +2163,32 @@ def stop_tunnel():
         state.broadcast_log_sync({"type": "tunnel_disconnected"})
 
     return {"message": "Tunnel stopped"}
+
+
+class SetTunnelAddressRequest(BaseModel):
+    address: str
+
+
+@app.post("/tunnel/set-address")
+def set_tunnel_address(req: SetTunnelAddressRequest):
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+
+    state.tunnel_address = req.address
+
+    # Save to cache
+    playit_cache_file = os.path.join(state.app_data_dir, "playit_cache.json")
+    try:
+        import json
+
+        with open(playit_cache_file, "w") as f:
+            json.dump({"domain": req.address}, f)
+    except Exception as e:
+        logging.error(f"Failed to cache playit domain manually: {e}")
+
+    state.broadcast_log_sync(f"✅ Custom IP set: {req.address}", "success")
+    state.broadcast_log_sync({"type": "tunnel_connected", "address": req.address})
+    return {"status": "success"}
 
 
 # --- Mods Endpoints ---

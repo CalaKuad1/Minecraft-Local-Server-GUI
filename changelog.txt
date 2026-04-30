@@ -1,84 +1,72 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.1.9 - 2026-04-08 🐧 LINUX STABILITY & SAFETY UPDATE
+## Version 1.2.0 - 2026-04-30 UI REDESIGN & NEOFORGE
 
-### 🐛 CRITICAL BUG FIXES:
-- **Fixed read-only filesystem crash on Linux** — The app was trying to write Java runtimes inside the AppImage mount (read-only). Now all data goes to `~/.minecraft_server_gui/` on Linux.
-- **Fixed RAM leak on Linux** — When the backend crashed, Electron entered a rapid retry loop eating all system memory. Fixed by resolving the root cause crash and adding memory-safe log structures (`deque` instead of `list.pop(0)`).
-- **Fixed unkillable app on ALL platforms** — Clicking X always hid the app to tray, even when no server was running. Now the app only stays in background when servers are actively running (Windows). On Linux, it always exits cleanly.
+### UI REDESIGN:
+- **Pixel art icon system** — Custom 16x16 pixel icons replacing generic icons throughout the entire UI
+- **Visual effects** — Mouse spotlight tracking, noise grain overlay, magnetic button hover effects, abstract animated backgrounds
+- **Server Library** — Completely redesigned server selector with grid view, search bar, recently opened section, and engine type icons
+- **Refined dark theme** — Deeper blacks, improved contrast, smoother glassmorphism panels
+- **Error Boundary** — Graceful error handling across the UI with fallback components
 
-### 🛡️ SAFETY IMPROVEMENTS:
-- **RAM allocation cap** — Slider now limited to 80% of system RAM to prevent system freezes
+### NEOFORGE SUPPORT:
+- Full support for **NeoForge** as a server engine
+- NeoForge appears in Setup Wizard, Mods browser, and server cards with its own dedicated icon
+- Java version mapping correctly handles NeoForge/NeoMinecraft 26.x+ to Java 25
+
+### MODPACKS:
+- New **Modpacks** tab in the Mods section — browse and install complete modpacks directly from Modrinth
+- Full filtering support: loader, version, category, and sort order
+
+### MULTI-LANGUAGE (i18n):
+- Interface available in **English, Spanish, French, and Russian**
+- Language selector in the new App Settings panel
+- Centralized LanguageContext for easy extension
+
+### APP SETTINGS:
+- New dedicated **Settings panel** with language, theme, notifications, auto-start, minimize-to-tray, and update check options
+
+### IMPROVEMENTS:
+- **WebSocket Context** — Centralized real-time communication layer
+- **Engine icons** — Each server type (Vanilla, Paper, Spigot, Forge, NeoForge, Fabric) has its own visual icon in cards and selectors
+- **Improved Mods browser** — Filter by loader (Fabric, Forge, NeoForge, Quilt), version, category, and sort order
+- **GitHub Actions** — Added build verification step for both Windows and Linux before publishing releases
+
+---
+
+## Version 1.1.9 - 2026-04-08 LINUX STABILITY & SAFETY UPDATE
+
+### CRITICAL BUG FIXES:
+- **Fixed read-only filesystem crash on Linux** — All data goes to `~/.minecraft_server_gui/` on Linux
+- **Fixed RAM leak on Linux** — Memory-safe log structures (`deque` instead of `list.pop(0)`)
+- **Fixed unkillable app on ALL platforms** — App only stays in background when servers are actively running
+
+### SAFETY IMPROVEMENTS:
+- **RAM allocation cap** — Slider limited to 80% of system RAM
 - **RAM warning system** — Visual warnings when assigning >50% or >75% of system RAM
-- **System info endpoint** — New `/system/info` API returns total RAM for frontend validation
+- **System info endpoint** — New `/system/info` API returns total RAM
 
-### ⚡ HOTFIX 1.1.9.1 (Included in v1.1.9):
-- **Fixed backend restart loop on Windows** — Watchdog now correctly monitors the Electron process using a passed PID, preventing premature restarts during installations.
-- **Improved Java version mapping** — Version detection now correctly maps high-version servers (NeoForge/NeoMinecraft 26.x+) to **Java 25**.
-- **Fixed Startup Scripts (run.bat/run.sh)** — Implemented **Environment Injection** (JAVA_HOME & PATH) to force startup scripts to use the app's managed Java version instead of the system default.
-- **Fixed Portable Executable Stability** — Implemented **Industrial Strength** fixes including `stdout/stderr` redirection and binary, unbuffered log pumping to prevent console hangs in the installer version.
-- **Robust Forge version handling** — Versions like "26.1.1" now correctly trigger the Java 25 requirement and use the managed environment.
+### HOTFIX 1.1.9.1 (Included in v1.1.9):
+- Fixed backend restart loop on Windows
+- Improved Java version mapping for Java 25
+- Fixed Startup Scripts (run.bat/run.sh) environment injection
+- Fixed Portable Executable Stability
+- Robust Forge version handling
 
-### 🔧 IMPROVEMENTS:
-- **Smart close behavior** — App checks for running servers before deciding to hide or quit
-- **Tray icon fixes for Linux** — Uses PNG instead of ICO, graceful fallback if tray not supported (Wayland)
-- **Parent watchdog fix** — Now stops ALL active server handlers when Electron exits, not just the selected one
-- **Memory-optimized log storage** — Uses bounded `deque` structures instead of unbounded lists
-- **Fixed duplicate except block** in Java validation code (server_handler.py)
-- **New endpoints** — `/servers/running` for close decisions, `/system/info` for RAM validation
-- **Multi-server improvements** — Better dashboard UI, smoother console transitions, bug fixes
+### IMPROVEMENTS:
+- Smart close behavior
+- Tray icon fixes for Linux
+- Parent watchdog fix
+- Memory-optimized log storage
+- New endpoints — `/servers/running`, `/system/info`
+- Multi-server improvements
 
-
-## Version 1.2.2 - 2024-11-XX
-- Implemented view transitions: Added a subtle "dip to background" fade effect when switching between different sections/tabs in the GUI for a smoother user experience.
-
-**Core UI Enhancements & Modernization:**
-- Replaced placeholder top bar with a functional header:
-    - Includes "Minecraft Server Dashboard" title.
-    - Dynamic server status label (Offline, Online, Starting, Stopping, Restarting) with distinct styles.
-    - "Restart Server" button, dynamically enabled/disabled.
-- Implemented `restart_server` and `_check_if_stopped_then_start` methods for robust server restarting.
-- Standardized typography for section headers within views (e.g., "Connected Players") using `Header.TLabel`.
-- Improved scrollbar aesthetics (`Vertical.TScrollbar`) for better dark theme integration (trough color, thumb background, flat relief).
-- Refined particle animation for subtlety: reduced particle count, more subdued colors, smaller size and speed.
-- Standardized `ScrolledText` widget styling (console, config editors, changelog) to `flat` relief with a 1px border.
-
-**Layout & Style Improvements by View:**
-- **Dashboard View:**
-    - Refactored "Server Controls" (Start/Stop buttons) and "Server Console" into separate, parallel `Card.TFrame` widgets.
-- **General List Views (Treeview Replacement & Actionable Rows):**
-    - Updated `CardView.Treeview` selection style: `ACCENT_COLOR` background, `PRIMARY_BG` foreground for clarity (where Treeview is still used or was recently replaced).
-    - **Worlds View:** Replaced Treeview. Each world row now displays name/size and a "💾 Backup" button.
-    - **Mods View:** Replaced `mods_tree` with a scrollable list. Each mod row shows JAR name/config path, with "⚙️ View" and "🗑️ Del" buttons. Implemented `_load_mod_config_for_editing` and `_delete_specific_mod`.
-    - **Bans View:** Replaced `banned_ips_tree` and `banned_players_tree`. Each ban entry shows details and a "⚖️ Pardon" button. Implemented `_pardon_ip` and `_pardon_player`.
-    - **Players View:** Replaced `players_tree`. Each player row displays name, with "👢 Kick" and "🚫 Ban" buttons. Refactored kick/ban methods.
-    - **Ops View:** Replaced `ops_tree`. Each operator row displays details and a "⚡ DeOp" button. Implemented `_deop_player(name)`.
-- **Server Properties View:**
-    - Enhanced `Switch.TCheckbutton` style for clearer on/off visual (green/grey).
-    - Refactored `_add_property_control` to pack controls side-by-side in a parent row frame.
-    - Significantly updated `load_server_properties` for a multi-column layout (2-3 properties per row) for compactness.
-    - Fixed `AttributeError` for `property_row_frames` initialization.
-- **Input Fields & Dropdowns (`TEntry`, `TCombobox`):**
-    - Added hover effects: `bordercolor` to `ACCENT_HOVER`, `fieldbackground` to `SECONDARY_BG`.
-    - Increased `borderwidth` to 2px on focus/hover, reverting to 1px otherwise.
-- **Button Styles:**
-    - Created `ActionRow.TButton` style for small inline action buttons in list rows (smaller font, reduced padding).
-    - Removed explicit `ipadx`/`ipady` from main action buttons to rely on style padding for consistency.
-- **Spacing and Padding Review:**
-    - Adjusted padding in Properties view (canvas, individual property controls).
-    - Adjusted padding in Resources view (main card, title, graph frame).
-    - Adjusted padding in Stats view (main card, title).
-
-**Other:**
-- Added "App Settings" tab with Application Information and a read-only Changelog viewer.
-
-## Version 1.0.0 - YYYY-MM-DD 
-(Initial version placeholder)
-- Initial GUI structure with server start/stop.
-- Console output and command input.
-- Server properties viewer and editor.
-- System resource usage display (CPU/RAM) with graphs.
-- Player list display.
-- Ops list display and management.
-- Worlds list display and backup functionality.
-- Player statistics viewer. 
+## Version 1.0.0 - Initial Release
+- Initial GUI structure with server start/stop
+- Console output and command input
+- Server properties viewer and editor
+- System resource usage display (CPU/RAM) with graphs
+- Player list display
+- Ops list display and management
+- Worlds list display and backup functionality
+- Player statistics viewer

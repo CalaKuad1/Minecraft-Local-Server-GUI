@@ -1,7 +1,7 @@
 <div align="center">
   <img src="electron-app/public/images/logo2.png" alt="Logo" width="200">
   
-  <h1>🎮 Minecraft Local Server GUI</h1>
+  <h1>Minecraft Local Server GUI</h1>
   
   <p><strong>The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.</strong></p>
   
@@ -28,36 +28,66 @@
 
 ---
 
-## ⬇️ Download & Install
+## What's New in v1.2.0
+
+### Complete UI Redesign
+- **Pixel art icon system** — Custom 16x16 pixel icons throughout the entire UI for a cohesive Minecraft-inspired aesthetic
+- **Visual effects** — Mouse spotlight tracking, noise grain overlay, magnetic button hover effects, and animated abstract backgrounds
+- **Server Library** — Completely redesigned server selector with grid view, search, recently opened section, and engine type icons
+- **Refined dark theme** — Deeper blacks, improved contrast, and smoother glassmorphism panels
+
+### NeoForge Support
+- Full support for **NeoForge** as a server engine alongside Vanilla, Paper, Spigot, Forge, and Fabric
+- NeoForge appears in the Setup Wizard, Mods browser, and server cards with its own icon
+
+### Modpacks
+- New **Modpacks** tab in the Mods section — browse and install modpacks directly from Modrinth
+
+### Multi-Language (i18n)
+- Interface available in **English, Spanish, French, and Russian**
+- Language selector in the new App Settings panel
+
+### App Settings
+- New dedicated **Settings panel** with language, theme, notifications, and more options
+
+### Other Improvements
+- **Error Boundary** — Graceful error handling across the UI
+- **WebSocket Context** — Centralized real-time communication layer
+- **Engine icons** — Each server type (Vanilla, Paper, Spigot, Forge, NeoForge, Fabric) now has its own visual icon in cards and selectors
+- **Improved Mods browser** — Filter by loader (Fabric, Forge, NeoForge, Quilt), version, category, and sort order
+
+---
+
+## Download & Install
 
 **One-click installation** — No Python or Java required!
 
 | Platform | Download |
 |:--------:|:---------|
-| **Windows** | [📦 Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.9/Minecraft-Local-Server-GUI-Setup-1.1.9.exe) |
-| **Linux** | [📦 Download AppImage (.AppImage)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/download/v1.1.9/Minecraft-Local-Server-GUI-1.1.9.AppImage) |
+| **Windows** | [Download Installer (.exe)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest) |
+| **Linux** | [Download AppImage (.AppImage)](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest) |
 
 > **Note:** The app automatically downloads and manages Java for you. Just install and play!
 
 ---
 
-## ✨ Features
+## Features
 
 <table>
 <tr>
 <td width="50%">
 
-### 🚀 Server Management
-- **One-click server creation** — Vanilla, Paper, Spigot, Forge
+### Server Management
+- **One-click server creation** — Vanilla, Paper, Spigot, Forge, **NeoForge**, Fabric
 - **Multiple server profiles** — Switch between servers instantly
 - **Live console** with real-time logs and command input
 - **Start/Stop controls** with visual status indicators
-- **Server Conflict Guard** — Prevents running multiple servers simultaneously with an integrated stop-and-switch flow
+- **Server Conflict Guard** — Prevents running multiple servers simultaneously
 
 </td>
 <td width="50%">
 
-### ☕ Automatic Java
+### Automatic Java
 - **Zero configuration** — Java 8/17/21 downloaded automatically
 - **Smart detection** — Matches Java version to Minecraft version
 - **No more errors** — Eliminates `UnsupportedClassVersionError`
@@ -68,36 +98,36 @@
 <tr>
 <td width="50%">
 
-### 📊 Dashboard
-- **Real-time stats** — CPU, RAM, and uptime monitoring
-- **One-Click Public Server** — Use **Pinggy** (Experimental) to share your server globally via SSH tunnel
-- **Region Selection** — Choose between EU, US, and Asia for best latency
+### Dashboard
+- **Real-time stats** — CPU, RAM, and uptime monitoring with sparkline graphs
+- **Public Server** — Share your server globally via SSH tunnel (Pinggy)
+- **Region Selection** — EU, US, and Asia for best latency
 - **Local IP display** — Easy LAN connection for friends
 - **Quick command input** — Send commands from dashboard
 
-### 🧩 Mods
-- **Mod search & install** — browse mods and install them in one click
-- **Installed mods list** — see what is currently installed
-- **Smart warning for non-modded servers** — Vanilla/Paper show a hint to install a mod loader (Setup Wizard)
-
-### 🌍 Worlds & Backups
-- **World list** with last modified time
-- **Fast loading** — world sizes are computed in the background and cached
-- **One-click backups** — create ZIP backups and keep them inside your server folder
+### Mods & Modpacks
+- **Mod search & install** — Browse and install mods from Modrinth
+- **Modpacks** — Browse and install complete modpacks
+- **Advanced filters** — Filter by loader, version, category, sort order
+- **Smart warning** — Vanilla/Paper show a hint to install a mod loader
 
 </td>
 <td width="50%">
 
-### ⚙️ Configuration
+### Configuration
 - **Visual settings editor** — No file editing required
 - **server.properties GUI** — All options organized by category
-- **RAM allocation** — Customize min/max memory per server with smart system limits
+- **RAM allocation** — Customize min/max memory with smart system limits
 - **Player management** — Op, ban, whitelist with one click
 
-### 👥 Players
-- **Accurate online players** — player counter is tracked from server logs and `/list`
-- **Cleaner console** — internal `/list` output is hidden from the console UI
-- **Faster refresh** — avoids full UI reloads during periodic updates
+### Multi-Language
+- **4 languages** — English, Spanish, French, Russian
+- **One-click switch** — Change language from App Settings
+
+### Worlds & Backups
+- **World list** with last modified time
+- **Fast loading** — Sizes computed in background and cached
+- **One-click backups** — ZIP backups inside your server folder
 
 </td>
 </tr>
@@ -105,31 +135,30 @@
 
 ---
 
-## 🎨 Modern UI
+## Modern UI
 
 Built with **React** and **Tailwind CSS**, featuring:
-- 🌙 **Dark theme** — Easy on the eyes
-- ✨ **Glassmorphism** — Blurred, translucent panels
-- 🎬 **Smooth animations** — Powered by Framer Motion
-- 📱 **Responsive layout** — Scales to any window size
+- **Dark theme** — Deep, high-contrast dark design
+- **Glassmorphism** — Blurred, translucent panels
+- **Pixel art icons** — Custom Minecraft-inspired icon set
+- **Smooth animations** — Powered by Framer Motion
+- **Interactive effects** — Mouse spotlight, noise grain, magnetic buttons
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | Electron + React + Vite |
 | **Styling** | Tailwind CSS + Framer Motion |
 | **Backend** | Python + FastAPI + Uvicorn |
+| **i18n** | Custom React Context (en/es/fr/ru) |
 | **Packaging** | electron-builder (GitHub Actions CI/CD) |
-| **Automation** | GitHub Actions (Auto-Release on Tag) |
 
 ---
 
-## 🛠️ Development Setup
-
-Want to contribute or run from source?
+## Development Setup
 
 ```bash
 # Clone the repository
@@ -152,25 +181,22 @@ npm run dev
 
 ### Building the Installer (Production)
 
-Local build (Windows/macOS detects platform automatically):
 ```bash
 cd electron-app
 npm run electron:build
 ```
 
 **Automated Multi-platform Release**:
-This project is configured with GitHub Actions. To trigger a new release with Windows and Linux binaries:
 1. Bump version in `package.json`
-2. Push a tag: `git tag v1.1.x && git push origin v1.1.x`
+2. Push a tag: `git tag v1.x.x && git push origin v1.x.x`
 3. GitHub will build and publish everything automatically!
 
 ---
 
-## 📋 Requirements
+## Requirements
 
-### For Users (Installer)
-- **Windows 10/11** (64-bit)
-- **Linux** (Any distro supporting AppImage or `.deb`)
+### For Users
+- **Windows 10/11** (64-bit) or **Linux** (AppImage / .deb)
 - **Internet connection** (for initial Java download)
 - ~500MB disk space
 
@@ -181,7 +207,7 @@ This project is configured with GitHub Actions. To trigger a new release with Wi
 
 ---
 
-## ❓ FAQ
+## FAQ
 
 <details>
 <summary><strong>Why is it downloading Java?</strong></summary>
@@ -197,9 +223,9 @@ For **Internet**: Use a tunneling service like [playit.gg](https://playit.gg) (r
 </details>
 
 <details>
-<summary><strong>Is the UI available in English?</strong></summary>
+<summary><strong>Is the UI available in other languages?</strong></summary>
 
-Yes — the app UI and system messages are in **English**.
+Yes — the app UI is available in **English, Spanish, French, and Russian**. You can switch languages from App Settings.
 </details>
 
 <details>
@@ -211,29 +237,29 @@ Server files are stored in the location you choose during setup. App configurati
 <details>
 <summary><strong>How do I import an existing server?</strong></summary>
 
-Click "Add Server" → "Use Existing" → Select your server folder. The app will auto-detect the server type and version.
+Click "Add Server" in the Library, then select your server folder. The app will auto-detect the server type and version.
 </details>
 
 <details>
 <summary><strong>Where is app data stored on Linux?</strong></summary>
 
-On Linux, all app data (Java runtimes, config files, logs) is stored in `~/.minecraft_server_gui/`. On Windows, it's in `%APPDATA%/MinecraftServerGUI`.
+On Linux, all app data is stored in `~/.minecraft_server_gui/`. On Windows, it's in `%APPDATA%/MinecraftServerGUI`.
 </details>
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## ⭐ Support
+## Support
 
-If this project helped you, please **star the repository** ⭐  
+If this project helped you, please **star the repository**  
 It helps others discover the tool and motivates development!
 
 <div align="center">
   <br>
-  <p>Made with ❤️ by <a href="https://github.com/CalaKuad1">CalaKuad1</a></p>
+  <p>Made with love by <a href="https://github.com/CalaKuad1">CalaKuad1</a></p>
 </div>

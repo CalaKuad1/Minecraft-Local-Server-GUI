@@ -6,8 +6,93 @@ on:
       - "v*"
 
 jobs:
-  release:
+  verify-build:
+    name: Verify Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './electron-app/package-lock.json'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd electron-app
+          npm config set fetch-retries 10
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm ci --prefer-offline --no-audit
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pyinstaller
+
+      - name: Build Backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller --onefile --noconsole \
+            --collect-all uvicorn \
+            --collect-all fastapi \
+            --hidden-import=uvicorn.logging \
+            --hidden-import=uvicorn.loops \
+            --hidden-import=uvicorn.loops.auto \
+            --hidden-import=uvicorn.protocols \
+            --hidden-import=uvicorn.protocols.http \
+            --hidden-import=uvicorn.protocols.http.auto \
+            --hidden-import=uvicorn.protocols.websockets \
+            --hidden-import=uvicorn.protocols.websockets.auto \
+            --hidden-import=uvicorn.lifespan \
+            --hidden-import=uvicorn.lifespan.on \
+            api_server.py
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv dist/api_server.exe .
+          else
+            mv dist/api_server .
+          fi
+        shell: bash
+
+      - name: Build Frontend (Vite)
+        run: |
+          cd electron-app
+          npm run build
+
+      - name: Build Electron App
+        run: |
+          cd electron-app
+          npm run electron:build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            electron-app/release/**/*.exe
+            electron-app/release/**/*.AppImage
+            electron-app/release/**/*.deb
+          if-no-files-found: warn
+
+  release:
+    name: Publish Release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: verify-build
     permissions:
       contents: write
 
@@ -69,7 +154,6 @@ jobs:
             --hidden-import=uvicorn.lifespan \
             --hidden-import=uvicorn.lifespan.on \
             api_server.py
-          # Move binary to backend root so it's picked up by extraResources
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv dist/api_server.exe .
           else

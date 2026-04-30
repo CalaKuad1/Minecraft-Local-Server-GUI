@@ -76,3 +76,23 @@ Thumbs.db
 *.temp
 
 electron-app/release/
+
+# PyInstaller artifacts
+backend/build/
+backend/dist/
+backend/*.spec
+
+# Pixel icon dev scripts output
+pixel-paths.json
+pixel-icon-library-by-hackernoon/
+
+# Ruff cache
+.ruff_cache/
+
+# Dev/temp scripts
+buildPixelIcons.js
+extractIcons.js
+refactorIcons.js
+test_playit_api.py
+test.png
+playit.exe

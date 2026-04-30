@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../api';
-import { User, Shield, Ban, CheckCircle, Search, Plus, Trash2, ShieldOff, MoreVertical } from 'lucide-react';
+import { User, Shield, Ban, CheckCircle, Search, Plus, Trash2, ShieldOff, MoreVertical } from './ui/PixelIcons';
 
 const PlayerCard = ({ player, type, onAction }) => {
     // Determine image (use minotar by name as it is reliable without UUIDs)
     const [imgSrc, setImgSrc] = useState(`https://minotar.net/helm/${player.name}/64`);
 
     return (
-        <div className="bg-surface border border-white/5 p-4 rounded-xl flex items-center justify-between group hover:bg-surface-hover transition-colors">
+        <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 p-4 rounded-md flex items-center justify-between group hover:border-white/10 transition-all shadow-sm">
             <div className="flex items-center gap-4">
                 <img
                     src={imgSrc}
@@ -55,19 +56,13 @@ const PlayerCard = ({ player, type, onAction }) => {
     );
 };
 
-const StatCard = ({ icon: Icon, label, value, color }) => (
-    <div className="bg-surface/50 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-white/10 transition-colors shadow-lg">
-        <div className={`p-3 rounded-xl ${color === 'blue' ? 'bg-blue-500/10 text-blue-400' :
-            color === 'green' ? 'bg-green-500/10 text-green-400' :
-                color === 'red' ? 'bg-red-500/10 text-red-400' :
-                    color === 'purple' ? 'bg-purple-500/10 text-purple-400' :
-                        'bg-gray-500/10 text-gray-400'}`}>
-            <Icon size={24} />
+const StatCard = ({ icon: Icon, label, value }) => (
+    <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 rounded-md p-5 flex flex-col justify-between hover:border-white/10 transition-all shadow-sm">
+        <div className="flex items-center gap-2 mb-2 text-gray-500">
+            <Icon size={14} className="opacity-70" />
+            <h3 className="text-xs font-bold uppercase tracking-widest">{label}</h3>
         </div>
-        <div>
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">{label}</h3>
-            <div className="text-2xl font-bold text-white leading-none mt-1">{value}</div>
-        </div>
+        <div className="text-3xl font-minecraft text-white tracking-wide">{value}</div>
     </div>
 );
 
@@ -171,7 +166,7 @@ export default function Players() {
             <div>
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h2 className="text-3xl font-bold text-white mb-2">Players</h2>
+                        <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-2">Players</h2>
                         <p className="text-gray-400">Manage server operators, access, and bans.</p>
                     </div>
                 </div>
@@ -181,46 +176,41 @@ export default function Players() {
                         icon={User}
                         label="Online"
                         value={onlinePlayers.length || 0}
-                        color="green"
                     />
                     <StatCard
                         icon={Shield}
                         label="Operators"
                         value={data.ops?.length || 0}
-                        color="blue"
                     />
                     <StatCard
                         icon={CheckCircle}
                         label="Whitelisted"
                         value={data.whitelist?.length || 0}
-                        color="purple"
                     />
                     <StatCard
                         icon={Ban}
                         label="Banned"
                         value={data.banned?.length || 0}
-                        color="red"
                     />
                 </div>
             </div>
 
             {/* Controls */}
             <div className="flex items-center justify-between">
-                {/* Tabs */}
-                <div className="flex gap-2 border-b border-white/5 pb-1 flex-1">
+                <div className="flex bg-[#030303]/60 backdrop-blur-xl border border-white/5 p-1 rounded-md mb-4 relative max-w-fit shadow-md">
                     {['online', 'ops', 'whitelist', 'banned'].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-6 py-3 rounded-t-xl font-medium transition-colors relative ${activeTab === tab
-                                ? 'text-white bg-white/5'
-                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                            className={`px-6 py-2.5 rounded-sm font-medium transition-colors relative flex items-center justify-center gap-2 z-10 text-sm ${activeTab === tab
+                                ? 'text-white'
+                                : 'text-zinc-500 hover:text-white'
                                 }`}
                         >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             {activeTab === tab && (
-                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary"></div>
+                                <motion.div layoutId="playersTab" className="absolute inset-0 bg-white/10 rounded-sm -z-10 shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
                             )}
+                            <span className={`relative z-10`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
                         </button>
                     ))}
                 </div>
@@ -229,7 +219,7 @@ export default function Players() {
                 {activeTab !== 'online' && (
                     <button
                         onClick={() => setShowAddModal(true)}
-                        className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-colors shadow-lg hover:shadow-primary/20 shrink-0 ml-4"
+                        className="bg-primary hover:bg-primary-hover text-black px-5 py-2.5 rounded-md flex items-center gap-2 font-bold transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] shrink-0 ml-4 text-sm"
                     >
                         <Plus size={18} />
                         Add to {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
@@ -249,7 +239,7 @@ export default function Players() {
                         />
                     ))
                 ) : (
-                    <div className="col-span-2 text-center py-20 bg-surface rounded-2xl border border-white/5 border-dashed">
+                    <div className="col-span-2 text-center py-20 bg-surface rounded-md border border-white/5 border-dashed">
                         <User size={48} className="mx-auto text-gray-600 mb-4 opacity-50" />
                         <p className="text-gray-500">No players found in this list.</p>
                         {activeTab === 'online' && <p className="text-gray-600 text-sm mt-1">Make sure the server is running.</p>}

@@ -22,21 +22,24 @@ try {
 } catch (_) { }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, isDev ? '../public/images/icon.ico' : '../dist/images/icon.ico');
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 650,
     title: 'Minecraft Local Server GUI',
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true, // Secure mode enabled
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs')
     },
-    frame: false, // Custom frame
+    frame: false,
     backgroundColor: '#0f0f0f',
-    show: true // Force show immediately for debugging
+    show: true
   });
 
   // Load the app
@@ -253,7 +256,6 @@ function createTray() {
     if (process.platform === 'win32') {
       iconPath = path.join(__dirname, isDev ? '../public/images/icon.ico' : '../dist/images/icon.ico');
     } else {
-      // Linux: use PNG for tray icon (ICO not always supported)
       iconPath = path.join(__dirname, isDev ? '../public/images/logo2.png' : '../dist/images/logo2.png');
     }
     tray = new Tray(iconPath);

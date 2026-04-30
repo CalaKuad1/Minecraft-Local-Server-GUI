@@ -205,6 +205,7 @@ class ServerHandler:
                 "-jar",
                 installer_path,
                 "--installServer",
+                "."
             ]
             process = subprocess.Popen(
                 install_command,
@@ -251,6 +252,74 @@ class ServerHandler:
                     os.remove(installer_log)
             except OSError as e:
                 self.output_callback(f"Error during cleanup: {e}\n", "warning")
+
+    def install_neoforge_server(self, neoforge_version, progress_callback):
+        """Downloads and installs a NeoForge server."""
+        # NeoForge installer URL: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.4.80/neoforge-20.4.80-installer.jar
+        file_name = f"neoforge-{neoforge_version}-installer.jar"
+        download_url = f"https://maven.neoforged.net/releases/net/neoforged/neoforge/{neoforge_version}/{file_name}"
+        installer_path = os.path.join(self.server_path, file_name)
+
+        self.output_callback(
+            f"Downloading NeoForge installer from {download_url}\n", "info"
+        )
+        if not download_file_from_url(download_url, installer_path, progress_callback):
+            self.output_callback("Failed to download NeoForge installer.\n", "error")
+            return
+
+        self.output_callback("Download complete. Running installer...\n", "info")
+
+        # Run the installer
+        try:
+            install_command = [
+                self.java_path,
+                "-jar",
+                installer_path,
+                "--installServer",
+                "."
+            ]
+            process = subprocess.Popen(
+                install_command,
+                cwd=self.server_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
+            )
+
+            # Log stdout and stderr from the installer
+            stdout, stderr = process.communicate()
+            for line in stdout.splitlines():
+                self.output_callback(f"[Installer] {line}\n", "normal")
+            for line in stderr.splitlines():
+                self.output_callback(f"[Installer] {line}\n", "error")
+
+            if process.returncode != 0:
+                self.output_callback(
+                    "NeoForge installer failed with a non-zero exit code.\n", "error"
+                )
+            else:
+                self.output_callback("NeoForge installation successful.\n", "info")
+                self._accept_eula()
+                self._create_default_server_properties()
+
+        except Exception as e:
+            self.output_callback(
+                f"An error occurred during NeoForge installation: {e}\n", "error"
+            )
+        finally:
+            # Clean up the installer and its log
+            self.output_callback("Cleaning up installer files...\n", "info")
+            try:
+                os.remove(installer_path)
+                installer_log = f"{installer_path}.log"
+                if os.path.exists(installer_log):
+                    os.remove(installer_log)
+            except OSError as e:
+                self.output_callback(f"Error during cleanup: {e}\n", "warning")
+
 
     def get_status(self):
         """
@@ -405,13 +474,36 @@ allow-flight=false
         ).start()
 
     def _get_start_command(self):
-        # Verificar que tenemos una ruta de Java válida
         java_path = self.java_path
 
-        # Si tenemos versión de Minecraft y no hemos configurado Java específico, intentar configurarlo
-        if self.minecraft_version and java_path == "java":
-            self._setup_java_for_minecraft(self.minecraft_version)
-            java_path = self.java_path
+        if self.minecraft_version:
+            if java_path == "java":
+                self._setup_java_for_minecraft(self.minecraft_version)
+                java_path = self.java_path
+            else:
+                required_java = (
+                    self.java_manager.get_required_java_version(self.minecraft_version)
+                    if self.java_manager
+                    else None
+                )
+                if required_java:
+                    current_major = self._detect_java_major_version(java_path)
+                    if current_major and not self._is_java_version_compatible(
+                        current_major, required_java
+                    ):
+                        self.output_callback(
+                            f"Java {current_major} is not compatible with Minecraft {self.minecraft_version} (requires Java {required_java}). Re-resolving...\n",
+                            "warning",
+                        )
+                        new_path = self.ensure_java_compatibility(
+                            self.minecraft_version
+                        )
+                        if new_path and self._verify_java_installation(new_path):
+                            java_path = new_path
+                            self.java_path = new_path
+                            self.output_callback(
+                                f"Fixed: Using Java from {new_path}\n", "success"
+                            )
 
         # Verificar que Java existe y funciona
         if not self._verify_java_installation(java_path):
@@ -488,14 +580,25 @@ allow-flight=false
         # Universal check for startup scripts
         if sys.platform == "win32":
             script_path = os.path.join(self.server_path, "run.bat")
-            logging.info(f"Handler: Checking for run.bat at {script_path}")
             if os.path.exists(script_path):
                 run_script = script_path
-                logging.info("Handler: run.bat FOUND")
+            else:
+                # Check for other common names
+                for alt in ["start.bat", "launch.bat", "run-server.bat"]:
+                    alt_path = os.path.join(self.server_path, alt)
+                    if os.path.exists(alt_path):
+                        run_script = alt_path
+                        break
         else:  # For macOS and Linux
             script_path = os.path.join(self.server_path, "run.sh")
             if os.path.exists(script_path):
                 run_script = script_path
+            else:
+                for alt in ["start.sh", "launch.sh", "run-server.sh"]:
+                    alt_path = os.path.join(self.server_path, alt)
+                    if os.path.exists(alt_path):
+                        run_script = alt_path
+                        break
 
         # If a run script is found, prioritize it
         if run_script:
@@ -540,7 +643,26 @@ allow-flight=false
         elif all_jars:  # Fallback if only installer jars are present for some reason
             server_jar_path = all_jars[0]
 
-        if not server_jar_path:
+        if not server_jar_path and not run_script:
+            # Special check for Forge/NeoForge libraries if run.bat is missing
+            if self.server_type in ["forge", "neoforge"]:
+                self.output_callback("Startup script missing. Checking libraries for server JAR...\n", "info")
+                lib_path = os.path.join(self.server_path, "libraries")
+                if os.path.exists(lib_path):
+                    # Search for any jar that looks like a forge/neoforge server jar
+                    for root, dirs, files in os.walk(lib_path):
+                        for file in files:
+                            if file.endswith(".jar") and ("forge" in file.lower() or "neoforge" in file.lower()) and "server" in file.lower():
+                                server_jar_path = os.path.join(root, file)
+                                break
+                        if server_jar_path: break
+                
+                if server_jar_path:
+                    self.output_callback(f"Found server JAR in libraries: {os.path.basename(server_jar_path)}\n", "success")
+                else:
+                    self.output_callback("Could not find server JAR in libraries. Installation might be incomplete.\n", "warning")
+
+        if not server_jar_path and not run_script:
             # Audit directory before failing
             try:
                 files = os.listdir(self.server_path)
@@ -557,39 +679,112 @@ allow-flight=false
         min_ram_str = f"-Xms{self.ram_min}{self.ram_unit}"
         max_ram_str = f"-Xmx{self.ram_max}{self.ram_unit}"
 
-        # Base command with suppression flags
+        java_major = self._detect_java_major_version(java_path)
+        logging.info(f"Handler: Detected Java major version: {java_major}")
+
         command = [
             java_path,
             max_ram_str,
             min_ram_str,
             "-Djline.terminal=jline.UnsupportedTerminal",
             "-Dorg.jline.terminal.dumb=true",
-            "--add-modules=jdk.incubator.vector",
-            "--enable-native-access=ALL-UNNAMED",
-            "-XX:+UnlockExperimentalVMOptions",
-            # Forge/ModLauncher Java 16+ compatibility args
-            "--add-exports=java.base/sun.security.util=ALL-UNNAMED",
-            "--add-opens=java.base/java.util.jar=ALL-UNNAMED",
-            "--add-opens=java.base/java.lang=ALL-UNNAMED",
-            "--add-opens=java.base/java.util=ALL-UNNAMED",
-            "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
-            "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens=java.base/java.text=ALL-UNNAMED",
-            "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
-            "--add-opens=java.base/java.nio=ALL-UNNAMED",
-            "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-            "--add-opens=java.management/sun.management=ALL-UNNAMED",
-            "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
         ]
 
-        # Add any server-type specific arguments before the -jar flag
-        # Example for future use:
-        # if self.server_type == 'some_type':
-        #     command.extend(['-Dsome.flag=true'])
+        if java_major and java_major >= 17:
+            command.extend(
+                [
+                    "--add-modules=jdk.incubator.vector",
+                    "--enable-native-access=ALL-UNNAMED",
+                ]
+            )
 
-        command.extend(["-jar", os.path.basename(server_jar_path), "--nogui"])
+        if java_major and java_major >= 17:
+            command.extend(
+                [
+                    "-XX:+UnlockExperimentalVMOptions",
+                    "--add-exports=java.base/sun.security.util=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util.jar=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                    "--add-opens=java.base/java.text=ALL-UNNAMED",
+                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+                    "--add-opens=java.base/java.nio=ALL-UNNAMED",
+                    "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+                    "--add-opens=java.management/sun.management=ALL-UNNAMED",
+                    "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
+                ]
+            )
+
+        # Check if the selected JAR is an installer
+        is_installer = False
+        if "installer" in os.path.basename(server_jar_path).lower():
+            is_installer = True
+        else:
+            # Deep check: look for SimpleInstaller in manifest/classes
+            try:
+                import zipfile
+                with zipfile.ZipFile(server_jar_path, 'r') as z:
+                    # Both Forge and NeoForge use SimpleInstaller
+                    names = z.namelist()
+                    if 'net/minecraftforge/installer/SimpleInstaller.class' in names or \
+                       'net/neoforged/installer/SimpleInstaller.class' in names:
+                        is_installer = True
+            except:
+                pass
+
+        if is_installer:
+            self.output_callback(
+                "Warning: The selected JAR seems to be an installer, not the server itself.\n",
+                "warning",
+            )
+            self.output_callback(
+                "This usually happens when a modpack server hasn't been installed yet.\n",
+                "info",
+            )
+            self.output_callback(
+                "Please use the 'Setup Wizard' to install the server correctly.\n",
+                "info",
+            )
+            # Try to run it without nogui if it's an installer, 
+            # though it probably won't start the server.
+            command.extend(["-jar", os.path.basename(server_jar_path)])
+        else:
+            command.extend(["-jar", os.path.basename(server_jar_path), "--nogui"])
 
         return command, custom_env
+
+    def _is_java_version_compatible(
+        self, installed_major: int, required_version: int
+    ) -> bool:
+        if required_version == 8:
+            return installed_major == 8
+        return installed_major >= required_version
+
+    def _detect_java_major_version(self, java_path: str) -> Optional[int]:
+        try:
+            result = subprocess.run(
+                [java_path, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
+            )
+            output = result.stderr or result.stdout
+            import re
+
+            match = re.search(r'version "(\d+)(?:\.(\d+))?', output)
+            if match:
+                major = int(match.group(1))
+                if major == 1 and match.group(2):
+                    major = int(match.group(2))
+                return major
+        except Exception as e:
+            logging.warning(f"Could not detect Java version: {e}")
+        return None
 
     def _run_server(self, command, env):
         logging.info(f"Handler: Background thread started. Command: {command}")
@@ -691,16 +886,24 @@ allow-flight=false
     ):
         line_no_ansi = re.sub(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", line)
 
-        # Check for standard server start completion messages
         is_done = False
-        if "Done" in line_no_ansi and "For help" in line_no_ansi:
+        if "Done" in line_no_ansi and (
+            "For help" in line_no_ansi or "help" in line_no_ansi.lower()
+        ):
             is_done = True
-        elif "Done (" in line_no_ansi and ")!" in line_no_ansi:
+        elif "Done (" in line_no_ansi and (
+            ")!" in line_no_ansi or ")!" in line_no_ansi
+        ):
             is_done = True
         elif "started on port" in line_no_ansi.lower():
             is_done = True
+        elif line_no_ansi.strip().startswith("Done") and "!" in line_no_ansi:
+            is_done = True
 
-        if is_done:
+        if is_done and not self.server_fully_started:
+            logging.info(
+                f"Handler: Detected server start completion: {line_no_ansi.strip()[:80]}"
+            )
             self.server_fully_started = True
             self.server_stopping = False
             # Broadcast explicit status change to online
