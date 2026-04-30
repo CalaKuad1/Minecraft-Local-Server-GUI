@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="electron-app/public/images/logo2.png" alt="Logo" width="200">
+  <img src="electron-app/public/images/icon.ico" alt="Logo" width="200">
   
   <h1>Minecraft Local Server GUI</h1>
   
