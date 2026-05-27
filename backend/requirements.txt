@@ -8,3 +8,4 @@ uvicorn>=0.22.0
 python-multipart>=0.0.6
 pydantic>=2.0.0
 mcstatus>=11.0.0
+wsproto>=1.2.0

@@ -52,6 +52,7 @@ jobs:
           pyinstaller --onefile --noconsole \
             --collect-all uvicorn \
             --collect-all fastapi \
+            --collect-all wsproto \
             --hidden-import=uvicorn.logging \
             --hidden-import=uvicorn.loops \
             --hidden-import=uvicorn.loops.auto \
@@ -134,6 +135,7 @@ jobs:
           pyinstaller --onefile --noconsole \
             --collect-all uvicorn \
             --collect-all fastapi \
+            --collect-all wsproto \
             --hidden-import=uvicorn.logging \
             --hidden-import=uvicorn.loops \
             --hidden-import=uvicorn.loops.auto \

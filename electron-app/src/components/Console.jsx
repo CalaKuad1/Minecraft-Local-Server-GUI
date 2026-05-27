@@ -44,6 +44,56 @@ export default function Console() {
         return subscribe('console', handleMsg);
     }, [subscribe]);
 
+    // Polling fallback when WebSocket is disconnected
+    useEffect(() => {
+        if (isConnected) return;
+        let cancelled = false;
+        let timer = null;
+
+        const poll = async () => {
+            if (cancelled) return;
+            try {
+                const status = await api.getStatus();
+                if (cancelled) return;
+                if (status?.recent_logs && Array.isArray(status.recent_logs)) {
+                    setLogs(prev => {
+                        if (prev.length === 0) {
+                            const items = status.recent_logs.slice(-150).map(item => ({
+                                ...item,
+                                _id: ++logIdRef.current,
+                                message: typeof item.message === 'string' ? item.message : String(item.message || ''),
+                                time: item.time || new Date().toLocaleTimeString([], { hour12: false })
+                            }));
+                            return items.slice(-MAX_LOGS);
+                        }
+                        const lastLocal = prev[prev.length - 1];
+                        const newItems = [];
+                        for (const item of status.recent_logs) {
+                            const msg = typeof item.message === 'string' ? item.message : String(item.message || '');
+                            if (lastLocal && msg === lastLocal.message) break;
+                            newItems.unshift({
+                                ...item,
+                                _id: ++logIdRef.current,
+                                message: msg,
+                                time: item.time || new Date().toLocaleTimeString([], { hour12: false })
+                            });
+                        }
+                        if (newItems.length === 0) return prev;
+                        const next = [...prev, ...newItems.reverse()];
+                        return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
+                    });
+                }
+            } catch (e) {}
+            if (!cancelled) timer = setTimeout(poll, 3000);
+        };
+
+        poll();
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
+    }, [isConnected]);
+
     useEffect(() => {
         if (scrollRef.current && !userScrolledUpRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

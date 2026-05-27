@@ -1,5 +1,16 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.2 - 2026-05-27 CONSOLE HOTFIX
+
+### CRITICAL FIX:
+- **Fixed WebSocket 404 in built .exe** — `wsproto` dependency was missing from PyInstaller build, causing `/ws/console` to return 404 and Console tab to receive no logs
+
+### IMPROVEMENTS:
+- **Console polling fallback** — Console tab now fetches logs via REST API when WebSocket is disconnected, matching Dashboard behavior
+- Added `wsproto` to `requirements.txt` and GitHub Actions PyInstaller builds
+
+---
+
 ## Version 1.2.1 - 2026-05-27 CONSOLE & STABILITY UPDATE
 
 ### NEW FEATURES:
