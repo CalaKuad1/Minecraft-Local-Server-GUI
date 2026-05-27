@@ -58,6 +58,12 @@ export const api = {
             body: JSON.stringify({ command })
         });
     },
+    setAutoRestart: async (enabled) => {
+        await fetchJson(`${API_URL}/server/auto-restart?enabled=${enabled}`, { method: 'POST' });
+    },
+    getAutoRestart: async () => {
+        return await fetchJson(`${API_URL}/server/auto-restart`);
+    },
     scheduleStop: async (minutes) => {
         return await fetchJson(`${API_URL}/server/schedule-stop`, {
             method: 'POST',

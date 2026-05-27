@@ -59,7 +59,9 @@ export function WebSocketProvider({ children }) {
             }
         };
 
-        ws.onerror = () => {};
+        ws.onerror = (err) => {
+            console.error('[WS] Connection error:', err);
+        };
 
         wsRef.current = ws;
     }, []);

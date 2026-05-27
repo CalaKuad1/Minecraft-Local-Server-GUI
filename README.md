@@ -28,33 +28,37 @@
 
 ---
 
-## What's New in v1.2.0
+## What's New in v1.2.1
+
+### Auto-Restart on Crash
+- Server automatically restarts after unexpected shutdowns — toggle it on/off from the Dashboard header
+- Up to 3 restart attempts with a 3-second delay between retries
+
+### Console Improvements
+- **Export logs** — Download button saves the full console history as a `.txt` file
+- **Search & filter** — Search bar and level filter (All/CMD/INF/WRN/ERR) for quick log navigation
+- **Always usable input** — Console input stays enabled even when WebSocket is disconnected (REST API fallback)
+
+### Stability Fixes
+- **Logs persist across tab switches** — No more losing console logs when navigating between panels
+- **Dashboard mini-console** — REST API fallback for sending commands when WebSocket is down
+- **Connection status** — Clear "Disconnected" indicator instead of misleading "Loading..." state
+
+---
+
+<details>
+<summary><strong>Earlier: v1.2.0 — UI Redesign & NeoForge</strong></summary>
 
 ### Complete UI Redesign
-- **Pixel art icon system** — Custom 16x16 pixel icons throughout the entire UI for a cohesive Minecraft-inspired aesthetic
-- **Visual effects** — Mouse spotlight tracking, noise grain overlay, magnetic button hover effects, and animated abstract backgrounds
-- **Server Library** — Completely redesigned server selector with grid view, search, recently opened section, and engine type icons
-- **Refined dark theme** — Deeper blacks, improved contrast, and smoother glassmorphism panels
+- **Pixel art icon system** — Custom 16x16 pixel icons throughout the entire UI
+- **Visual effects** — Mouse spotlight, noise grain, magnetic buttons, abstract backgrounds
+- **Server Library** — Redesigned grid view with search, recently opened, engine type icons
 
-### NeoForge Support
-- Full support for **NeoForge** as a server engine alongside Vanilla, Paper, Spigot, Forge, and Fabric
-- NeoForge appears in the Setup Wizard, Mods browser, and server cards with its own icon
+### NeoForge Support & Modpacks
+- **NeoForge** as a new server engine + **Modpacks** tab for browsing and installing from Modrinth
+- **Multi-Language (i18n)** — English, Spanish, French, and Russian with language selector in App Settings
 
-### Modpacks
-- New **Modpacks** tab in the Mods section — browse and install modpacks directly from Modrinth
-
-### Multi-Language (i18n)
-- Interface available in **English, Spanish, French, and Russian**
-- Language selector in the new App Settings panel
-
-### App Settings
-- New dedicated **Settings panel** with language, theme, notifications, and more options
-
-### Other Improvements
-- **Error Boundary** — Graceful error handling across the UI
-- **WebSocket Context** — Centralized real-time communication layer
-- **Engine icons** — Each server type (Vanilla, Paper, Spigot, Forge, NeoForge, Fabric) now has its own visual icon in cards and selectors
-- **Improved Mods browser** — Filter by loader (Fabric, Forge, NeoForge, Quilt), version, category, and sort order
+</details>
 
 ---
 
@@ -80,7 +84,8 @@
 ### Server Management
 - **One-click server creation** — Vanilla, Paper, Spigot, Forge, **NeoForge**, Fabric
 - **Multiple server profiles** — Switch between servers instantly
-- **Live console** with real-time logs and command input
+- **Live console** with real-time logs, search/filter, export, and command input
+- **Auto-restart on crash** — Detects and restarts server automatically after unexpected shutdowns
 - **Start/Stop controls** with visual status indicators
 - **Server Conflict Guard** — Prevents running multiple servers simultaneously
 
@@ -100,10 +105,11 @@
 
 ### Dashboard
 - **Real-time stats** — CPU, RAM, and uptime monitoring with sparkline graphs
-- **Public Server** — Share your server globally via SSH tunnel (Pinggy)
+- **Auto-restart** — Toggle to automatically restart server on crash (max 3 attempts)
+- **Public Server** — Share your server globally via SSH tunnel (Pinggy/Playit)
 - **Region Selection** — EU, US, and Asia for best latency
 - **Local IP display** — Easy LAN connection for friends
-- **Quick command input** — Send commands from dashboard
+- **Quick command input** — Send commands from dashboard with WebSocket/REST fallback
 
 ### Mods & Modpacks
 - **Mod search & install** — Browse and install mods from Modrinth

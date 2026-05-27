@@ -622,6 +622,11 @@ def get_status():
             and state.tunnel_process.poll() is None,
             "address": state.tunnel_address,
         },
+        "auto_restart": {
+            "enabled": state.server_handler.auto_restart,
+            "attempt": state.server_handler._restart_count,
+            "max_attempts": state.server_handler._max_restarts,
+        },
     }
 
 
@@ -676,6 +681,26 @@ def cancel_stop_server():
         raise HTTPException(status_code=400, detail="Server not configured")
     success, message = state.server_handler.cancel_shutdown()
     return {"message": message}
+
+
+@app.post("/server/auto-restart")
+def set_auto_restart(enabled: bool = True):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    state.server_handler.auto_restart = enabled
+    state.server_handler._restart_count = 0
+    return {"message": f"Auto-restart {'enabled' if enabled else 'disabled'}"}
+
+
+@app.get("/server/auto-restart")
+def get_auto_restart():
+    if not state or not state.server_handler:
+        return {"enabled": False, "attempt": 0, "max_attempts": 3}
+    return {
+        "enabled": state.server_handler.auto_restart,
+        "attempt": state.server_handler._restart_count,
+        "max_attempts": state.server_handler._max_restarts,
+    }
 
 
 @app.post("/command")

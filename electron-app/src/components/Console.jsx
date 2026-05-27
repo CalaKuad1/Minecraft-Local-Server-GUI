@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Send } from './ui/PixelIcons';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Download, Send } from './ui/PixelIcons';
 import { api } from '../api';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -16,6 +16,8 @@ export default function Console() {
     const { isConnected, subscribe, send } = useWebSocket();
     const [logs, setLogs] = useState([]);
     const [inputObj, setInputObj] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [levelFilter, setLevelFilter] = useState('all');
     const scrollRef = useRef(null);
     const userScrolledUpRef = useRef(false);
     const MAX_LOGS = 800;
@@ -54,6 +56,30 @@ export default function Console() {
         userScrolledUpRef.current = !atBottom;
     }, []);
 
+    const handleDownload = useCallback(() => {
+        if (logs.length === 0) return;
+        const text = logs.map(log => {
+            const time = log.level !== 'input' && log.time ? `[${log.time}] ` : '';
+            const level = log.level ? `[${log.level.toUpperCase()}] ` : '';
+            return `${time}${level}${log.message}`;
+        }).join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `server-console-${new Date().toISOString().slice(0, 10)}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [logs]);
+
+    const filteredLogs = useMemo(() => {
+        return logs.filter(log => {
+            if (levelFilter !== 'all' && log.level !== levelFilter) return false;
+            if (searchQuery && !log.message.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            return true;
+        });
+    }, [logs, searchQuery, levelFilter]);
+
     const sendCommand = useCallback(async (e) => {
         e.preventDefault();
         if (!inputObj.trim()) return;
@@ -87,14 +113,51 @@ export default function Console() {
                     </div>
                     <span>Integrated Terminal</span>
                 </div>
-                <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-gray-500'}`}>
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                    {isConnected ? t('status.online') : t('common.loading')}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleDownload}
+                        disabled={logs.length === 0}
+                        className="flex items-center gap-1.5 text-zinc-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-[10px] font-bold uppercase tracking-widest"
+                        title="Download logs"
+                    >
+                        <Download size={12} />
+                        Log
+                    </button>
+                    <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-yellow-500'}`}>
+                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                        {isConnected ? t('status.online') : 'Disconnected'}
+                    </div>
+                </div>
+            </div>
+
+            {/* Filter bar */}
+            <div className="flex items-center gap-2 px-4 py-1.5 bg-[#080808] border-b border-white/5">
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search logs..."
+                    className="flex-1 bg-[#050505] border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-zinc-700 font-mono outline-none focus:border-white/20 transition-colors"
+                />
+                <div className="flex gap-1">
+                    {['all', 'normal', 'input', 'warning', 'error'].map(lvl => (
+                        <button
+                            key={lvl}
+                            onClick={() => setLevelFilter(lvl)}
+                            className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                levelFilter === lvl
+                                    ? 'bg-white/10 text-white'
+                                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/5'
+                            }`}
+                        >
+                            {lvl === 'all' ? 'All' : lvl.slice(0, 3)}
+                        </button>
+                    ))}
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10" ref={scrollRef} onScroll={handleScroll}>
-                {logs.map((log, i) => (
+                {filteredLogs.map((log, i) => (
                     <div key={log._id} className="flex items-start font-mono text-[11.5px] leading-relaxed hover:bg-white/5 px-2 py-0.5 rounded transition-colors group">
                         <div className="w-12 flex-shrink-0 text-white/10 select-none group-hover:text-white/30 transition-colors">
                             {String(i + 1).padStart(4, '0')}
@@ -114,9 +177,9 @@ export default function Console() {
                         </div>
                     </div>
                 ))}
-                {logs.length === 0 && (
+                {filteredLogs.length === 0 && (
                     <div className="text-zinc-600 italic flex items-center gap-2 h-full justify-center opacity-50 font-sans text-center px-8">
-                        {isConnected ? t('dashboard.waiting_logs') : t('common.loading')}
+                        {logs.length === 0 ? t('dashboard.waiting_logs') : 'No logs match your filter'}
                     </div>
                 )}
             </div>
@@ -128,11 +191,10 @@ export default function Console() {
                         value={inputObj}
                         onChange={(e) => setInputObj(e.target.value)}
                         className="flex-1 bg-transparent border-none outline-none text-white placeholder-zinc-700 font-mono text-xs pl-2"
-                        placeholder={isConnected ? t('nav.console') + "..." : t('common.loading')}
+                        placeholder={t('nav.console') + "..."}
                         autoFocus
-                        disabled={!isConnected}
                     />
-                <button type="submit" disabled={!isConnected} className="text-primary hover:text-white p-2 transition-colors disabled:opacity-50">
+                <button type="submit" className="text-primary hover:text-white p-2 transition-colors">
                     <Send size={16} />
                 </button>
             </form>

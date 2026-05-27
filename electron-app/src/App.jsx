@@ -266,34 +266,40 @@ function App() {
         <main className="flex-1 overflow-hidden relative flex flex-col bg-[#050505]/70 backdrop-blur-md w-full">
           <div className="flex-1 overflow-y-auto p-8 relative z-10 flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent w-full">
           <div className="mx-auto w-full flex-1 flex flex-col">
+            {/* Dashboard - always mounted to preserve log state */}
+            <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>
+              <Dashboard status={serverStatus} onRefresh={triggerRefresh} />
+            </div>
+
+            {/* Console - always mounted to preserve log state */}
+            <div style={{ display: activeTab !== 'console' ? 'none' : undefined }}>
+              <Console key={selectedServer?.id} />
+            </div>
+
+            {/* Animated transitions for other tabs */}
             <AnimatePresence mode="wait">
+              {activeTab !== 'dashboard' && activeTab !== 'console' && (
                 <motion.div
-                key={`${activeTab}-${selectedServer?.id}`}
-                initial={{ opacity: 0, scale: 0.99, y: 10, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, scale: 0.99, y: -10, filter: 'blur(4px)' }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}
-                 style={activeTab === 'console' ? { display: 'none' } : undefined}
-               >
-                 {activeTab === 'dashboard' && <Dashboard status={serverStatus} onRefresh={triggerRefresh} />}
-                 {activeTab === 'players' && <Players status={serverStatus} />}
-                 {activeTab === 'worlds' && <Worlds />}
-                 {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
-                 {activeTab === 'plugins' && <Plugins status={serverStatus} />}
-                 {activeTab === 'settings' && <Settings />}
-               </motion.div>
-             </AnimatePresence>
+                  key={`${activeTab}-${selectedServer?.id}`}
+                  initial={{ opacity: 0, scale: 0.99, y: 10, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, scale: 0.99, y: -10, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  {activeTab === 'players' && <Players status={serverStatus} />}
+                  {activeTab === 'worlds' && <Worlds />}
+                  {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
+                  {activeTab === 'plugins' && <Plugins status={serverStatus} />}
+                  {activeTab === 'settings' && <Settings />}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-             <AnimatePresence>
-               {showAppSettings && (
-                 <AppSettings isOpen={true} onClose={() => setShowAppSettings(false)} />
-               )}
-             </AnimatePresence>
-
-             {activeTab === 'console' && (
-               <Console key={selectedServer?.id} />
-             )}
+            <AnimatePresence>
+              {showAppSettings && (
+                <AppSettings isOpen={true} onClose={() => setShowAppSettings(false)} />
+              )}
+            </AnimatePresence>
           </div>
           </div>
         </main>

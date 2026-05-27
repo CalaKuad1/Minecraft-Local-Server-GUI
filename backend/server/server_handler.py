@@ -82,6 +82,12 @@ class ServerHandler:
             None  # Epoch time when shutdown will occur
         )
 
+        # Auto-restart on crash
+        self.auto_restart = False
+        self._restart_count = 0
+        self._max_restarts = 3
+        self._restart_delay = 3
+
         # Statistics Cache for low-resource environments
         self._stats_cache = {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
         self._last_stats_time = 0
@@ -860,8 +866,30 @@ allow-flight=false
             # 2. Enviar mensaje de log final
             if not was_stopping:
                 self._log("Server stopped unexpectedly.\n", "error")
+                # Auto-restart on crash
+                if self.auto_restart and self._restart_count < self._max_restarts:
+                    self._restart_count += 1
+                    self._log(
+                        f"Auto-restarting in {self._restart_delay}s "
+                        f"(attempt {self._restart_count}/{self._max_restarts})...\n",
+                        "warning",
+                    )
+                    # Notify frontend about restart attempt
+                    if self.output_callback:
+                        self.output_callback(
+                            {
+                                "type": "auto_restart",
+                                "attempt": self._restart_count,
+                                "max_attempts": self._max_restarts,
+                                "server_id": self.server_id,
+                            }
+                        )
+                    time.sleep(self._restart_delay)
+                    self.start()
+                    return  # Don't send offline status, start() will handle it
             else:
                 self._log("Server stopped.\n", "info")
+                self._restart_count = 0  # Reset on clean stop
 
             # 3. NOTIFICAR AL FRONTEND VIA WEBSOCKET (Explicit event)
             # Esto asegura que el frontend limpie cualquier estado 'stopping' residual.
@@ -906,6 +934,7 @@ allow-flight=false
             )
             self.server_fully_started = True
             self.server_stopping = False
+            self._restart_count = 0  # Reset restart counter on successful start
             # Broadcast explicit status change to online
             if self.output_callback:
                 self.output_callback(

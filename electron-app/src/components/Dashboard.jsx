@@ -346,8 +346,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             }
 
             // Polling Fallback for Logs (If WS is dead/unstable)
-            const isWsConnected = false;
-            if (!isWsConnected && serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
+            if (!isConnected && serverStatus.recent_logs && Array.isArray(serverStatus.recent_logs) && serverStatus.recent_logs.length > 0) {
                 setLocalLogs(prev => {
                     if (prev.length === 0) return serverStatus.recent_logs.slice(-50);
                     const lastPoll = serverStatus.recent_logs[serverStatus.recent_logs.length - 1];
@@ -359,6 +358,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     return prev;
                 });
             }
+            // Sync auto-restart state
+            if (serverStatus?.auto_restart) {
+                setAutoRestart(serverStatus.auto_restart.enabled);
+            }
+
             // Sync tunnel info from polling too
             if (serverStatus?.tunnel) {
                 if (serverStatus.tunnel.active && serverStatus.tunnel.address) {
@@ -399,8 +403,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [tunnelProvider, setTunnelProvider] = useState(defaultProvider);
     const [playitClaimLink, setPlayitClaimLink] = useState(null);
     const [history, setHistory] = useState({ cpu: [], ram: [] });
+    const [autoRestart, setAutoRestart] = useState(false);
 
-    const { subscribe, send } = useWebSocket();
+    const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
     const scrollContainerRef = useRef(null);
     const userScrolledUpRef = useRef(false);
@@ -434,6 +439,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             setTunnelAddress(null);
             setTunnelConnecting(false);
             setPlayitClaimLink(null);
+            return;
+        }
+
+        if (item.type === 'auto_restart') {
+            setLocalLogs(prev => [...prev, {
+                message: `🔄 Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
+                level: 'warning',
+                time: new Date().toLocaleTimeString([], { hour12: false })
+            }]);
             return;
         }
 
@@ -628,6 +642,28 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 )}
                             </div>
                         )}
+
+                        {/* Auto-restart Toggle */}
+                        <button
+                            onClick={async () => {
+                                const newState = !autoRestart;
+                                try {
+                                    await api.setAutoRestart(newState);
+                                    setAutoRestart(newState);
+                                } catch (err) {
+                                    console.error("Failed to toggle auto-restart", err);
+                                }
+                            }}
+                            className={`h-10 px-3 flex items-center gap-2 rounded-sm border text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                autoRestart
+                                    ? 'bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20'
+                                    : 'border-white/10 text-zinc-600 hover:text-white hover:bg-white/5'
+                            }`}
+                            title={autoRestart ? 'Auto-restart on crash: ON' : 'Auto-restart on crash: OFF'}
+                        >
+                            <div className={`w-2 h-2 rounded-full ${autoRestart ? 'bg-green-500 animate-pulse' : 'bg-zinc-600'}`} />
+                            Auto
+                        </button>
                     </div>
                 </div>
 
@@ -806,10 +842,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         setLocalLogs(prev => [...prev, { message: `> ${input}`, level: 'input' }]);
 
                         try {
-                            send(input);
+                            if (isConnected) {
+                                send(input);
+                            } else {
+                                await api.sendCommand(input);
+                            }
                             e.target.elements.cmd.value = '';
                         } catch (err) {
-                            console.error("Failed to send command", err);
+                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }]);
                         }
                     }}
                     className="border-t border-white/5 bg-black/30 p-2 flex"

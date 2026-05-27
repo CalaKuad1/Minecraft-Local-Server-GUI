@@ -1,5 +1,25 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.1 - 2026-05-27 CONSOLE & STABILITY UPDATE
+
+### NEW FEATURES:
+- **Auto-restart on crash** — Server automatically restarts after unexpected shutdown (toggle in Dashboard header, max 3 attempts)
+- **Export console logs** — Download button in Console tab saves logs as .txt file
+- **Search & filter in console** — Search bar and level filter (All/CMD/INF/WRN/ERR) for quick log navigation
+
+### BUG FIXES:
+- **Fixed console tab loading forever** — Input no longer disabled when WebSocket is disconnected; REST API fallback works now
+- **Fixed logs disappearing on tab switch** — Dashboard and Console components stay mounted; log state preserved across panel navigation
+- **Fixed Dashboard mini-console input** — REST API fallback added when WebSocket is disconnected
+- **Fixed polling fallback** — No longer hardcoded to always use polling; now correctly checks WebSocket connection state
+
+### IMPROVEMENTS:
+- Console connection status now shows "Disconnected" (yellow) instead of "Loading..." (gray) when WebSocket is down
+- WebSocket errors now logged to console for easier debugging
+- Improved input usability in Console tab (always enabled, falls back to REST API)
+
+---
+
 ## Version 1.2.0 - 2026-04-30 UI REDESIGN & NEOFORGE
 
 ### UI REDESIGN:
