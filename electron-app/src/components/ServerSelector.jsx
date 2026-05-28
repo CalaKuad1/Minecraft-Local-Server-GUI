@@ -19,6 +19,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [booting, setBooting] = useState(null);
     const dialog = useDialog();
 
     useEffect(() => {
@@ -57,6 +58,21 @@ export default function ServerSelector({ onSelect, onAdd }) {
             return true;
         }
         return false;
+    };
+
+    const handleBoot = async (serverId, e) => {
+        e.stopPropagation();
+        if (await checkConflict(serverId)) return;
+        setBooting(serverId);
+        try {
+            await api.selectServer(serverId);
+            await api.start();
+            loadServers();
+            setTimeout(() => onSelect(serverId), 1500);
+        } catch (err) {
+            console.error("Boot failed", err);
+            setBooting(null);
+        }
     };
 
     const handleSelect = async (id) => {
@@ -186,7 +202,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {recentlyOpened.map((server) => (
-                                        <RecentCard key={server.id} server={server} onClick={() => handleSelect(server.id)} />
+                                        <RecentCard key={server.id} server={server} onClick={() => handleSelect(server.id)} onBoot={(e) => handleBoot(server.id, e)} booting={booting === server.id} />
                                     ))}
                                 </div>
                             </div>
@@ -213,7 +229,9 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                             key={server.id} 
                                             server={server} 
                                             onClick={() => handleSelect(server.id)}
+                                            onBoot={(e) => handleBoot(server.id, e)}
                                             onDelete={(e) => handleDelete(server.id, e)}
+                                            booting={booting === server.id}
                                             t={t}
                                         />
                                     ))}
@@ -282,7 +300,7 @@ function EngineIcon({ type, size = 16, className = "" }) {
     );
 }
 
-function RecentCard({ server, onClick }) {
+function RecentCard({ server, onClick, onBoot, booting }) {
     const isOnline = server.status === 'online';
     
     const engineType = (server.server_type || server.type || 'vanilla').toLowerCase();
@@ -316,6 +334,11 @@ function RecentCard({ server, onClick }) {
                     </span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                    {!isOnline && (
+                        <button onClick={(e) => { e.stopPropagation(); onBoot(e); }} className="px-2 py-0.5 rounded-sm bg-white/10 hover:bg-white text-black transition-colors text-[9px] font-minecraft uppercase tracking-wider flex items-center gap-1">
+                            {booting ? <><div className="w-2 h-2 border border-black/30 border-t-black rounded-full animate-spin"/> Boot</> : <><Play size={8} className="ml-0.5"/> Boot</>}
+                        </button>
+                    )}
                     <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-600'}`} />
                 </div>
             </div>
@@ -323,7 +346,7 @@ function RecentCard({ server, onClick }) {
     );
 }
 
-function ServerCard({ server, onClick, onDelete, t }) {
+function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
     const isOnline = server.status === 'online';
     const isStarting = server.status && server.status !== 'offline' && !isOnline;
 
@@ -365,11 +388,15 @@ function ServerCard({ server, onClick, onDelete, t }) {
                     >
                         <Trash2 size={14} />
                     </button>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <div className="bg-white/10 hover:bg-white/20 border border-white/10 text-white w-7 h-7 rounded-sm flex items-center justify-center transition-colors">
-                            <Play size={12} className="ml-0.5" />
-                        </div>
-                    </div>
+                    {!isOnline && !isStarting && (
+                        <button 
+                            onClick={onBoot}
+                            className="px-2.5 py-1 rounded-sm bg-white/10 hover:bg-white text-black transition-colors text-[9px] font-minecraft uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            title="Boot Server"
+                        >
+                            {booting ? <><div className="w-2 h-2 border border-black/30 border-t-black rounded-full animate-spin"/> Boot</> : <><Play size={8} className="ml-0.5"/> Boot</>}
+                        </button>
+                    )}
                 </div>
             </div>
 

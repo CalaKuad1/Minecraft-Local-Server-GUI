@@ -2409,6 +2409,25 @@ async def check_dns_subdomain(request: Request):
         return {"available": True, "note": f"Could not verify: {e}"}
 
 
+@app.get("/server/online-mode")
+def get_online_mode():
+    if not state or not state.server_handler:
+        return {"online_mode": True}
+    props = state.server_handler.get_server_properties()
+    return {"online_mode": props.get("online-mode", "true") == "true"}
+
+
+@app.post("/server/online-mode")
+async def toggle_online_mode(request: Request):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    body = await request.json()
+    val = "true" if body.get("online_mode", True) else "false"
+    state.server_handler._write_property("online-mode", val)
+    state.broadcast_log_sync(f"Online-mode set to {val}", "info")
+    return {"online_mode": val == "true"}
+
+
 # --- Mods Endpoints ---
 @app.get("/mods/search")
 def search_mods(

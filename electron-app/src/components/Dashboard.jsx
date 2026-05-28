@@ -393,6 +393,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 setDnsSubdomain(data.subdomain);
             }
         }).catch(() => {});
+        api.getOnlineMode().then(data => {
+            if (data) setOnlineMode(data.online_mode);
+        }).catch(() => {});
     }, [serverStatus?.server_id]);
 
     // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
@@ -430,6 +433,8 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [dnsEditing, setDnsEditing] = useState(false);
     const [dnsAvailable, setDnsAvailable] = useState(null);
     const [dnsSubdomain, setDnsSubdomain] = useState('');
+    const [onlineMode, setOnlineMode] = useState(true);
+    const [togglingMode, setTogglingMode] = useState(false);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -629,6 +634,25 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 <span className={`text-[10px] font-bold tracking-widest uppercase ${isOnline ? 'text-primary' : (isStarting || isStopping) ? 'text-yellow-500' : 'text-zinc-500'}`}>
                                     {isStopping ? t('status.stopping') : t(`status.${localStatus}`)}
                                 </span>
+                                <button
+                                    onClick={async () => {
+                                        if (isOnline) return;
+                                        setTogglingMode(true);
+                                        try {
+                                            const r = await api.setOnlineMode(!onlineMode);
+                                            setOnlineMode(r.online_mode);
+                                        } catch(e) { console.error(e); }
+                                        setTogglingMode(false);
+                                    }}
+                                    disabled={isOnline || togglingMode}
+                                    title={onlineMode ? 'Premium (online-mode=true)' : 'Cracked (online-mode=false)'}
+                                    className={`text-[9px] px-1.5 py-0.5 rounded-sm border font-bold uppercase tracking-wider transition-all ${
+                                        onlineMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                    } ${isOnline ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-125'}`}
+                                >
+                                    {togglingMode ? '...' : onlineMode ? 'Premium' : 'Offline'}
+                                </button>
+                            </div>
                             </div>
                             <h2 className="text-2xl font-minecraft text-white tracking-wide">
                                 Minecraft Server

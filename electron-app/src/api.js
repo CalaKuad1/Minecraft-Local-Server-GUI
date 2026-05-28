@@ -51,7 +51,16 @@ export const api = {
     stop: async (force = false) => {
         await fetchJson(`${API_URL}/stop?force=${force}`, { method: 'POST' }, 15000);
     },
-    sendCommand: async (command) => {
+    getOnlineMode: async () => {
+        return await fetchJson(`${API_URL}/server/online-mode`);
+    },
+    setOnlineMode: async (onlineMode) => {
+        return await fetchJson(`${API_URL}/server/online-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ online_mode: onlineMode })
+        });
+    },
         await fetchJson(`${API_URL}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
