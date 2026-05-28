@@ -868,9 +868,10 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 <div className="p-4 font-mono text-xs flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10" ref={scrollContainerRef} onScroll={handleLogScroll}>
                     {localLogs.length > 0 ? (
                         localLogs.map((log, i) => {
-                            const timeStr = log.time
-                                ? (log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString([], { hour12: false }))
-                                : '';
+                            let timeStr = '';
+                            if (log.time) {
+                                timeStr = log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString(undefined, {hour12: false});
+                            }
                             return (
                             <div key={`${i}-${log.message?.slice(0, 20)}`} className="flex items-start font-mono text-[11.5px] leading-relaxed hover:bg-white/5 px-2 py-0.5 rounded transition-colors group">
                                 <div className="w-12 flex-shrink-0 text-white/10 select-none group-hover:text-white/30 transition-colors">
