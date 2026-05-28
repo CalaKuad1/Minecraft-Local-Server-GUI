@@ -716,15 +716,20 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 e.preventDefault();
                                 const v = e.target.elements.sd.value.trim();
                                 if (!v) { setDnsEditing(false); setDnsAvailable(null); return; }
+                                setDnsAvailable(null);
                                 try {
                                     const c = await api.checkDnsSubdomain(v);
-                                    if (!c.available) { setDnsAvailable(false); return; }
+                                    if (c && !c.available) {
+                                        setDnsAvailable(v);
+                                        return;
+                                    }
+                                } catch { /* network error, allow save anyway */ }
+                                try {
                                     const r = await api.setDnsSubdomain(v);
                                     setDnsSubdomain(r.subdomain);
                                     setDnsAddress(r.address);
                                     setDnsEditing(false);
-                                    setDnsAvailable(null);
-                                } catch(err) { /* ignore */ }
+                                } catch(err) { console.error('Failed to set subdomain', err); }
                             }} className="flex items-center gap-1.5 mb-1">
                                 <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
                                 <input name="sd" defaultValue={dnsSubdomain} placeholder="survival" className="w-40 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
@@ -743,7 +748,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 </button>
                             </div>
                         ) : null}
-                        {dnsAvailable === false && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">That name is already in use</div>}
+                        {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">"{dnsAvailable}" is already taken — pick another name</div>}
                         <div>
                             {tunnelAddress === "Check Playit.gg Dashboard" ? <span className="text-sm font-mono font-bold text-orange-400">Panel Playit.gg <button onClick={async () => { const ip = prompt("IP de Playit:"); if (ip) { try { await api.setTunnelAddress(ip); } catch (e) { /* ignore */ } } }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm text-white uppercase cursor-pointer">Escribir IP</button></span>
                             : <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span>}
