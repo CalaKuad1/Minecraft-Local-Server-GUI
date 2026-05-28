@@ -402,6 +402,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [autoTunnel, setAutoTunnel] = useState(
+        localStorage.getItem('autoTunnel') !== 'false'
+    );
     
     // Load preferred provider from localStorage if available, default to pinggy
     const defaultProvider = localStorage.getItem('preferredTunnelProvider') || 'pinggy';
@@ -543,9 +546,17 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     const handleStart = async () => {
         setLoading(true);
-        setLocalStatus('starting'); // Immediate visual feedback
+        setLocalStatus('starting');
         try {
             await api.start();
+            if (autoTunnel) {
+                setTimeout(async () => {
+                    try {
+                        setTunnelConnecting(true);
+                        await api.startTunnel(tunnelRegion, tunnelProvider);
+                    } catch (e) { console.error(e); }
+                }, 2000);
+            }
             if (onRefresh) onRefresh();
         } catch (e) {
             setLocalStatus('offline');
@@ -760,9 +771,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 </>
                             )}
                         </div>
-                        {tunnelAddress && dnsAddress && (
-                            <div className="text-[9px] text-zinc-600 font-mono mt-0.5">via {tunnelAddress}</div>
-                        )}
+                        <div className="flex items-center gap-3 text-[9px] text-zinc-600 font-mono mt-0.5">
+                            <span>Local {status.local_ip || '127.0.0.1'}:{status.port || '25565'}</span>
+                            {tunnelAddress && dnsAddress && (
+                                <span>via {tunnelAddress}</span>
+                            )}
+                            {tunnelAddress && !dnsAddress && (
+                                <span className="text-emerald-500">● DNS</span>
+                            )}
+                        </div>
                     </div>
 
                     <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-zinc-500 hover:text-white rounded-sm transition-colors" title="Open Server Directory">
@@ -838,7 +855,22 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             </div>
                         )}
                         <div className="w-px h-6 bg-white/5"></div>
-                        <span className="text-[10px] text-zinc-600 font-bold">DNS: <span className="text-emerald-400">ON</span> — Config in Settings → Fixed Address</span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    const v = !autoTunnel;
+                                    setAutoTunnel(v);
+                                    localStorage.setItem('autoTunnel', v.toString());
+                                }}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                    autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'
+                                }`}
+                            >
+                                <div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                                Auto-Tunnel
+                            </button>
+                            <span className="text-[10px] text-zinc-600 font-bold">DNS: <span className="text-emerald-400">ON</span></span>
+                        </div>
                     </div>
                 )}
             </div>
