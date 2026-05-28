@@ -2413,7 +2413,7 @@ async def check_dns_subdomain(request: Request):
 def get_online_mode():
     if not state or not state.server_handler:
         return {"online_mode": True}
-    props = state.server_handler.get_server_properties()
+    props = get_server_properties()
     return {"online_mode": props.get("online-mode", "true") == "true"}
 
 
@@ -2423,9 +2423,30 @@ async def toggle_online_mode(request: Request):
         raise HTTPException(status_code=400, detail="Server not configured")
     body = await request.json()
     val = "true" if body.get("online_mode", True) else "false"
-    state.server_handler._write_property("online-mode", val)
+    _write_server_property("online-mode", val)
     state.broadcast_log_sync(f"Online-mode set to {val}", "info")
     return {"online_mode": val == "true"}
+
+
+def _write_server_property(key, value):
+    """Escribir una propiedad individual en server.properties."""
+    if not state or not state.server_handler:
+        return
+    props_path = os.path.join(state.server_handler.server_path, "server.properties")
+    lines = []
+    found = False
+    if os.path.exists(props_path):
+        with open(props_path, "r") as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{key}="):
+                lines[i] = f"{key}={value}\n"
+                found = True
+                break
+    if not found:
+        lines.append(f"{key}={value}\n")
+    with open(props_path, "w") as f:
+        f.writelines(lines)
 
 
 # --- Mods Endpoints ---
