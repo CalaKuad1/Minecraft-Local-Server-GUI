@@ -385,7 +385,13 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     useEffect(() => {
         if (!serverStatus?.server_id) return;
         api.getDnsSubdomain().then(data => {
-            if (data?.address) setDnsAddress(data.address);
+            if (data?.subdomain && !data?.address) {
+                setDnsSubdomain(data.subdomain);
+                setDnsEditing(true);
+            } else if (data?.address) {
+                setDnsAddress(data.address);
+                setDnsSubdomain(data.subdomain);
+            }
         }).catch(() => {});
     }, [serverStatus?.server_id]);
 

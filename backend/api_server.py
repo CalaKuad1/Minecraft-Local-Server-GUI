@@ -2320,14 +2320,17 @@ def get_dns_subdomain():
     slug = _get_server_slug(state)
     settings = _get_dns_settings(state)
     domain = ""
+
+    # Si no hay subdominio personalizado, generar uno único
+    if not slug:
+        folder = os.path.basename(state.server_handler.server_path.rstrip("/\\"))
+        folder_slug = "".join(c if c.isalnum() else "-" for c in folder.lower()).strip("-") or "mc"
+        uid = (state.server_handler.server_id or "x")[:5]
+        slug = f"{folder_slug}-{uid}"
+
     if settings["enabled"]:
-        try:
-            app = state.config_manager.config.get("app_settings", {})
-            url = settings["url"]
-            # Extraer dominio del Worker URL o usar variables
-            domain = f"{slug}.play.ariser.app"
-        except Exception:
-            pass
+        domain = f"{slug}.play.ariser.app"
+
     return {
         "subdomain": slug,
         "address": domain if settings["enabled"] else "",
