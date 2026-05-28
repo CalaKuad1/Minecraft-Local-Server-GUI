@@ -1728,7 +1728,7 @@ def _get_dns_settings(state):
     """Lee los settings del proxy DNS desde la config de la app."""
     try:
         app = state.config_manager.config.get("app_settings", {})
-        enabled = app.get("dns_proxy_enabled", False)
+        enabled = app.get("dns_proxy_enabled", True)
         url = app.get("dns_proxy_url", "")
         # Siempre usar la URL por defecto
         if not url:

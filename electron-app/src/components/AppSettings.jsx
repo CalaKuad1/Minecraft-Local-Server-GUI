@@ -26,6 +26,7 @@ export default function AppSettings({ isOpen, onClose }) {
         autoStart: false,
         minimizeToTray: true,
         checkUpdates: true,
+        dns_proxy_enabled: true,
     });
     const [activeSection, setActiveSection] = useState('general');
     const [saving, setSaving] = useState(false);
@@ -243,7 +244,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                     <ToggleSetting
                                         label="Enable Fixed Address"
                                         description="Auto-update DNS when tunnel starts. Your server gets a permanent domain like survival.play.ariser.com"
-                                        value={settings.dns_proxy_enabled || false}
+                                        value={settings.dns_proxy_enabled}
                                         onChange={(v) => updateSetting('dns_proxy_enabled', v)}
                                     />
 
