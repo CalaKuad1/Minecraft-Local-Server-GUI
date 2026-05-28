@@ -371,9 +371,23 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 } else if (!tunnelConnecting && tunnelAddress) {
                     setTunnelAddress(null);
                 }
+                if (serverStatus.tunnel.dns_address) {
+                    setDnsAddress(serverStatus.tunnel.dns_address);
+                }
+            }
+            if (serverStatus?.auto_restart) {
+                setAutoRestart(serverStatus.auto_restart.enabled);
             }
         }
     }, [serverStatus]);
+
+    // Load DNS subdomain
+    useEffect(() => {
+        if (!serverStatus?.server_id) return;
+        api.getDnsSubdomain().then(data => {
+            if (data?.address) setDnsAddress(data.address);
+        }).catch(() => {});
+    }, [serverStatus?.server_id]);
 
     // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
     useEffect(() => {
@@ -404,6 +418,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [playitClaimLink, setPlayitClaimLink] = useState(null);
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
+    const [dnsAddress, setDnsAddress] = useState(null);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -444,10 +459,15 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
         if (item.type === 'auto_restart') {
             setLocalLogs(prev => [...prev, {
-                message: `­ƒöä Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
+                message: `🔄 Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
                 level: 'warning',
                 time: new Date().toLocaleTimeString([], { hour12: false })
             }]);
+            return;
+        }
+
+        if (item.type === 'dns_updated') {
+            setDnsAddress(item.address);
             return;
         }
 
@@ -701,6 +721,12 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 <span className={tunnelAddress ? "text-orange-400 select-all" : "select-all"}>
                                     {tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
                                 </span>
+                            )}
+                            {dnsAddress && tunnelAddress && (
+                                <div className="text-sm font-mono text-emerald-400 font-bold mt-1 select-all">
+                                    {dnsAddress}
+                                    <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="ml-2 text-[10px] text-zinc-500 hover:text-white align-middle">Copy</button>
+                                </div>
                             )}
                         </div>
                     </div>
