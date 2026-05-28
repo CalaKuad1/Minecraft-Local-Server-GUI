@@ -1724,7 +1724,7 @@ def _get_dns_settings(state):
         url = app.get("dns_proxy_url", "")
         # Fallback URL por defecto si no hay URL configurada
         if enabled and not url:
-            url = "https://mlsg-dns-worker.calakuad.workers.dev"
+            url = "https://mlsg-dns-worker.aitorsr044.workers.dev"
         return {
             "enabled": enabled,
             "url": url,
