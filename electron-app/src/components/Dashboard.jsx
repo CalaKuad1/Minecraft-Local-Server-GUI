@@ -412,7 +412,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [dnsSubdomain, setDnsSubdomain] = useState('');
     const [dnsEditing, setDnsEditing] = useState(false);
     const [dnsAvailable, setDnsAvailable] = useState(null);
-    const [dnsChecking, setDnsChecking] = useState(false);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
