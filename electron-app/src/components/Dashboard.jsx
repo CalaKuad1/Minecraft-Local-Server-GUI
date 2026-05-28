@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe } from './ui/PixelIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -156,7 +156,7 @@ const PlayitClaimModal = ({ link, onClose, t }) => {
                 <div className="p-8 space-y-6 flex flex-col items-center text-center">
                     <p className="text-gray-400 text-xs leading-relaxed font-medium uppercase tracking-wider opacity-80 mb-2">
                         {link.includes('manage/tunnels') 
-                            ? "Tu agente de Playit ya está conectado. Sin embargo, no tienes ningún túnel configurado para Minecraft. Por favor, abre el panel de Playit, crea un túnel para Minecraft Java y copia tu nueva IP."
+                            ? "Tu agente de Playit ya est├í conectado. Sin embargo, no tienes ning├║n t├║nel configurado para Minecraft. Por favor, abre el panel de Playit, crea un t├║nel para Minecraft Java y copia tu nueva IP."
                             : t('dashboard.playit.click_link', 'Click the link below to link this server to your Playit.gg account. Once authorized, the tunnel will connect automatically.')}
                     </p>
                     <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full px-5 py-4 bg-blue-500 hover:bg-blue-400 text-black font-minecraft tracking-widest text-sm uppercase transition-all rounded-sm shadow-[0_0_15px_rgba(59,130,246,0.5)] outline outline-offset-2 outline-transparent hover:outline-blue-500/50">
@@ -305,7 +305,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     // Sync with polling props
     useEffect(() => {
-        // Solo sincronizar si NO estamos en medio de un proceso de detención controlado localmente
+        // Solo sincronizar si NO estamos en medio de un proceso de detenci├│n controlado localmente
         if (serverStatus?.status) {
             // Recharts Historical Tracing (Hardware)
             setHistory(prev => {
@@ -370,10 +370,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     setTunnelConnecting(false);
                 } else if (!tunnelConnecting && tunnelAddress) {
                     setTunnelAddress(null);
-                    setTunnelConnecting(false);
-                }
-                if (serverStatus.tunnel.dns_address) {
-                    setDnsAddress(serverStatus.tunnel.dns_address);
                 }
             }
         }
@@ -401,10 +397,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [tunnelAddress, setTunnelAddress] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
-    const [showAdvanced, setShowAdvanced] = useState(false);
-    const [autoTunnel, setAutoTunnel] = useState(
-        localStorage.getItem('autoTunnel') !== 'false'
-    );
     
     // Load preferred provider from localStorage if available, default to pinggy
     const defaultProvider = localStorage.getItem('preferredTunnelProvider') || 'pinggy';
@@ -412,10 +404,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [playitClaimLink, setPlayitClaimLink] = useState(null);
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
-    const [dnsAddress, setDnsAddress] = useState(null);
-    const [dnsSubdomain, setDnsSubdomain] = useState('');
-    const [dnsEditing, setDnsEditing] = useState(false);
-    const [dnsAvailable, setDnsAvailable] = useState(null);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -456,15 +444,10 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
         if (item.type === 'auto_restart') {
             setLocalLogs(prev => [...prev, {
-                message: `🔄 Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
+                message: `­ƒöä Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
                 level: 'warning',
-                time: new Date().toLocaleTimeString(undefined, { hour12: false })
+                time: new Date().toLocaleTimeString([], { hour12: false })
             }]);
-            return;
-        }
-
-        if (item.type === 'dns_updated') {
-            setDnsAddress(item.address);
             return;
         }
 
@@ -493,18 +476,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     useEffect(() => {
         return subscribe('dashboard', handleWsMessage);
     }, [subscribe, handleWsMessage]);
-
-    // Cargar subdominio DNS al montar
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const data = await api.getDnsSubdomain();
-                if (data?.subdomain) setDnsSubdomain(data.subdomain);
-                if (data?.address) setDnsAddress(data.address);
-            } catch (e) {}
-        };
-        load();
-    }, [serverStatus?.server_id]);
 
     // Robust Auto-scroll logs
     useEffect(() => {
@@ -546,17 +517,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     const handleStart = async () => {
         setLoading(true);
-        setLocalStatus('starting');
+        setLocalStatus('starting'); // Immediate visual feedback
         try {
             await api.start();
-            if (autoTunnel) {
-                setTimeout(async () => {
-                    try {
-                        setTunnelConnecting(true);
-                        await api.startTunnel(tunnelRegion, tunnelProvider);
-                    } catch (e) { console.error(e); }
-                }, 2000);
-            }
             if (onRefresh) onRefresh();
         } catch (e) {
             setLocalStatus('offline');
@@ -565,9 +528,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     };
 
     const handleStop = async () => {
-        // Si ya se está deteniendo, la segunda pulsación es un Force Kill
+        // Si ya se est├í deteniendo, la segunda pulsaci├│n es un Force Kill
         if (isStopping) {
-            if (confirm("¿El servidor no responde? ¿Quieres forzar el cierre inmediatemente? (Podría perderse el progreso no guardado)")) {
+            if (confirm("┬┐El servidor no responde? ┬┐Quieres forzar el cierre inmediatemente? (Podr├¡a perderse el progreso no guardado)")) {
                 setLoading(true);
                 try {
                     await api.stop(true); // force = true
@@ -705,140 +668,115 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 </div>
 
             {/* Local IP Info + Make Public */}
-            <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
-                {/* Main row */}
-                <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-sm border ${tunnelAddress ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
+            <div className="flex items-center gap-4 p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
+                <div className="flex items-center gap-3 flex-1">
+                    <div className="p-2 rounded-sm border border-white/10 bg-white/5 text-zinc-300">
                         <Terminal size={16} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                                {tunnelAddress ? 'Public Server' : (dnsAddress ? 'Fixed Address' : 'Local Host')}
-                            </div>
-                            {tunnelAddress && dnsAddress && (
-                                <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">ONLINE</span>
-                            )}
-                            {!tunnelAddress && dnsAddress && (
-                                <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-zinc-500 rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">OFFLINE</span>
-                            )}
+                    <div>
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
+                            {tunnelAddress ? 'Public Gateway' : 'Local Host'}
                         </div>
-                        {/* DNS address - always visible when configured */}
-                        {dnsAddress && (
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-mono font-bold text-emerald-400 select-all">{dnsAddress}</span>
-                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors" title="Copy">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                </button>
-                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Edit subdomain">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                </button>
-                            </div>
-                        )}
-                        {/* Tunnel address or edit form */}
-                        <div className="flex items-center gap-2">
-                            {dnsEditing ? (
-                                <form onSubmit={async (e) => {
-                                    e.preventDefault();
-                                    const val = e.target.elements.subdomain.value.trim();
-                                    if (!val) { setDnsEditing(false); setDnsAvailable(null); return; }
-                                    try {
-                                        const check = await api.checkDnsSubdomain(val);
-                                        if (!check.available) { setDnsAvailable(false); return; }
-                                        const result = await api.setDnsSubdomain(val);
-                                        setDnsSubdomain(result.subdomain);
-                                        setDnsAddress(result.address);
-                                        setDnsEditing(false);
-                                        setDnsAvailable(null);
-                                    } catch (err) { console.error(err); }
-                                }} className="flex items-center gap-1">
-                                    <input name="subdomain" defaultValue={dnsSubdomain} placeholder="survival" className="w-40 bg-black/40 border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm font-mono text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500" autoFocus />
-                                    <span className="text-sm font-mono text-zinc-600">.play.ariser.app</span>
-                                    <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">✓</button>
-                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors">✕</button>
-                                </form>
+                        <div className="text-sm font-mono text-white font-bold leading-none">
+                            {tunnelAddress === "Check Playit.gg Dashboard" ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-orange-400">Panel Playit.gg</span>
+                                    <button 
+                                        onClick={async () => {
+                                            const ip = prompt("Por favor, introduce la IP de tu servidor de Minecraft Java que te da Playit (ej. nombre.auto.playit.gg):");
+                                            if (ip) {
+                                                try {
+                                                    await api.setTunnelAddress(ip);
+                                                } catch (err) {
+                                                    console.error("Failed to set IP", err);
+                                                }
+                                            }
+                                        }}
+                                        className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer"
+                                    >
+                                        Escribir IP
+                                    </button>
+                                </div>
                             ) : (
-                                <span className={`text-sm font-mono font-bold leading-none select-all ${
-                                    tunnelAddress === "Check Playit.gg Dashboard" ? 'text-orange-400' :
-                                    tunnelAddress ? 'text-orange-400' : 'text-white'
-                                }`}>
-                                    {tunnelAddress === "Check Playit.gg Dashboard" ? (
-                                        <span className="flex items-center gap-2">
-                                            Panel Playit.gg
-                                            <button onClick={async () => {
-                                                const ip = prompt("IP de Playit:");
-                                                if (ip) { try { await api.setTunnelAddress(ip); } catch (err) {} }
-                                            }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer">Escribir IP</button>
-                                        </span>
-                                    ) : tunnelAddress ? tunnelAddress : `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
+                                <span className={tunnelAddress ? "text-orange-400 select-all" : "select-all"}>
+                                    {tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
                                 </span>
                             )}
                         </div>
-                        {/* Local IP */}
-                        {(tunnelAddress || dnsAddress) && (
-                            <div className="flex items-center gap-3 text-[9px] text-zinc-600 font-mono mt-0.5">
-                                <span>Local {status.local_ip || '127.0.0.1'}:{status.port || '25565'}</span>
-                                {tunnelAddress && (
-                                    <span>via {tunnelAddress}</span>
-                                )}
-                            </div>
-                        )}
                     </div>
-                            {tunnelAddress && dnsAddress && (
-                                <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">DNS</span>
-                            )}
+                </div>
+
+                <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-zinc-500 hover:text-white rounded-sm transition-colors hover:border-white/10" title="Open Server Directory">
+                    <FolderOpen size={16} />
+                </button>
+
+                <div className="flex gap-2 h-full items-stretch">
+                    <div className="w-28 relative z-50 rounded-sm border border-white/10 hover:border-white/20 transition-colors bg-white/5">
+                        <Select value={tunnelProvider} onChange={(val) => {
+                            setTunnelProvider(val);
+                            localStorage.setItem('preferredTunnelProvider', val);
+                        }} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'pinggy', label: 'Pinggy (Recomendado)' }, { value: 'playit', label: 'Playit.gg' }]} />
+                    </div>
+                    {tunnelProvider === 'pinggy' && (
+                        <div className="w-24 relative z-50 rounded-sm border border-white/10 hover:border-white/20 transition-colors bg-white/5 animate-in fade-in slide-in-from-left-2 duration-300">
+                            <Select value={tunnelRegion} onChange={setTunnelRegion} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'eu', label: 'EU ­ƒç¬­ƒç║' }, { value: 'us', label: 'US ­ƒç║­ƒç©' }, { value: 'ap', label: 'Asia ­ƒîÅ' }]} />
                         </div>
-                        <div className="flex items-center gap-2">
-                            {dnsEditing ? (
-                                <form onSubmit={async (e) => {
-                                    e.preventDefault();
-                                    const val = e.target.elements.subdomain.value.trim();
-                                    if (!val) { setDnsEditing(false); setDnsAvailable(null); return; }
-                                    try {
-                                        const check = await api.checkDnsSubdomain(val);
-                                        if (!check.available) { setDnsAvailable(false); return; }
-                                        const result = await api.setDnsSubdomain(val);
-                                        setDnsSubdomain(result.subdomain);
-                                        setDnsAddress(result.address);
-                                        setDnsEditing(false);
-                                        setDnsAvailable(null);
-                                    } catch (err) { console.error(err); }
-                                }} className="flex items-center gap-1">
-                                    <input name="subdomain" defaultValue={dnsSubdomain} placeholder="survival" className="w-40 bg-black/40 border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm font-mono text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500" autoFocus />
-                                    <span className="text-sm font-mono text-zinc-600">.play.ariser.app</span>
-                                    <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">✓</button>
-                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors">✕</button>
-                                </form>
-                            ) : (
-                                <>
-                                    <span className={`text-sm font-mono font-bold leading-none select-all ${
-                                        tunnelAddress === "Check Playit.gg Dashboard" ? 'text-orange-400' :
-                                        dnsAddress ? 'text-emerald-400' :
-                                        tunnelAddress ? 'text-orange-400' : 'text-white'
-                                    }`}>
-                                        {tunnelAddress === "Check Playit.gg Dashboard" ? (
-                                            <span className="flex items-center gap-2">
-                                                Panel Playit.gg
-                                                <button onClick={async () => {
-                                                    const ip = prompt("IP de Playit:");
-                                                    if (ip) { try { await api.setTunnelAddress(ip); } catch (err) {} }
-                                                }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer">Escribir IP</button>
-                                            </span>
-                                        ) : dnsAddress ? dnsAddress : tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
-                                    </span>
-                                    {dnsAddress && (
-                                        <>
-                                            <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors" title="Copy">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                            </button>
-                                            <button onClick={() => setDnsEditing(true)} className="p-1.5 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Edit subdomain">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                            </button>
-                                        </>
-                                    )}
-                                </>
-                            )}
+                    )}
+                </div>
+
+                <button
+                    onClick={async () => {
+                        try {
+                            if (tunnelAddress) {
+                                await api.stopTunnel();
+                                setTunnelAddress(null);
+                                setTunnelConnecting(false);
+                                setPlayitClaimLink(null);
+                            } else {
+                                setTunnelConnecting(true);
+                                setPlayitClaimLink(null);
+                                console.log('[Dashboard] Starting tunnel with region:', tunnelRegion, 'provider:', tunnelProvider);
+                                const result = await api.startTunnel(tunnelRegion, tunnelProvider);
+                                console.log('[Dashboard] Tunnel start result:', result);
+                                
+                                // Automatically save Pinggy provider selection since it's the most reliable option now
+                                if (tunnelProvider === 'pinggy') {
+                                    localStorage.setItem('preferredTunnelProvider', 'pinggy');
+                                }
+                                // Note: tunnelConnecting will be set to false by polling or WS event
+                            }
+                        } catch (err) {
+                            console.error('[Dashboard] Tunnel error:', err);
+                            setTunnelConnecting(false);
+                            // Get the error message from the response if possible
+                            const errorMsg = err.response?.data?.detail || err.message || "Unknown error";
+                            // Show error in logs
+                            setLocalLogs(prev => [...prev, {
+                                message: `ÔØî Tunnel error: ${errorMsg}`,
+                                level: 'error',
+                                time: new Date().toISOString()
+                            }]);
+                            alert(`Error de t├║nel: ${errorMsg}`);
+                        }
+                    }}
+                    disabled={tunnelConnecting && !tunnelAddress}
+                    className={`px-4 py-2 border rounded-sm text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all group ${tunnelAddress ? 'bg-transparent border-red-500/20 text-red-400 hover:bg-red-500/10' : tunnelConnecting ? 'bg-transparent border-yellow-500/20 text-yellow-400' : 'bg-transparent border-white/10 text-zinc-400 hover:text-white hover:border-white/30'}`}
+                >
+                    {tunnelAddress ? (<><Square size={14} className="group-hover:fill-current" /> Stop Public</>) : tunnelConnecting ? (<><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>) : (<><Globe size={14} /> Make Public</>)}
+                </button>
+
+                <div className="relative group">
+                    <button onClick={() => setShowPublicModal(true)} className="p-2 rounded-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-400 hover:text-white transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
+                    </button>
+
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-black/90 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl z-50">
+                        <div className="text-sm text-white font-medium mb-1 uppercase font-minecraft tracking-widest">Public Server</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">
+                            Click to make your server accessible from the Internet.
                         </div>
+                        <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-black/90 rotate-45 border-r border-b border-white/10"></div>
                     </div>
                 </div>
             </div>
@@ -862,10 +800,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 <div className="p-4 font-mono text-xs flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10" ref={scrollContainerRef} onScroll={handleLogScroll}>
                     {localLogs.length > 0 ? (
                         localLogs.map((log, i) => {
-                            let timeStr = '';
-                            if (log.time) {
-                                timeStr = log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString(undefined, {hour12: false});
-                            }
+                            const timeStr = log.time
+                                ? (log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString([], { hour12: false }))
+                                : '';
                             return (
                             <div key={`${i}-${log.message?.slice(0, 20)}`} className="flex items-start font-mono text-[11.5px] leading-relaxed hover:bg-white/5 px-2 py-0.5 rounded transition-colors group">
                                 <div className="w-12 flex-shrink-0 text-white/10 select-none group-hover:text-white/30 transition-colors">
@@ -912,7 +849,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             }
                             e.target.elements.cmd.value = '';
                         } catch (err) {
-                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString(undefined, { hour12: false }) }]);
+                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }]);
                         }
                     }}
                     className="border-t border-white/5 bg-black/30 p-2 flex"
