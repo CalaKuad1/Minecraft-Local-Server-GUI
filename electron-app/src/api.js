@@ -330,6 +330,14 @@ export const api = {
     openModsFolder: async () => {
         return await fetchJson(`${API_URL}/mods/open-folder`, { method: 'POST' });
     },
+    importMod: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return await fetchJson(`${API_URL}/mods/import`, {
+            method: 'POST',
+            body: formData
+        }, 30000);
+    },
 
     // --- Server Appearance ---
     uploadServerIcon: async (file) => {

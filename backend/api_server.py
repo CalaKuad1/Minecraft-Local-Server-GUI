@@ -2541,6 +2541,20 @@ def open_mods_folder():
     return {"message": "Folder opened"}
 
 
+@app.post("/mods/import")
+async def import_mod(file: UploadFile = File(...)):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    mods_path = os.path.join(state.server_handler.server_path, "mods")
+    if not os.path.exists(mods_path):
+        os.makedirs(mods_path)
+    dest = os.path.join(mods_path, file.filename)
+    with open(dest, "wb") as f:
+        f.write(await file.read())
+    state.broadcast_log_sync(f"📦 Mod imported: {file.filename}", "info")
+    return {"status": "imported", "filename": file.filename}
+
+
 @app.post("/system/shutdown")
 def shutdown_app():
     logging.info("Shutdown request received")

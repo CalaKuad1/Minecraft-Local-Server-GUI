@@ -205,12 +205,27 @@ export default function Mods({ status, onOpenWizard }) {
                 </div>
                 <button
                     onClick={() => api.openModsFolder()}
-                    className="px-4 py-2 border border-transparent hover:border-white/10 rounded-md font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 ml-auto"
+                    className="px-4 py-2 border border-transparent hover:border-white/10 rounded-md font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
                     title="Open Mods Folder"
                 >
                     <HardDrive size={18} />
                     Folder
                 </button>
+                <label className="px-4 py-2 border border-transparent hover:border-white/10 rounded-md font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 cursor-pointer ml-1">
+                    <Plus size={18} />
+                    Import
+                    <input type="file" accept=".jar" className="hidden" onChange={async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        try {
+                            await api.importMod(file);
+                            loadInstalledMods();
+                            e.target.value = '';
+                        } catch (err) {
+                            console.error('Import failed', err);
+                        }
+                    }} />
+                </label>
             </div>
 
             {(activeTab === 'browse' || activeTab === 'modpacks') && (
