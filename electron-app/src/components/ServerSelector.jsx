@@ -312,9 +312,9 @@ function RecentCard({ server, onClick, onBoot, booting }) {
     else if (engineType.includes('vanilla')) engineColor = 'text-emerald-400';
 
     return (
-        <button 
+        <div
             onClick={onClick}
-            className="flex flex-col items-start p-4 bg-[#0a0a0a]/60 backdrop-blur-md border border-white/5 rounded-sm hover:bg-white/[0.02] hover:border-white/10 transition-all duration-200 group text-left"
+            className="flex flex-col items-start p-4 bg-[#0a0a0a]/60 backdrop-blur-md border border-white/5 rounded-sm hover:bg-white/[0.02] hover:border-white/10 transition-all duration-200 group cursor-pointer text-left"
         >
             <div className="flex items-center gap-3 w-full mb-3">
                 <div className={`p-1.5 rounded-sm border ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
@@ -342,7 +342,7 @@ function RecentCard({ server, onClick, onBoot, booting }) {
                     <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-600'}`} />
                 </div>
             </div>
-        </button>
+        </div>
     );
 }
 

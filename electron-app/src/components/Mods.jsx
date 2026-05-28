@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Search, Download, Trash2, Package, RefreshCw, ExternalLink, HardDrive } from './ui/PixelIcons';
+import { Search, Download, Trash2, Package, RefreshCw, ExternalLink, HardDrive, Plus } from './ui/PixelIcons';
 import { useDialog } from './ui/DialogContext';
 import { Select } from './ui/Select';
 import { useWebSocket } from '../contexts/WebSocketContext';
