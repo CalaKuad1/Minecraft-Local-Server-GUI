@@ -61,6 +61,7 @@ export const api = {
             body: JSON.stringify({ online_mode: onlineMode })
         });
     },
+    sendCommand: async (command) => {
         await fetchJson(`${API_URL}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

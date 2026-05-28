@@ -641,7 +641,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                         try {
                                             const r = await api.setOnlineMode(!onlineMode);
                                             setOnlineMode(r.online_mode);
-                                        } catch(e) { console.error(e); }
+                                        } catch (e) {
+                                            console.error(e);
+                                        }
                                         setTogglingMode(false);
                                     }}
                                     disabled={isOnline || togglingMode}
@@ -855,7 +857,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} />
                 <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} />
                 <StatCard icon={Activity} label={t('dashboard.uptime')} value={status.uptime || '--'} sublabel={t('dashboard.uptime_sub')} />
-            </div>
             </div>
 
             {/* Mini Console (Real-time via WS) */}
