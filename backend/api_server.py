@@ -2253,9 +2253,7 @@ def start_tunnel(
                 state.broadcast_log_sync("🔴 Tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_disconnected"})
                 state.tunnel_address = None
-                state.dns_address = None
-                # Clean up DNS record
-                _delete_dns_record_proxy(state)
+                # Keep DNS record — subdomain stays reserved for this server
 
             except Exception as e:
                 logging.exception(f"Tunnel error: {e}")
