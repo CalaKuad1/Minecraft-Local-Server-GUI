@@ -376,7 +376,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     setDnsAddress(serverStatus.tunnel.dns_address);
                 }
             }
-            }
         }
     }, [serverStatus]);
 
