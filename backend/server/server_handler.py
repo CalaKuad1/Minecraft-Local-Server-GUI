@@ -1279,6 +1279,22 @@ allow-flight=false
         # ... (rest of the code remains the same)
         return None
 
+    def get_server_properties(self):
+        """Parses server.properties into a dict."""
+        props = {}
+        props_file = os.path.join(self.server_path, "server.properties")
+        if os.path.exists(props_file):
+            try:
+                with open(props_file, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            key, value = line.split("=", 1)
+                            props[key.strip()] = value.strip()
+            except Exception as e:
+                self._log(f"Error reading server.properties: {e}", "error")
+        return props
+
     def _write_property(self, key, value):
         """Escribir una propiedad individual en server.properties."""
         props_path = os.path.join(self.server_path, "server.properties")

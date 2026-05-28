@@ -655,7 +655,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                     {togglingMode ? '...' : onlineMode ? 'Premium' : 'Offline'}
                                 </button>
                             </div>
-                            </div>
                             <h2 className="text-2xl font-minecraft text-white tracking-wide">
                                 Minecraft Server
                             </h2>
@@ -858,6 +857,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} />
                 <StatCard icon={Activity} label={t('dashboard.uptime')} value={status.uptime || '--'} sublabel={t('dashboard.uptime_sub')} />
             </div>
+            </div>
 
             {/* Mini Console (Real-time via WS) */}
             <div className="mt-8 h-80 flex-none bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
@@ -957,6 +957,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     />
                 )}
             </AnimatePresence>
-        </div >
+        </div>
     );
 }
