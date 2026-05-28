@@ -28,7 +28,26 @@
 
 ---
 
-## What's New in v1.2.1
+## What's New in v1.3.0
+
+### Fixed Server Addresses (DNS Proxy)
+- **Permanent domain for your server** — `survival.play.yourdomain.com` always works, even when the tunnel IP changes
+- Deploy the included Cloudflare Worker proxy (private repo) with your API keys
+- The app automatically updates the DNS record every time the tunnel starts
+- Configure it in Settings → Cloudflare
+
+<details>
+<summary><strong>Earlier: v1.2.2 — Console Hotfix</strong></summary>
+
+- **Console polling fallback** — Console tab fetches logs via REST API when WebSocket is disconnected
+- **Fixed WebSocket 404** — `wsproto` dependency was missing from the built .exe
+
+</details>
+
+---
+
+<details>
+<summary><strong>Earlier: v1.2.1 — Console & Stability</strong></summary>
 
 ### Auto-Restart on Crash
 - Server automatically restarts after unexpected shutdowns — toggle it on/off from the Dashboard header
@@ -107,6 +126,7 @@
 - **Real-time stats** — CPU, RAM, and uptime monitoring with sparkline graphs
 - **Auto-restart** — Toggle to automatically restart server on crash (max 3 attempts)
 - **Public Server** — Share your server globally via SSH tunnel (Pinggy/Playit)
+- **Fixed Address (DNS)** — Permanent domain via Cloudflare proxy (e.g. `survival.play.yourdomain.com`)
 - **Region Selection** — EU, US, and Asia for best latency
 - **Local IP display** — Easy LAN connection for friends
 - **Quick command input** — Send commands from dashboard with WebSocket/REST fallback

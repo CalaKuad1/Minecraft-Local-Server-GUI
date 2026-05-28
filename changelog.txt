@@ -1,5 +1,21 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.3.0 - 2026-05-27 FIXED ADDRESSES & DNS PROXY
+
+### NEW FEATURE: Fixed Server Addresses
+- **DNS Proxy integration** — Server gets a permanent domain (e.g. `survival.play.yourdomain.com`) even when the tunnel IP changes
+- **Cloudflare Worker proxy** — Custom proxy handles Cloudflare API calls without exposing API keys in the open-source code
+- **Auto-update on tunnel start** — DNS SRV record automatically updated when Pinggy tunnel starts
+- **Auto-cleanup on tunnel stop** — DNS record removed when tunnel is closed
+- **Settings UI** — New "Cloudflare" section in App Settings: enable/disable, proxy URL, auth key
+
+### How it works
+- Deploy the included `mc-dns-proxy` Cloudflare Worker (private repo) with your API keys
+- Configure the proxy URL + auth key in MLSG Settings
+- Your friends always connect to the same address, regardless of tunnel IP changes
+
+---
+
 ## Version 1.2.2 - 2026-05-27 CONSOLE HOTFIX
 
 ### CRITICAL FIX:

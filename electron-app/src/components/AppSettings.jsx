@@ -69,6 +69,7 @@ export default function AppSettings({ isOpen, onClose }) {
         { id: 'general', label: t('settings.general'), Icon: Settings },
         { id: 'language', label: t('settings.language'), Icon: Globe },
         { id: 'appearance', label: t('settings.appearance'), Icon: Palette },
+        { id: 'dns', label: 'Cloudflare', Icon: Globe },
         { id: 'about', label: t('settings.about'), Icon: Info },
     ];
 
@@ -233,6 +234,52 @@ export default function AppSettings({ isOpen, onClose }) {
                             </div>
                         )}
 
+                        {activeSection === 'dns' && (
+                            <div>
+                                <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">DNS Proxy</h2>
+                                <p className="text-xs text-zinc-600 mb-6">Configure a Cloudflare DNS proxy for fixed server addresses via tunnels.</p>
+
+                                <div className="space-y-5">
+                                    <ToggleSetting
+                                        label="Enable DNS Proxy"
+                                        description="Automatically update a fixed domain when the tunnel starts."
+                                        value={settings.dns_proxy_enabled || false}
+                                        onChange={(v) => updateSetting('dns_proxy_enabled', v)}
+                                    />
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">Proxy URL</label>
+                                        <input
+                                            type="text"
+                                            value={settings.dns_proxy_url || ''}
+                                            onChange={(e) => updateSetting('dns_proxy_url', e.target.value)}
+                                            placeholder="https://mc-dns.tudominio.workers.dev"
+                                            className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-white/30 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">Auth Key</label>
+                                        <input
+                                            type="password"
+                                            value={settings.dns_proxy_auth || ''}
+                                            onChange={(e) => updateSetting('dns_proxy_auth', e.target.value)}
+                                            placeholder="••••••••••••"
+                                            className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-white/30 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm">
+                                        <p className="text-[10px] text-zinc-500 leading-relaxed font-mono">
+                                            Your server will get a fixed address like{' '}
+                                            <span className="text-emerald-400">survival.play.yourdomain.com</span>
+                                            {' '}even when the tunnel IP changes.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {activeSection === 'about' && (
                             <div>
                                 <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-6">{t('settings.about_settings.title')}</h2>
@@ -240,7 +287,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                 <div className="space-y-4">
                                     <div className="bg-white/[0.02] border border-white/5 rounded-md p-5">
                                         <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">Minecraft Server GUI</div>
-                                        <div className="text-xs font-mono text-zinc-500 mb-4">v1.1.9</div>
+                                        <div className="text-xs font-mono text-zinc-500 mb-4">v1.3.0</div>
                                         <p className="text-xs text-zinc-500 leading-relaxed">
                                             A professional server management tool for Minecraft servers.
                                             Supports Vanilla, Paper, Spigot, Fabric, Forge, and NeoForge server types.

@@ -1704,6 +1704,78 @@ def create_world_backup(req: WorldBackupRequest):
     return {"status": "started", "name": backup_name}
 
 
+# --- DNS Proxy Helper ---
+def _get_server_slug(state):
+    """Genera un slug a partir del nombre del servidor para usar como subdominio."""
+    if not state or not state.server_handler:
+        return "minecraft"
+    folder_name = os.path.basename(state.server_handler.server_path.rstrip("/\\"))
+    # Limpiar: solo letras, números, guiones
+    slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in folder_name.lower())
+    slug = slug.strip("-")
+    return slug if slug else "minecraft"
+
+
+def _get_dns_settings(state):
+    """Lee los settings del proxy DNS desde la config de la app."""
+    try:
+        app = state.config_manager.config.get("app_settings", {})
+        return {
+            "enabled": app.get("dns_proxy_enabled", False),
+            "url": app.get("dns_proxy_url", ""),
+            "auth": app.get("dns_proxy_auth", ""),
+        }
+    except Exception:
+        return {"enabled": False, "url": "", "auth": ""}
+
+
+def _update_dns_record_proxy(state):
+    """Llama al proxy DNS para crear/actualizar el registro SRV."""
+    settings = _get_dns_settings(state)
+    if not settings["enabled"] or not settings["url"] or not state.tunnel_address:
+        return
+    try:
+        slug = _get_server_slug(state)
+        import requests as req
+        req.post(
+            settings["url"],
+            json={
+                "subdomain": slug,
+                "target": state.tunnel_address,
+                "action": "create",
+                "auth": settings["auth"],
+            },
+            timeout=5,
+        )
+        state.broadcast_log_sync(
+            f"🌐 DNS updated: {slug} → {state.tunnel_address}", "info"
+        )
+    except Exception as e:
+        state.broadcast_log_sync(f"⚠️ DNS update failed: {e}", "warning")
+
+
+def _delete_dns_record_proxy(state):
+    """Limpia el registro SRV cuando el túnel se cierra."""
+    settings = _get_dns_settings(state)
+    if not settings["enabled"] or not settings["url"]:
+        return
+    try:
+        slug = _get_server_slug(state)
+        import requests as req
+        req.post(
+            settings["url"],
+            json={
+                "subdomain": slug,
+                "target": "",
+                "action": "delete",
+                "auth": settings["auth"],
+            },
+            timeout=5,
+        )
+    except Exception:
+        pass  # Silent cleanup, no need to spam logs on tunnel close
+
+
 # --- Tunnel Management Endpoints (Pinggy) ---
 
 
@@ -2138,6 +2210,8 @@ def start_tunnel(
                             }
                         )
                         connected_emitted = True
+                        # Update DNS record via proxy
+                        _update_dns_record_proxy(state)
 
                 # Additional check if process exited with error
                 if (
@@ -2157,6 +2231,8 @@ def start_tunnel(
                 state.broadcast_log_sync("🔴 Tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_disconnected"})
                 state.tunnel_address = None
+                # Clean up DNS record
+                _delete_dns_record_proxy(state)
 
             except Exception as e:
                 logging.exception(f"Tunnel error: {e}")
