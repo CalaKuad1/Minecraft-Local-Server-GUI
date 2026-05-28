@@ -707,49 +707,62 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         )}
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`text-sm font-mono font-bold leading-none select-all ${
-                            tunnelAddress === "Check Playit.gg Dashboard" ? 'text-orange-400' :
-                            dnsAddress ? 'text-emerald-400' :
-                            tunnelAddress ? 'text-orange-400' : 'text-white'
-                        }`}>
-                            {tunnelAddress === "Check Playit.gg Dashboard" ? (
-                                <span className="flex items-center gap-2">
-                                    Panel Playit.gg
-                                    <button onClick={async () => {
-                                        const ip = prompt("IP de Playit:");
-                                        if (ip) { try { await api.setTunnelAddress(ip); } catch (err) {} }
-                                    }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer">Escribir IP</button>
-                                </span>
-                            ) : dnsAddress ? dnsAddress : tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
-                        </span>
-                        {dnsAddress && (
+                        {dnsEditing ? (
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const val = e.target.elements.subdomain.value.trim();
+                                if (!val) { setDnsEditing(false); setDnsAvailable(null); return; }
+                                try {
+                                    const check = await api.checkDnsSubdomain(val);
+                                    if (!check.available) { setDnsAvailable(false); return; }
+                                    const result = await api.setDnsSubdomain(val);
+                                    setDnsSubdomain(result.subdomain);
+                                    setDnsAddress(result.address);
+                                    setDnsEditing(false);
+                                    setDnsAvailable(null);
+                                } catch (err) { console.error(err); }
+                            }} className="flex items-center gap-1">
+                                <input
+                                    name="subdomain"
+                                    defaultValue={dnsSubdomain}
+                                    placeholder="survival"
+                                    className="w-40 bg-black/40 border border-emerald-500/30 rounded-sm px-2 py-1.5 text-sm font-mono text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500"
+                                    autoFocus
+                                />
+                                <span className="text-sm font-mono text-zinc-600">.play.ariser.app</span>
+                                <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">✓</button>
+                                <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors">✕</button>
+                            </form>
+                        ) : (
                             <>
-                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="text-[10px] text-zinc-500 hover:text-white px-2 py-0.5 rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider">Copy</button>
-                                <button onClick={() => setDnsEditing(!dnsEditing)} className="text-[10px] text-zinc-600 hover:text-white px-1.5 py-0.5 rounded-sm hover:bg-white/5 transition-colors" title="Edit subdomain">✎</button>
-                                {dnsEditing && (
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        const val = e.target.elements.subdomain.value.trim();
-                                        if (!val) { setDnsEditing(false); return; }
-                                        try {
-                                            const check = await api.checkDnsSubdomain(val);
-                                            if (!check.available) { setDnsAvailable(false); return; }
-                                            const result = await api.setDnsSubdomain(val);
-                                            setDnsSubdomain(result.subdomain);
-                                            setDnsAddress(result.address);
-                                            setDnsEditing(false);
-                                            setDnsAvailable(null);
-                                        } catch (err) { console.error(err); }
-                                    }} className="flex items-center gap-1.5">
-                                        <span className="text-[9px] text-zinc-600 font-mono">.play.ariser.app</span>
-                                        <input name="subdomain" defaultValue={dnsSubdomain} placeholder="survival" className="w-24 bg-black/40 border border-white/10 rounded-sm px-1.5 py-0.5 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-emerald-500/40" autoFocus />
-                                        <button type="submit" className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm hover:bg-emerald-500/20 uppercase tracking-wider">OK</button>
-                                        <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="text-xs text-zinc-500 hover:text-white">✕</button>
-                                    </form>
+                                <span className={`text-sm font-mono font-bold leading-none select-all ${
+                                    tunnelAddress === "Check Playit.gg Dashboard" ? 'text-orange-400' :
+                                    dnsAddress ? 'text-emerald-400' :
+                                    tunnelAddress ? 'text-orange-400' : 'text-white'
+                                }`}>
+                                    {tunnelAddress === "Check Playit.gg Dashboard" ? (
+                                        <span className="flex items-center gap-2">
+                                            Panel Playit.gg
+                                            <button onClick={async () => {
+                                                const ip = prompt("IP de Playit:");
+                                                if (ip) { try { await api.setTunnelAddress(ip); } catch (err) {} }
+                                            }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer">Escribir IP</button>
+                                        </span>
+                                    ) : dnsAddress ? dnsAddress : tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
+                                </span>
+                                {dnsAddress && (
+                                    <>
+                                        <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors" title="Copy">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        </button>
+                                        <button onClick={() => setDnsEditing(true)} className="p-1.5 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Edit subdomain">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        </button>
+                                    </>
                                 )}
-                                {dnsAvailable === false && <span className="text-[10px] text-red-400">Taken</span>}
                             </>
                         )}
+                        {dnsAvailable === false && !dnsEditing && <span className="text-[10px] text-red-400">Taken</span>}
                     </div>
                     {tunnelAddress && dnsAddress && (
                         <div className="text-[9px] text-zinc-600 font-mono mt-0.5">{tunnelAddress}</div>
