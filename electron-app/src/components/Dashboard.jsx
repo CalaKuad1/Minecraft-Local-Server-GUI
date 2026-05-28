@@ -695,41 +695,66 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
             {/* Local IP Info + Make Public */}
             <div className="flex items-center gap-4 p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
-                <div className="flex items-center gap-3 flex-1">
-                    <div className="p-2 rounded-sm border border-white/10 bg-white/5 text-zinc-300">
-                        <Terminal size={16} />
-                    </div>
-                    <div>
-                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                            {tunnelAddress ? 'Public Gateway' : 'Local Host'}
+                <div className={`p-2 rounded-sm border ${tunnelAddress ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
+                    <Terminal size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                            {tunnelAddress ? (dnsAddress ? 'Fixed Address' : 'Public Gateway') : 'Local Host'}
                         </div>
-                        <div className="text-sm font-mono text-white font-bold leading-none">
+                        {tunnelAddress && dnsAddress && (
+                            <span className="text-[8px] text-zinc-600 font-mono">via Pinggy</span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-sm font-mono font-bold leading-none select-all ${
+                            tunnelAddress === "Check Playit.gg Dashboard" ? 'text-orange-400' :
+                            dnsAddress ? 'text-emerald-400' :
+                            tunnelAddress ? 'text-orange-400' : 'text-white'
+                        }`}>
                             {tunnelAddress === "Check Playit.gg Dashboard" ? (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-orange-400">Panel Playit.gg</span>
-                                    <button 
-                                        onClick={async () => {
-                                            const ip = prompt("Por favor, introduce la IP de tu servidor de Minecraft Java que te da Playit (ej. nombre.auto.playit.gg):");
-                                            if (ip) {
-                                                try {
-                                                    await api.setTunnelAddress(ip);
-                                                } catch (err) {
-                                                    console.error("Failed to set IP", err);
-                                                }
-                                            }
-                                        }}
-                                        className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer"
-                                    >
-                                        Escribir IP
-                                    </button>
-                                </div>
-                            ) : (
-                                <span className={tunnelAddress ? "text-orange-400 select-all" : "select-all"}>
-                                    {tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
+                                <span className="flex items-center gap-2">
+                                    Panel Playit.gg
+                                    <button onClick={async () => {
+                                        const ip = prompt("IP de Playit:");
+                                        if (ip) { try { await api.setTunnelAddress(ip); } catch (err) {} }
+                                    }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm transition-colors text-white uppercase tracking-wider cursor-pointer">Escribir IP</button>
                                 </span>
-                            )}
-                        </div>
+                            ) : dnsAddress ? dnsAddress : tunnelAddress || `${status.local_ip || '127.0.0.1'}:${status.port || '25565'}`}
+                        </span>
+                        {dnsAddress && (
+                            <>
+                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="text-[10px] text-zinc-500 hover:text-white px-2 py-0.5 rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider">Copy</button>
+                                <button onClick={() => setDnsEditing(!dnsEditing)} className="text-[10px] text-zinc-600 hover:text-white px-1.5 py-0.5 rounded-sm hover:bg-white/5 transition-colors" title="Edit subdomain">✎</button>
+                                {dnsEditing && (
+                                    <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const val = e.target.elements.subdomain.value.trim();
+                                        if (!val) { setDnsEditing(false); return; }
+                                        try {
+                                            const check = await api.checkDnsSubdomain(val);
+                                            if (!check.available) { setDnsAvailable(false); return; }
+                                            const result = await api.setDnsSubdomain(val);
+                                            setDnsSubdomain(result.subdomain);
+                                            setDnsAddress(result.address);
+                                            setDnsEditing(false);
+                                            setDnsAvailable(null);
+                                        } catch (err) { console.error(err); }
+                                    }} className="flex items-center gap-1.5">
+                                        <span className="text-[9px] text-zinc-600 font-mono">.play.ariser.app</span>
+                                        <input name="subdomain" defaultValue={dnsSubdomain} placeholder="survival" className="w-24 bg-black/40 border border-white/10 rounded-sm px-1.5 py-0.5 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-emerald-500/40" autoFocus />
+                                        <button type="submit" className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm hover:bg-emerald-500/20 uppercase tracking-wider">OK</button>
+                                        <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="text-xs text-zinc-500 hover:text-white">✕</button>
+                                    </form>
+                                )}
+                                {dnsAvailable === false && <span className="text-[10px] text-red-400">Taken</span>}
+                            </>
+                        )}
                     </div>
+                    {tunnelAddress && dnsAddress && (
+                        <div className="text-[9px] text-zinc-600 font-mono mt-0.5">{tunnelAddress}</div>
+                    )}
                 </div>
 
                 <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-zinc-500 hover:text-white rounded-sm transition-colors hover:border-white/10" title="Open Server Directory">
@@ -756,27 +781,21 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             if (tunnelAddress) {
                                 await api.stopTunnel();
                                 setTunnelAddress(null);
+                                setDnsAddress(null);
                                 setTunnelConnecting(false);
                                 setPlayitClaimLink(null);
                             } else {
                                 setTunnelConnecting(true);
                                 setPlayitClaimLink(null);
-                                console.log('[Dashboard] Starting tunnel with region:', tunnelRegion, 'provider:', tunnelProvider);
                                 const result = await api.startTunnel(tunnelRegion, tunnelProvider);
-                                console.log('[Dashboard] Tunnel start result:', result);
-                                
-                                // Automatically save Pinggy provider selection since it's the most reliable option now
                                 if (tunnelProvider === 'pinggy') {
                                     localStorage.setItem('preferredTunnelProvider', 'pinggy');
                                 }
-                                // Note: tunnelConnecting will be set to false by polling or WS event
                             }
                         } catch (err) {
                             console.error('[Dashboard] Tunnel error:', err);
                             setTunnelConnecting(false);
-                            // Get the error message from the response if possible
                             const errorMsg = err.response?.data?.detail || err.message || "Unknown error";
-                            // Show error in logs
                             setLocalLogs(prev => [...prev, {
                                 message: `❌ Tunnel error: ${errorMsg}`,
                                 level: 'error',
@@ -788,15 +807,13 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     disabled={tunnelConnecting && !tunnelAddress}
                     className={`px-4 py-2 border rounded-sm text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all group ${tunnelAddress ? 'bg-transparent border-red-500/20 text-red-400 hover:bg-red-500/10' : tunnelConnecting ? 'bg-transparent border-yellow-500/20 text-yellow-400' : 'bg-transparent border-white/10 text-zinc-400 hover:text-white hover:border-white/30'}`}
                 >
-                    {tunnelAddress ? (<><Square size={14} className="group-hover:fill-current" /> Stop Public</>) : tunnelConnecting ? (<><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>) : (<><Globe size={14} /> Make Public</>)}
+                    {tunnelAddress ? (<><Square size={14} className="group-hover:fill-current" /> Stop</>) : tunnelConnecting ? (<><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>) : (<><Globe size={14} /> Make Public</>)}
                 </button>
 
                 <div className="relative group">
                     <button onClick={() => setShowPublicModal(true)} className="p-2 rounded-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-400 hover:text-white transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
                     </button>
-
-                    {/* Tooltip on hover */}
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-black/90 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl z-50">
                         <div className="text-sm text-white font-medium mb-1 uppercase font-minecraft tracking-widest">Public Server</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">
@@ -806,84 +823,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     </div>
                 </div>
             </div>
-
-            {/* Fixed DNS Address - appears when tunnel is active */}
-            {tunnelAddress && (
-                <div className="flex items-center gap-4 p-4 bg-emerald-500/[0.03] border border-emerald-500/10 rounded-sm relative z-50 backdrop-blur-2xl">
-                    <div className="p-2 rounded-sm border border-emerald-500/20 bg-emerald-500/5 text-emerald-400">
-                        <Globe size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                            Fixed Address
-                        </div>
-                        {dnsAddress ? (
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-mono text-emerald-400 font-bold select-all">{dnsAddress}</span>
-                                <button
-                                    onClick={() => { navigator.clipboard.writeText(dnsAddress); }}
-                                    className="text-[10px] text-zinc-500 hover:text-white px-2 py-0.5 rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider"
-                                >
-                                    Copy
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="text-sm font-mono text-zinc-500">
-                                Enable "Fixed Address" in Settings to get a permanent domain
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        {dnsEditing ? (
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                const val = e.target.elements.subdomain.value.trim();
-                                if (!val) return;
-                                setDnsChecking(true);
-                                try {
-                                    const check = await api.checkDnsSubdomain(val);
-                                    if (!check.available) {
-                                        setDnsAvailable(false);
-                                        setDnsChecking(false);
-                                        return;
-                                    }
-                                    const result = await api.setDnsSubdomain(val);
-                                    setDnsSubdomain(result.subdomain);
-                                    setDnsAddress(result.address);
-                                    setDnsEditing(false);
-                                    setDnsAvailable(null);
-                                } catch (err) {
-                                    console.error(err);
-                                }
-                                setDnsChecking(false);
-                            }} className="flex items-center gap-1">
-                                <span className="text-xs text-zinc-500">.play.ariser.app</span>
-                                <input
-                                    name="subdomain"
-                                    defaultValue={dnsSubdomain}
-                                    placeholder="survival"
-                                    className="w-24 bg-black/40 border border-white/10 rounded-sm px-2 py-1 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-emerald-500/40"
-                                    autoFocus
-                                />
-                                <button type="submit" disabled={dnsChecking} className="text-[10px] px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm hover:bg-emerald-500/20 disabled:opacity-50 uppercase tracking-wider">
-                                    {dnsChecking ? '...' : 'Set'}
-                                </button>
-                                <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="text-[10px] px-1 py-1 text-zinc-500 hover:text-white">✕</button>
-                            </form>
-                        ) : (
-                            <button
-                                onClick={() => setDnsEditing(true)}
-                                className="text-[10px] px-2 py-1 text-zinc-500 hover:text-white rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider"
-                            >
-                                {dnsSubdomain ? dnsSubdomain : 'Customize'}
-                            </button>
-                        )}
-                    </div>
-                    {dnsAvailable === false && (
-                        <div className="text-[10px] text-red-400 absolute -bottom-5 left-0">That name is already taken</div>
-                    )}
-                </div>
-            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
