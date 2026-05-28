@@ -750,20 +750,23 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 e.preventDefault();
                                 const v = e.target.elements.sd.value.trim();
                                 if (!v) { setDnsEditing(false); setDnsAvailable(null); return; }
-                                setDnsAvailable(null);
+                                let isTaken = false;
                                 try {
                                     const c = await api.checkDnsSubdomain(v);
-                                    if (c && !c.available) {
+                                    if (c && !c.available && v !== dnsSubdomain) {
                                         setDnsAvailable(v);
-                                        return;
+                                        isTaken = true;
                                     }
-                                } catch { /* network error, allow save anyway */ }
-                                try {
-                                    const r = await api.setDnsSubdomain(v);
-                                    setDnsSubdomain(r.subdomain);
-                                    setDnsAddress(r.address);
-                                    setDnsEditing(false);
-                                } catch(err) { console.error('Failed to set subdomain', err); }
+                                } catch { /* network error, allow save */ }
+                                if (!isTaken) {
+                                    try {
+                                        const r = await api.setDnsSubdomain(v);
+                                        setDnsSubdomain(r.subdomain);
+                                        setDnsAddress(r.address);
+                                        setDnsEditing(false);
+                                        setDnsAvailable(null);
+                                    } catch(err) { console.error('Failed to set subdomain', err); }
+                                }
                             }} className="mb-1">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
