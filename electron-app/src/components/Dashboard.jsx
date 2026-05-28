@@ -553,8 +553,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             await api.start();
             if (autoTunnel) {
                 setTimeout(async () => {
-                    try { await api.startTunnel(tunnelRegion, tunnelProvider); } catch (e) {}
-                }, 3000);
+                    try {
+                        setTunnelConnecting(true);
+                        await api.startTunnel(tunnelRegion, tunnelProvider);
+                    } catch (e) { setTunnelConnecting(false); }
+                }, 5000);
             }
             if (onRefresh) onRefresh();
         } catch (e) {
@@ -796,8 +799,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     </button>
 
                     <div className="relative group">
-                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={`p-2 rounded-sm transition-all ${showAdvanced ? 'bg-white/10 text-white' : 'text-zinc-600 hover:text-white hover:bg-white/5'}`}>
+                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={`p-2 rounded-sm transition-all relative ${showAdvanced ? 'bg-white/10 text-white' : 'text-zinc-600 hover:text-white hover:bg-white/5'}`}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            {autoTunnel && <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></div>}
                         </button>
                         <div className="absolute bottom-full right-0 mb-2 w-72 p-4 bg-black/95 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-50">
                             <div className="text-xs text-white font-minecraft tracking-widest uppercase mb-1">Make Public</div>
