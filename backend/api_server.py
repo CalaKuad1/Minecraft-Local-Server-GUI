@@ -1748,8 +1748,16 @@ def _update_dns_record_proxy(state):
         return
     slug = _get_server_slug(state)
     if not slug:
-        state.broadcast_log_sync("⚠️ DNS not configured — set a subdomain in the Dashboard", "warning")
-        return
+        # Auto-generar un slug único
+        if not state.server_handler:
+            return
+        folder = os.path.basename(state.server_handler.server_path.rstrip("/\\"))
+        folder_slug = "".join(c if c.isalnum() else "-" for c in folder.lower()).strip("-") or "mc"
+        uid = (state.server_handler.server_id or "x")[:5]
+        slug = f"{folder_slug}-{uid}"
+        state.server_handler.dns_subdomain = slug
+        state.config_manager.update_server(state.selected_server_id, {"dns_subdomain": slug})
+        state.broadcast_log_sync(f"🌐 Auto-generated subdomain: {slug}", "info")
     try:
         import requests as req
         req.post(

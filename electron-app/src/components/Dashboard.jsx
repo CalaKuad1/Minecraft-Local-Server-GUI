@@ -647,12 +647,12 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                         setTogglingMode(false);
                                     }}
                                     disabled={isOnline || togglingMode}
-                                    title={onlineMode ? 'Premium (online-mode=true)' : 'Cracked (online-mode=false)'}
-                                    className={`text-[9px] px-1.5 py-0.5 rounded-sm border font-bold uppercase tracking-wider transition-all ${
-                                        onlineMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                                    } ${isOnline ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-125'}`}
+                                    title={onlineMode ? 'Requires premium Minecraft account' : 'Allows cracked/non-premium accounts'}
+                                    className={`text-[9px] px-2 py-0.5 rounded-sm border uppercase tracking-wider transition-all font-medium ${
+                                        onlineMode ? 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/[0.07]' : 'bg-white/[0.03] border-white/5 text-zinc-500 hover:bg-white/[0.06] hover:border-white/10'
+                                    } ${isOnline ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
-                                    {togglingMode ? '...' : onlineMode ? 'Premium' : 'Offline'}
+                                    {togglingMode ? '...' : onlineMode ? 'Premium' : 'No Premium'}
                                 </button>
                             </div>
                             <h2 className="text-2xl font-minecraft text-white tracking-wide">
