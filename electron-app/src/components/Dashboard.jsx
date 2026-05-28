@@ -768,7 +768,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">"{dnsAvailable}" is already taken — pick another name</div>}
                         <div>
                             {tunnelAddress === "Check Playit.gg Dashboard" ? <span className="text-sm font-mono font-bold text-orange-400">Panel Playit.gg <button onClick={async () => { const ip = prompt("IP de Playit:"); if (ip) { try { await api.setTunnelAddress(ip); } catch (e) { /* ignore */ } } }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm text-white uppercase cursor-pointer">Escribir IP</button></span>
-                            : <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span>}
+                            : !dnsAddress ? <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span> : null}
                         </div>
                         {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-zinc-600 font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
                     </div>
