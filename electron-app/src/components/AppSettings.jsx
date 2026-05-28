@@ -236,44 +236,36 @@ export default function AppSettings({ isOpen, onClose }) {
 
                         {activeSection === 'dns' && (
                             <div>
-                                <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">DNS Proxy</h2>
-                                <p className="text-xs text-zinc-600 mb-6">Configure a Cloudflare DNS proxy for fixed server addresses via tunnels.</p>
+                                <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">Fixed Address</h2>
+                                <p className="text-xs text-zinc-600 mb-6">Give your server a permanent domain that never changes, even when the tunnel IP does.</p>
 
                                 <div className="space-y-5">
                                     <ToggleSetting
-                                        label="Enable DNS Proxy"
-                                        description="Automatically update a fixed domain when the tunnel starts."
+                                        label="Enable Fixed Address"
+                                        description="Auto-update DNS when tunnel starts. Your server gets a permanent domain like survival.play.ariser.com"
                                         value={settings.dns_proxy_enabled || false}
                                         onChange={(v) => updateSetting('dns_proxy_enabled', v)}
                                     />
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">Proxy URL</label>
+                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">DNS Proxy URL</label>
                                         <input
                                             type="text"
                                             value={settings.dns_proxy_url || ''}
                                             onChange={(e) => updateSetting('dns_proxy_url', e.target.value)}
-                                            placeholder="https://mc-dns.tudominio.workers.dev"
+                                            placeholder="Default: community proxy (leave empty)"
                                             className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-white/30 transition-colors"
                                         />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">Auth Key</label>
-                                        <input
-                                            type="password"
-                                            value={settings.dns_proxy_auth || ''}
-                                            onChange={(e) => updateSetting('dns_proxy_auth', e.target.value)}
-                                            placeholder="••••••••••••"
-                                            className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-white/30 transition-colors"
-                                        />
+                                        <p className="text-[9px] text-zinc-600 mt-1">
+                                            Leave empty to use the community proxy. Advanced users can host their own.
+                                        </p>
                                     </div>
 
                                     <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm">
                                         <p className="text-[10px] text-zinc-500 leading-relaxed font-mono">
-                                            Your server will get a fixed address like{' '}
-                                            <span className="text-emerald-400">survival.play.yourdomain.com</span>
-                                            {' '}even when the tunnel IP changes.
+                                            When the tunnel starts, your server automatically gets a fixed address at{' '}
+                                            <span className="text-emerald-400">[servername].play.ariser.com</span>.
+                                            Max 1 update per minute per server. Free for everyone.
                                         </p>
                                     </div>
                                 </div>

@@ -1720,13 +1720,17 @@ def _get_dns_settings(state):
     """Lee los settings del proxy DNS desde la config de la app."""
     try:
         app = state.config_manager.config.get("app_settings", {})
+        enabled = app.get("dns_proxy_enabled", False)
+        url = app.get("dns_proxy_url", "")
+        # Fallback URL por defecto si no hay URL configurada
+        if enabled and not url:
+            url = "https://mlsg-dns-worker.calakuad.workers.dev"
         return {
-            "enabled": app.get("dns_proxy_enabled", False),
-            "url": app.get("dns_proxy_url", ""),
-            "auth": app.get("dns_proxy_auth", ""),
+            "enabled": enabled,
+            "url": url,
         }
     except Exception:
-        return {"enabled": False, "url": "", "auth": ""}
+        return {"enabled": False, "url": ""}
 
 
 def _update_dns_record_proxy(state):
@@ -1743,7 +1747,6 @@ def _update_dns_record_proxy(state):
                 "subdomain": slug,
                 "target": state.tunnel_address,
                 "action": "create",
-                "auth": settings["auth"],
             },
             timeout=5,
         )
@@ -1768,7 +1771,6 @@ def _delete_dns_record_proxy(state):
                 "subdomain": slug,
                 "target": "",
                 "action": "delete",
-                "auth": settings["auth"],
             },
             timeout=5,
         )
