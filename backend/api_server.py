@@ -1735,8 +1735,8 @@ def _get_dns_settings(state):
         app = state.config_manager.config.get("app_settings", {})
         enabled = app.get("dns_proxy_enabled", False)
         url = app.get("dns_proxy_url", "")
-        # Fallback URL por defecto si no hay URL configurada
-        if enabled and not url:
+        # Siempre usar la URL por defecto
+        if not url:
             url = "https://dns.ariser.app"
         return {
             "enabled": enabled,
@@ -2356,6 +2356,29 @@ async def set_dns_subdomain(request: Request):
     state.server_handler.dns_subdomain = subdomain
 
     address = f"{subdomain}.play.ariser.app"
+
+    # Si el túnel está activo, actualizar DNS inmediatamente
+    if state.tunnel_address and state.tunnel_process and state.tunnel_process.poll() is None:
+        try:
+            slug = _get_server_slug(state)
+            settings = _get_dns_settings(state)
+            if settings["enabled"] and settings["url"]:
+                import requests as req
+                req.post(
+                    settings["url"],
+                    json={"subdomain": slug, "target": state.tunnel_address, "action": "create"},
+                    timeout=5,
+                )
+                state.dns_address = address
+                state.broadcast_log_sync({
+                    "type": "dns_updated",
+                    "address": address,
+                    "target": state.tunnel_address,
+                })
+                state.broadcast_log_sync(f"🌐 DNS updated: {address} → {state.tunnel_address}", "info")
+        except Exception as e:
+            state.broadcast_log_sync(f"⚠️ DNS update failed: {e}", "warning")
+
     return {"subdomain": subdomain, "address": address}
 
 

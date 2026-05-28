@@ -32,7 +32,7 @@ export default function Console() {
                 ...item,
                 _id: ++logIdRef.current,
                 message: typeof item.message === 'string' ? item.message : String(item.message || ''),
-                time: item.time || new Date().toLocaleTimeString([], { hour12: false })
+                time: item.time || new Date().toLocaleTimeString(undefined, { hour12: false })
             };
 
             setLogs(prev => {
@@ -62,7 +62,7 @@ export default function Console() {
                                 ...item,
                                 _id: ++logIdRef.current,
                                 message: typeof item.message === 'string' ? item.message : String(item.message || ''),
-                                time: item.time || new Date().toLocaleTimeString([], { hour12: false })
+                                time: item.time || new Date().toLocaleTimeString(undefined, { hour12: false })
                             }));
                             return items.slice(-MAX_LOGS);
                         }
@@ -75,7 +75,7 @@ export default function Console() {
                                 ...item,
                                 _id: ++logIdRef.current,
                                 message: msg,
-                                time: item.time || new Date().toLocaleTimeString([], { hour12: false })
+                                time: item.time || new Date().toLocaleTimeString(undefined, { hour12: false })
                             });
                         }
                         if (newItems.length === 0) return prev;
@@ -136,7 +136,7 @@ export default function Console() {
 
         const cmd = inputObj;
         setLogs(prev => {
-            const next = [...prev, { _id: ++logIdRef.current, message: `> ${cmd}`, level: 'input', time: new Date().toLocaleTimeString([], { hour12: false }) }];
+            const next = [...prev, { _id: ++logIdRef.current, message: `> ${cmd}`, level: 'input', time: new Date().toLocaleTimeString(undefined, { hour12: false }) }];
             return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
         });
 
@@ -146,7 +146,7 @@ export default function Console() {
             try {
                 await api.sendCommand(cmd);
             } catch (err) {
-                setLogs(prev => [...prev, { _id: ++logIdRef.current, message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }]);
+                setLogs(prev => [...prev, { _id: ++logIdRef.current, message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString(undefined, { hour12: false }) }]);
             }
         }
         setInputObj('');

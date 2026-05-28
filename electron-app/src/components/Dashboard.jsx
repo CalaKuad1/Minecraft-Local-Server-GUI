@@ -455,7 +455,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             setLocalLogs(prev => [...prev, {
                 message: `🔄 Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
                 level: 'warning',
-                time: new Date().toLocaleTimeString([], { hour12: false })
+                time: new Date().toLocaleTimeString(undefined, { hour12: false })
             }]);
             return;
         }
@@ -1001,7 +1001,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     {localLogs.length > 0 ? (
                         localLogs.map((log, i) => {
                             const timeStr = log.time
-                                ? (log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString([], { hour12: false }))
+                                ? (log.time.includes(':') ? log.time : new Date(log.time).toLocaleTimeString(undefined, { hour12: false }))
                                 : '';
                             return (
                             <div key={`${i}-${log.message?.slice(0, 20)}`} className="flex items-start font-mono text-[11.5px] leading-relaxed hover:bg-white/5 px-2 py-0.5 rounded transition-colors group">
@@ -1049,7 +1049,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             }
                             e.target.elements.cmd.value = '';
                         } catch (err) {
-                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }]);
+                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString(undefined, { hour12: false }) }]);
                         }
                     }}
                     className="border-t border-white/5 bg-black/30 p-2 flex"

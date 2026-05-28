@@ -28,26 +28,24 @@
 
 ---
 
-## What's New in v1.3.0
+## What's New in v1.3.2
 
-### Fixed Server Addresses (DNS Proxy)
-- **Permanent domain for your server** — `survival.play.yourdomain.com` always works, even when the tunnel IP changes
-- Deploy the included Cloudflare Worker proxy (private repo) with your API keys
-- The app automatically updates the DNS record every time the tunnel starts
-- Configure it in Settings → Cloudflare
+### Fixed Server Addresses (DNS)
+- **Permanent domain** — Your server gets a permanent address like `survival.play.ariser.app` that never changes
+- **Auto-update** — DNS updates automatically every time the tunnel starts or the subdomain changes
+- **Inline editing** — Click the pencil icon to change your server's subdomain
+- **Duplicate protection** — Checks availability before assigning a subdomain
 
-<details>
-<summary><strong>Earlier: v1.2.2 — Console Hotfix</strong></summary>
+### Console Improvements
+- **Search & filter** — Search bar and level badges (CMD/INF/WRN/ERR) for quick log navigation
+- **Export logs** — Download button saves console history as `.txt`
+- **Polling fallback** — Console fetches logs via REST API when WebSocket is disconnected
 
-- **Console polling fallback** — Console tab fetches logs via REST API when WebSocket is disconnected
-- **Fixed WebSocket 404** — `wsproto` dependency was missing from the built .exe
-
-</details>
-
----
+### Auto-Restart
+- Toggle in Dashboard header — server restarts automatically on crash (max 3 attempts)
 
 <details>
-<summary><strong>Earlier: v1.2.1 — Console & Stability</strong></summary>
+<summary><strong>Earlier versions</strong></summary>
 
 ### Auto-Restart on Crash
 - Server automatically restarts after unexpected shutdowns — toggle it on/off from the Dashboard header
