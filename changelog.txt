@@ -1,18 +1,35 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.3.0 - 2026-05-27 FIXED ADDRESSES & DNS PROXY
+## Version 1.2.5 - 2026-05-28 DNS PROXY, FIXED ADDRESSES & CONSOLE
 
-### NEW FEATURE: Fixed Server Addresses
-- **DNS Proxy integration** — Server gets a permanent domain (e.g. `survival.play.yourdomain.com`) even when the tunnel IP changes
-- **Cloudflare Worker proxy** — Custom proxy handles Cloudflare API calls without exposing API keys in the open-source code
-- **Auto-update on tunnel start** — DNS SRV record automatically updated when Pinggy tunnel starts
-- **Auto-cleanup on tunnel stop** — DNS record removed when tunnel is closed
-- **Settings UI** — New "Cloudflare" section in App Settings: enable/disable, proxy URL, auth key
+### NEW: Fixed Server Addresses (DNS)
+- **Permanent domain** — Each server gets a permanent address like `survival.play.tudominio.app` that never changes
+- **Auto-generated** — Unique subdomain generated automatically from server name + ID (`vanilla-a3f2b`)
+- **Inline editing** — Click the pencil icon to change your subdomain, with availability checking
+- **Duplicate protection** — Subdomains are permanently reserved; not released when tunnel stops
+- **Cloudflare DNS Proxy** — Open-source Cloudflare Worker manages SRV records (repo: MLSG-DNS-Worker)
+- **Auto-Tunnel** — Tunnel starts automatically 5s after server boot (toggle in Advanced settings)
 
-### How it works
-- Deploy the included `mc-dns-proxy` Cloudflare Worker (private repo) with your API keys
-- Configure the proxy URL + auth key in MLSG Settings
-- Your friends always connect to the same address, regardless of tunnel IP changes
+### Console Improvements
+- **Search & filter** — Search bar and level badges (CMD/INF/WRN/ERR) for quick log navigation
+- **Export logs** — Download button saves full console history as `.txt`
+- **Polling fallback** — Console fetches logs via REST API when WebSocket is disconnected
+- **Fixed WebSocket 404** — `wsproto` dependency added to fix WebSocket in .exe builds
+
+### UI & Dashboard
+- **Redesigned tunnel section** — Clean single-address display, DNS always visible, Advanced toggle
+- **Local IP** — Always shown as subtitle alongside public/DNS address
+- **Online/Offline badges** — Clear DNS status indicator (ONLINE/OFFLINE)
+- **Premium/No Premium toggle** — Quick online-mode switch in Dashboard header
+- **Boot from library** — "Boot" button on server cards to start server directly from library
+- **Mods import** — Upload `.jar` files directly with file picker in Mods tab
+- **Auto-restart on crash** — Toggle in Dashboard header, max 3 restart attempts
+
+### Bug Fixes
+- Fixed console tab showing "Loading..." forever (input always enabled, REST fallback works)
+- Fixed logs disappearing when switching panels (Dashboard & Console stay mounted)
+- Fixed Dashboard mini-console unable to send commands without WebSocket
+- Various JSX/Babel parsing fixes
 
 ---
 

@@ -28,21 +28,25 @@
 
 ---
 
-## What's New in v1.3.2
+## What's New in v1.2.5
 
 ### Fixed Server Addresses (DNS)
-- **Permanent domain** — Your server gets a permanent address like `survival.play.ariser.app` that never changes
-- **Auto-update** — DNS updates automatically every time the tunnel starts or the subdomain changes
-- **Inline editing** — Click the pencil icon to change your server's subdomain
-- **Duplicate protection** — Checks availability before assigning a subdomain
+- **Permanent domain** — Your server gets a permanent address like `survival.play.tudominio.app` that never changes
+- **Auto-generated** — A unique subdomain is created automatically when the tunnel starts
+- **Duplicate protection** — Subdomains are permanently reserved for your server, never released
+- **Inline editing** — Edit your subdomain directly in the Dashboard with availability checking
+- **Cloudflare DNS Proxy** — Open-source Worker manages SRV records (repo: `MLSG-DNS-Worker`)
 
-### Console Improvements
-- **Search & filter** — Search bar and level badges (CMD/INF/WRN/ERR) for quick log navigation
-- **Export logs** — Download button saves console history as `.txt`
-- **Polling fallback** — Console fetches logs via REST API when WebSocket is disconnected
+### Console
+- **Search & filter** — Search bar and level badges (CMD/INF/WRN/ERR)
+- **Export logs** — Download console history as `.txt`
+- **Always works** — REST API fallback when WebSocket is disconnected
 
-### Auto-Restart
-- Toggle in Dashboard header — server restarts automatically on crash (max 3 attempts)
+### Dashboard
+- **Premium/No Premium** — Quick online-mode toggle in the Dashboard header
+- **Auto-restart on crash** — Toggle to auto-restart server on unexpected shutdown
+- **Auto-Tunnel** — Tunnel starts automatically with the server (toggle in Advanced)
+- **Boot from library** — "Boot" button on server cards in the library
 
 <details>
 <summary><strong>Earlier versions</strong></summary>

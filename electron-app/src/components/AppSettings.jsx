@@ -280,7 +280,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                 <div className="space-y-4">
                                     <div className="bg-white/[0.02] border border-white/5 rounded-md p-5">
                                         <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">Minecraft Server GUI</div>
-                                        <div className="text-xs font-mono text-zinc-500 mb-4">v1.3.0</div>
+                                        <div className="text-xs font-mono text-zinc-500 mb-4">v1.2.5</div>
                                         <p className="text-xs text-zinc-500 leading-relaxed">
                                             A professional server management tool for Minecraft servers.
                                             Supports Vanilla, Paper, Spigot, Fabric, Forge, and NeoForge server types.
