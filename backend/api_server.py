@@ -1712,21 +1712,16 @@ def create_world_backup(req: WorldBackupRequest):
 
 # --- DNS Proxy Helper ---
 def _get_server_slug(state):
-    """Genera un slug a partir del subdominio personalizado o nombre del servidor."""
+    """Devuelve el subdominio personalizado del servidor, o None si no se ha configurado."""
     if not state or not state.server_handler:
-        return "minecraft"
-    # Primero mirar si el servidor tiene un subdominio personalizado
+        return None
     handler = state.server_handler
     if hasattr(handler, "dns_subdomain") and handler.dns_subdomain:
         slug = handler.dns_subdomain.strip().lower()
         slug = "".join(c if c.isalnum() or c in "-" else "-" for c in slug).strip("-")
         if slug:
             return slug
-    # Fallback: nombre de la carpeta
-    folder_name = os.path.basename(handler.server_path.rstrip("/\\"))
-    slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in folder_name.lower())
-    slug = slug.strip("-")
-    return slug if slug else "minecraft"
+    return None
 
 
 def _get_dns_settings(state):
@@ -1751,8 +1746,11 @@ def _update_dns_record_proxy(state):
     settings = _get_dns_settings(state)
     if not settings["enabled"] or not settings["url"] or not state.tunnel_address:
         return
+    slug = _get_server_slug(state)
+    if not slug:
+        state.broadcast_log_sync("⚠️ DNS not configured — set a subdomain in the Dashboard", "warning")
+        return
     try:
-        slug = _get_server_slug(state)
         import requests as req
         req.post(
             settings["url"],

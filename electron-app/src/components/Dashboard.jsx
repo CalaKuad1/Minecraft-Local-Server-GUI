@@ -730,12 +730,20 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                     setDnsAddress(r.address);
                                     setDnsEditing(false);
                                 } catch(err) { console.error('Failed to set subdomain', err); }
-                            }} className="flex items-center gap-1.5 mb-1">
-                                <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
-                                <input name="sd" defaultValue={dnsSubdomain} placeholder="survival" className="w-40 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
-                                <span className="text-xs font-mono text-zinc-600">.play.ariser.app</span>
-                                <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors">✓</button>
-                                <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors">✕</button>
+                            }} className="mb-1">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
+                                    <input name="sd" defaultValue={dnsSubdomain} placeholder="your-server-name" className="w-44 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
+                                    <span className="text-xs font-mono text-zinc-600">.play.ariser.app</span>
+                                    <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors">✓</button>
+                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors">✕</button>
+                                </div>
+                                {dnsAvailable && <div className="flex items-center gap-1.5 mt-1.5">
+                                    <span className="text-[10px] text-red-400">"{dnsAvailable}" taken — try:</span>
+                                    {[dnsAvailable+'-mc', dnsAvailable+'-sv', 'my-'+dnsAvailable].map(s => (
+                                        <button key={s} type="button" onClick={() => { setDnsSubdomain(s); setDnsAvailable(null); }} className="text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors font-mono">{s}</button>
+                                    ))}
+                                </div>}
                             </form>
                         ) : dnsAddress ? (
                             <div className="flex items-center gap-1.5 mb-1 group">
