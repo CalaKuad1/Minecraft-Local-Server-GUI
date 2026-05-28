@@ -197,6 +197,7 @@ class AppState:
         # Tunnel management
         self.tunnel_process: Optional[subprocess.Popen] = None
         self.tunnel_address: Optional[str] = None
+        self.dns_address: Optional[str] = None
 
         # Install Progress Tracking
         self.install_progress: int = 0
@@ -347,6 +348,11 @@ class AppState:
             java_path=server_config.get("java_path"),  # Pass saved Java path
         )
         self.active_handlers[server_id] = new_handler
+
+        # Cargar subdominio DNS personalizado si existe
+        dns_sub = server_config.get("dns_subdomain", "")
+        if dns_sub:
+            new_handler.dns_subdomain = dns_sub
 
         self.config_manager.config["last_selected_id"] = server_id
         self.config_manager.save()
@@ -1706,11 +1712,18 @@ def create_world_backup(req: WorldBackupRequest):
 
 # --- DNS Proxy Helper ---
 def _get_server_slug(state):
-    """Genera un slug a partir del nombre del servidor para usar como subdominio."""
+    """Genera un slug a partir del subdominio personalizado o nombre del servidor."""
     if not state or not state.server_handler:
         return "minecraft"
-    folder_name = os.path.basename(state.server_handler.server_path.rstrip("/\\"))
-    # Limpiar: solo letras, números, guiones
+    # Primero mirar si el servidor tiene un subdominio personalizado
+    handler = state.server_handler
+    if hasattr(handler, "dns_subdomain") and handler.dns_subdomain:
+        slug = handler.dns_subdomain.strip().lower()
+        slug = "".join(c if c.isalnum() or c in "-" else "-" for c in slug).strip("-")
+        if slug:
+            return slug
+    # Fallback: nombre de la carpeta
+    folder_name = os.path.basename(handler.server_path.rstrip("/\\"))
     slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in folder_name.lower())
     slug = slug.strip("-")
     return slug if slug else "minecraft"
@@ -1750,9 +1763,15 @@ def _update_dns_record_proxy(state):
             },
             timeout=5,
         )
+        state.dns_address = f"{slug}.play.ariser.app"
         state.broadcast_log_sync(
-            f"🌐 DNS updated: {slug} → {state.tunnel_address}", "info"
+            f"🌐 DNS updated: {state.dns_address} → {state.tunnel_address}", "info"
         )
+        state.broadcast_log_sync({
+            "type": "dns_updated",
+            "address": state.dns_address,
+            "target": state.tunnel_address,
+        })
     except Exception as e:
         state.broadcast_log_sync(f"⚠️ DNS update failed: {e}", "warning")
 
@@ -1784,12 +1803,13 @@ def _delete_dns_record_proxy(state):
 @app.get("/tunnel/status")
 def get_tunnel_status():
     if not state:
-        return {"active": False, "address": None}
+        return {"active": False, "address": None, "dns_address": None}
 
     return {
         "active": state.tunnel_process is not None
         and state.tunnel_process.poll() is None,
         "address": state.tunnel_address,
+        "dns_address": state.dns_address,
     }
 
 
@@ -2233,6 +2253,7 @@ def start_tunnel(
                 state.broadcast_log_sync("🔴 Tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_disconnected"})
                 state.tunnel_address = None
+                state.dns_address = None
                 # Clean up DNS record
                 _delete_dns_record_proxy(state)
 
@@ -2292,6 +2313,78 @@ def set_tunnel_address(req: SetTunnelAddressRequest):
     state.broadcast_log_sync(f"✅ Custom IP set: {req.address}", "success")
     state.broadcast_log_sync({"type": "tunnel_connected", "address": req.address})
     return {"status": "success"}
+
+
+# --- DNS Subdomain Endpoints ---
+
+@app.get("/server/dns-subdomain")
+def get_dns_subdomain():
+    if not state or not state.server_handler:
+        return {"subdomain": "", "address": ""}
+    slug = _get_server_slug(state)
+    settings = _get_dns_settings(state)
+    domain = ""
+    if settings["enabled"]:
+        try:
+            app = state.config_manager.config.get("app_settings", {})
+            url = settings["url"]
+            # Extraer dominio del Worker URL o usar variables
+            domain = f"{slug}.play.ariser.app"
+        except Exception:
+            pass
+    return {
+        "subdomain": slug,
+        "address": domain if settings["enabled"] else "",
+        "enabled": settings["enabled"],
+    }
+
+
+@app.post("/server/dns-subdomain")
+async def set_dns_subdomain(request: Request):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    body = await request.json()
+    subdomain = (body.get("subdomain") or "").strip().lower()
+    subdomain = "".join(c if c.isalnum() or c in "-" else "-" for c in subdomain).strip("-")
+
+    if not subdomain:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+
+    # Guardar en la config del servidor
+    server_id = state.selected_server_id
+    state.config_manager.update_server(server_id, {"dns_subdomain": subdomain})
+    state.server_handler.dns_subdomain = subdomain
+
+    address = f"{subdomain}.play.ariser.app"
+    return {"subdomain": subdomain, "address": address}
+
+
+@app.post("/server/dns-check")
+async def check_dns_subdomain(request: Request):
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    body = await request.json()
+    subdomain = (body.get("subdomain") or "").strip().lower()
+    subdomain = "".join(c if c.isalnum() or c in "-" else "-" for c in subdomain).strip("-")
+
+    if not subdomain:
+        return {"available": False, "error": "Invalid subdomain"}
+
+    settings = _get_dns_settings(state)
+    if not settings["url"]:
+        return {"available": True, "note": "No proxy configured"}
+
+    try:
+        import requests as req
+        r = req.post(
+            settings["url"],
+            json={"subdomain": subdomain, "target": "", "action": "check"},
+            timeout=5,
+        )
+        data = r.json()
+        return data
+    except Exception as e:
+        return {"available": True, "note": f"Could not verify: {e}"}
 
 
 # --- Mods Endpoints ---

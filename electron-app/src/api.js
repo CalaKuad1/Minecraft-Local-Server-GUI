@@ -271,6 +271,23 @@ export const api = {
             body: JSON.stringify({ address })
         });
     },
+    getDnsSubdomain: async () => {
+        return await fetchJson(`${API_URL}/server/dns-subdomain`);
+    },
+    setDnsSubdomain: async (subdomain) => {
+        return await fetchJson(`${API_URL}/server/dns-subdomain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subdomain })
+        });
+    },
+    checkDnsSubdomain: async (subdomain) => {
+        return await fetchJson(`${API_URL}/server/dns-check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subdomain })
+        });
+    },
 
     // --- Mods ---
     searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod', sort = 'downloads', category = null) => {

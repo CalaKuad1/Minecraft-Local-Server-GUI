@@ -370,7 +370,12 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     setTunnelConnecting(false);
                 } else if (!tunnelConnecting && tunnelAddress) {
                     setTunnelAddress(null);
+                    setTunnelConnecting(false);
                 }
+                if (serverStatus.tunnel.dns_address) {
+                    setDnsAddress(serverStatus.tunnel.dns_address);
+                }
+            }
             }
         }
     }, [serverStatus]);
@@ -404,6 +409,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [playitClaimLink, setPlayitClaimLink] = useState(null);
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
+    const [dnsAddress, setDnsAddress] = useState(null);
+    const [dnsSubdomain, setDnsSubdomain] = useState('');
+    const [dnsEditing, setDnsEditing] = useState(false);
+    const [dnsAvailable, setDnsAvailable] = useState(null);
+    const [dnsChecking, setDnsChecking] = useState(false);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -451,6 +461,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             return;
         }
 
+        if (item.type === 'dns_updated') {
+            setDnsAddress(item.address);
+            return;
+        }
+
         if (item.message !== undefined || item.level) {
             const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
 
@@ -476,6 +491,18 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     useEffect(() => {
         return subscribe('dashboard', handleWsMessage);
     }, [subscribe, handleWsMessage]);
+
+    // Cargar subdominio DNS al montar
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const data = await api.getDnsSubdomain();
+                if (data?.subdomain) setDnsSubdomain(data.subdomain);
+                if (data?.address) setDnsAddress(data.address);
+            } catch (e) {}
+        };
+        load();
+    }, [serverStatus?.server_id]);
 
     // Robust Auto-scroll logs
     useEffect(() => {
@@ -780,6 +807,84 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     </div>
                 </div>
             </div>
+
+            {/* Fixed DNS Address - appears when tunnel is active */}
+            {tunnelAddress && (
+                <div className="flex items-center gap-4 p-4 bg-emerald-500/[0.03] border border-emerald-500/10 rounded-sm relative z-50 backdrop-blur-2xl">
+                    <div className="p-2 rounded-sm border border-emerald-500/20 bg-emerald-500/5 text-emerald-400">
+                        <Globe size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
+                            Fixed Address
+                        </div>
+                        {dnsAddress ? (
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-mono text-emerald-400 font-bold select-all">{dnsAddress}</span>
+                                <button
+                                    onClick={() => { navigator.clipboard.writeText(dnsAddress); }}
+                                    className="text-[10px] text-zinc-500 hover:text-white px-2 py-0.5 rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-sm font-mono text-zinc-500">
+                                Enable "Fixed Address" in Settings to get a permanent domain
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {dnsEditing ? (
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const val = e.target.elements.subdomain.value.trim();
+                                if (!val) return;
+                                setDnsChecking(true);
+                                try {
+                                    const check = await api.checkDnsSubdomain(val);
+                                    if (!check.available) {
+                                        setDnsAvailable(false);
+                                        setDnsChecking(false);
+                                        return;
+                                    }
+                                    const result = await api.setDnsSubdomain(val);
+                                    setDnsSubdomain(result.subdomain);
+                                    setDnsAddress(result.address);
+                                    setDnsEditing(false);
+                                    setDnsAvailable(null);
+                                } catch (err) {
+                                    console.error(err);
+                                }
+                                setDnsChecking(false);
+                            }} className="flex items-center gap-1">
+                                <span className="text-xs text-zinc-500">.play.ariser.app</span>
+                                <input
+                                    name="subdomain"
+                                    defaultValue={dnsSubdomain}
+                                    placeholder="survival"
+                                    className="w-24 bg-black/40 border border-white/10 rounded-sm px-2 py-1 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-emerald-500/40"
+                                    autoFocus
+                                />
+                                <button type="submit" disabled={dnsChecking} className="text-[10px] px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm hover:bg-emerald-500/20 disabled:opacity-50 uppercase tracking-wider">
+                                    {dnsChecking ? '...' : 'Set'}
+                                </button>
+                                <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="text-[10px] px-1 py-1 text-zinc-500 hover:text-white">✕</button>
+                            </form>
+                        ) : (
+                            <button
+                                onClick={() => setDnsEditing(true)}
+                                className="text-[10px] px-2 py-1 text-zinc-500 hover:text-white rounded-sm border border-white/5 hover:border-white/20 transition-colors uppercase tracking-wider"
+                            >
+                                {dnsSubdomain ? dnsSubdomain : 'Customize'}
+                            </button>
+                        )}
+                    </div>
+                    {dnsAvailable === false && (
+                        <div className="text-[10px] text-red-400 absolute -bottom-5 left-0">That name is already taken</div>
+                    )}
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
