@@ -419,6 +419,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
     const [dnsAddress, setDnsAddress] = useState(null);
+    const [autoTunnel, setAutoTunnel] = useState(localStorage.getItem('autoTunnel') !== 'false');
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -537,9 +538,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
     const handleStart = async () => {
         setLoading(true);
-        setLocalStatus('starting'); // Immediate visual feedback
+        setLocalStatus('starting');
         try {
             await api.start();
+            if (autoTunnel) {
+                setTimeout(async () => {
+                    try { await api.startTunnel(tunnelRegion, tunnelProvider); } catch (e) {}
+                }, 3000);
+            }
             if (onRefresh) onRefresh();
         } catch (e) {
             setLocalStatus('offline');
@@ -744,10 +750,24 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         }} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'pinggy', label: 'Pinggy (Recomendado)' }, { value: 'playit', label: 'Playit.gg' }]} />
                     </div>
                     {tunnelProvider === 'pinggy' && (
-                        <div className="w-24 relative z-50 rounded-sm border border-white/10 hover:border-white/20 transition-colors bg-white/5 animate-in fade-in slide-in-from-left-2 duration-300">
-                            <Select value={tunnelRegion} onChange={setTunnelRegion} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'eu', label: 'EU ­ƒç¬­ƒç║' }, { value: 'us', label: 'US ­ƒç║­ƒç©' }, { value: 'ap', label: 'Asia ­ƒîÅ' }]} />
+                        <div className="w-20 relative z-50 rounded-sm border border-white/10 hover:border-white/20 transition-colors bg-white/5 animate-in fade-in slide-in-from-left-2 duration-300">
+                            <Select value={tunnelRegion} onChange={setTunnelRegion} disabled={!!tunnelAddress || tunnelConnecting} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} />
                         </div>
                     )}
+                    <button
+                        onClick={() => {
+                            const v = !autoTunnel;
+                            setAutoTunnel(v);
+                            localStorage.setItem('autoTunnel', v.toString());
+                        }}
+                        disabled={!!tunnelAddress || tunnelConnecting}
+                        title={autoTunnel ? 'Auto-start tunnel with server: ON' : 'Auto-start tunnel with server: OFF'}
+                        className={`w-10 h-full flex items-center justify-center rounded-sm border text-[10px] font-bold uppercase transition-all ${
+                            autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'
+                        }`}
+                    >
+                        <span className={autoTunnel ? 'animate-pulse' : ''}>⏱</span>
+                    </button>
                 </div>
 
                 <button
@@ -761,34 +781,22 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             } else {
                                 setTunnelConnecting(true);
                                 setPlayitClaimLink(null);
-                                console.log('[Dashboard] Starting tunnel with region:', tunnelRegion, 'provider:', tunnelProvider);
-                                const result = await api.startTunnel(tunnelRegion, tunnelProvider);
-                                console.log('[Dashboard] Tunnel start result:', result);
-                                
-                                // Automatically save Pinggy provider selection since it's the most reliable option now
-                                if (tunnelProvider === 'pinggy') {
-                                    localStorage.setItem('preferredTunnelProvider', 'pinggy');
-                                }
-                                // Note: tunnelConnecting will be set to false by polling or WS event
+                                if (tunnelProvider === 'pinggy') localStorage.setItem('preferredTunnelProvider', 'pinggy');
+                                await api.startTunnel(tunnelRegion, tunnelProvider);
                             }
                         } catch (err) {
-                            console.error('[Dashboard] Tunnel error:', err);
                             setTunnelConnecting(false);
-                            // Get the error message from the response if possible
-                            const errorMsg = err.response?.data?.detail || err.message || "Unknown error";
-                            // Show error in logs
-                            setLocalLogs(prev => [...prev, {
-                                message: `ÔØî Tunnel error: ${errorMsg}`,
-                                level: 'error',
-                                time: new Date().toISOString()
-                            }]);
-                            alert(`Error de t├║nel: ${errorMsg}`);
+                            alert('Tunnel error: ' + (err.response?.data?.detail || err.message));
                         }
                     }}
                     disabled={tunnelConnecting && !tunnelAddress}
-                    className={`px-4 py-2 border rounded-sm text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all group ${tunnelAddress ? 'bg-transparent border-red-500/20 text-red-400 hover:bg-red-500/10' : tunnelConnecting ? 'bg-transparent border-yellow-500/20 text-yellow-400' : 'bg-transparent border-white/10 text-zinc-400 hover:text-white hover:border-white/30'}`}
+                    className={`px-5 py-2.5 rounded-sm text-xs font-minecraft font-bold uppercase tracking-widest flex items-center gap-2 transition-all ${
+                        tunnelAddress ? 'bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10' :
+                        tunnelConnecting ? 'bg-transparent border border-yellow-500/30 text-yellow-400' :
+                        'bg-white text-black hover:bg-zinc-200'
+                    }`}
                 >
-                    {tunnelAddress ? (<><Square size={14} className="group-hover:fill-current" /> Stop Public</>) : tunnelConnecting ? (<><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting...</>) : (<><Globe size={14} /> Make Public</>)}
+                    {tunnelAddress ? (<><Square size={14} /> Stop</>) : tunnelConnecting ? (<><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting</>) : (<><Globe size={14} /> Make Public</>)}
                 </button>
 
                 <div className="relative group">
