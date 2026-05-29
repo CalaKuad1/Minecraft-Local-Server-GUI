@@ -87,37 +87,29 @@ export default function Mods({ status, onOpenWizard }) {
     };
 
     const handleInstall = async (mod) => {
-        // Find best version if we can, or just install what we have? 
-        // NOTE: 'mod' here is a search result. It has 'project_id' or 'slug'.
-        // We actually need a SPECIFIC FILE VERSION ID. 
-        // The search result usually contains `latest_version` string or we should hit `getModVersions`.
-        //
-        // FOR NOW: Let's assume we fetch versions first to be safe, OR if the search result allows direct install (unlikely).
-        // Modrinth Search Result -> slug.
-
-        // 1. Fetch versions
-        // 2. Install latest compatible
-
         try {
-            setInstalling(prev => ({ ...prev, [mod.slug]: true })); // Use slug as key
+            setInstalling(prev => ({ ...prev, [mod.slug]: true }));
 
-            // Fetch versions
             const versions = await api.getModVersions(mod.slug, activeLoader, activeVersion);
             if (!versions || versions.length === 0) {
-                // Try fetching "any" version just in case filters were too strict
-                // Or just error
                 throw new Error("No compatible versions found for this server.");
             }
 
-            const targetVersion = versions[0]; // First one is usually latest
+            const targetVersion = versions[0];
 
-            // Trigger install
-            // The backend now runs async and sends WS progress
+            // Check for required dependencies
+            const reqDeps = targetVersion.dependencies?.filter(d => d.dependency_type === 'required') || [];
+            if (reqDeps.length > 0) {
+                const depNames = reqDeps.map(d => d.project_id).join(', ');
+                const proceed = await dialog.confirm(
+                    `${mod.title || mod.slug} requires ${reqDeps.length} mod${reqDeps.length > 1 ? 's' : ''}.\n\nRequired: ${reqDeps.map(d => d.file_name || d.project_id).join(', ')}\n\nInstall ${mod.title || mod.slug} anyway? (Dependencies must be installed separately)`,
+                    "Required Dependencies",
+                    { variant: "warning", confirmLabel: "Install Anyway", cancelLabel: "Cancel" }
+                );
+                if (!proceed) { setInstalling(prev => ({ ...prev, [mod.slug]: false })); return; }
+            }
+
             await api.installMod(targetVersion.id);
-
-            // We don't await completion here anymore, we watch WS.
-            // But we can keep state 'installing' until we get a completion event?
-            // For now, let's rely on standard WS logs or optimistically say "Started".
 
         } catch (err) {
             console.error(err);

@@ -435,6 +435,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [dnsSubdomain, setDnsSubdomain] = useState('');
     const [onlineMode, setOnlineMode] = useState(true);
     const [togglingMode, setTogglingMode] = useState(false);
+    const [serverError, setServerError] = useState(null);
 
     const { isConnected, subscribe, send } = useWebSocket();
     const logsEndRef = useRef(null);
@@ -450,6 +451,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 isStoppingRef.current = false;
                 if (onRefresh) onRefresh();
             } else if (item.status === 'online') {
+                setServerError(null);
                 if (onRefresh) onRefresh();
             }
             return;
@@ -484,6 +486,11 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
         if (item.type === 'dns_updated') {
             setDnsAddress(item.address);
+            return;
+        }
+
+        if (item.type === 'server_error') {
+            setServerError(item);
             return;
         }
 
@@ -730,6 +737,37 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         </button>
                     </div>
                 </div>
+
+            {/* Error Banner */}
+            {serverError && (
+                <div className="rounded-sm border border-red-500/20 bg-red-500/5 p-4 relative overflow-hidden">
+                    <div className="flex items-start gap-3">
+                        <div className="p-1.5 rounded-sm bg-red-500/10 text-red-400 shrink-0 mt-0.5">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-minecraft tracking-wider uppercase text-red-400 mb-0.5">
+                                {serverError.error === 'mod_dependency' ? 'Missing Mod Dependency' :
+                                 serverError.error === 'java_version' ? 'Java Version Error' :
+                                 serverError.error === 'port_conflict' ? 'Port Conflict' :
+                                 serverError.error === 'out_of_memory' ? 'Out of Memory' :
+                                 serverError.error === 'mod_loading' ? 'Mod Loading Error' :
+                                 'Server Error'}
+                            </div>
+                            <div className="text-[11px] text-zinc-400 leading-relaxed">
+                                {serverError.fix || 'Unknown error. Check the console for details.'}
+                                {serverError.mod && <span className="text-zinc-500 ml-1">— {serverError.mod}</span>}
+                            </div>
+                            <div className="text-[9px] text-zinc-600 font-mono mt-1 truncate">{serverError.detail}</div>
+                        </div>
+                        <button onClick={() => setServerError(null)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors shrink-0">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    {/* Dismiss hint */}
+                    <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-red-500/[0.02] to-transparent pointer-events-none"></div>
+                </div>
+            )}
 
             {/* Tunnel Section */}
             <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">

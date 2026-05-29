@@ -53,6 +53,8 @@ jobs:
             --collect-all uvicorn \
             --collect-all fastapi \
             --collect-all wsproto \
+            --collect-all requests \
+            --collect-all pydantic \
             --hidden-import=uvicorn.logging \
             --hidden-import=uvicorn.loops \
             --hidden-import=uvicorn.loops.auto \
@@ -63,6 +65,13 @@ jobs:
             --hidden-import=uvicorn.protocols.websockets.auto \
             --hidden-import=uvicorn.lifespan \
             --hidden-import=uvicorn.lifespan.on \
+            --hidden-import=starlette \
+            --hidden-import=starlette.routing \
+            --hidden-import=starlette.middleware \
+            --hidden-import=starlette.requests \
+            --hidden-import=starlette.responses \
+            --hidden-import=multipart \
+            --hidden-import=python_multipart \
             api_server.py
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv dist/api_server.exe .
@@ -136,6 +145,8 @@ jobs:
             --collect-all uvicorn \
             --collect-all fastapi \
             --collect-all wsproto \
+            --collect-all requests \
+            --collect-all pydantic \
             --hidden-import=uvicorn.logging \
             --hidden-import=uvicorn.loops \
             --hidden-import=uvicorn.loops.auto \
@@ -146,6 +157,13 @@ jobs:
             --hidden-import=uvicorn.protocols.websockets.auto \
             --hidden-import=uvicorn.lifespan \
             --hidden-import=uvicorn.lifespan.on \
+            --hidden-import=starlette \
+            --hidden-import=starlette.routing \
+            --hidden-import=starlette.middleware \
+            --hidden-import=starlette.requests \
+            --hidden-import=starlette.responses \
+            --hidden-import=multipart \
+            --hidden-import=python_multipart \
             api_server.py
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv dist/api_server.exe .

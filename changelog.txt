@@ -2,6 +2,15 @@
 
 ## Version 1.2.5 - 2026-05-28 DNS PROXY, FIXED ADDRESSES & CONSOLE
 
+### CRITICAL FIX:
+- **Fixed backend crash on startup (.exe)** — Added missing hidden imports (`requests`, `pydantic`, `starlette`, `multipart`) to PyInstaller build
+- **Error logging** — Backend crash logs are now saved to `%APPDATA%/MinecraftServerGUI/backend_crash.log`
+
+### ERROR FEEDBACK (NEW):
+- **Server error detection** — Common errors (missing mods, Java version, port conflicts, OOM) are detected and shown as structured error banners with fix suggestions
+- **Mod dependency warnings** — When installing a mod that requires other mods, shows a confirmation dialog
+- **Banner in Dashboard** — Clear, actionable error messages with dismiss button
+
 ### NEW: Fixed Server Addresses (DNS)
 - **Permanent domain** — Each server gets a permanent address like `survival.play.tudominio.app` that never changes
 - **Auto-generated** — Unique subdomain generated automatically from server name + ID (`vanilla-a3f2b`)

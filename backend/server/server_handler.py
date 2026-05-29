@@ -975,6 +975,9 @@ allow-flight=false
             player_name = leave_match.group(1)
             self.tracked_players.discard(player_name)
 
+        # Detect common server errors and broadcast structured events
+        self._detect_and_broadcast_errors(line_no_ansi)
+
         clean_line = line_no_ansi.strip()
         suppress_from_console = False
         if clean_line:
@@ -1204,6 +1207,45 @@ allow-flight=false
         except Exception as e:
             self._log(f"Error while waiting for server to stop: {e}\n", "error")
             return False
+
+    def _detect_and_broadcast_errors(self, line):
+        """Detect common server errors and broadcast structured events."""
+        if not self.output_callback:
+            return
+        error_info = None
+
+        # Mod dependency missing (NoClassDefFoundError)
+        m = re.search(r"NoClassDefFoundError:\s*(\S+)", line)
+        if m:
+            cls = m.group(1)
+            # Map class to mod name
+            error_info = {"type": "server_error", "error": "mod_dependency", "detail": cls}
+            if "geckolib" in cls.lower() or "software.bernie" in cls.lower():
+                error_info["mod"] = "GeckoLib"
+                error_info["fix"] = "Install GeckoLib from the Mods browser"
+            else:
+                error_info["mod"] = cls.split(".")[-1]
+                error_info["fix"] = f"Search and install the mod that provides '{cls}'"
+
+        # Java version error
+        if not error_info and re.search(r"UnsupportedClassVersionError|javax\.net\.ssl", line):
+            error_info = {"type": "server_error", "error": "java_version", "fix": "Update Java to the required version (Settings > System)"}
+
+        # Port conflict
+        if not error_info and re.search(r"Address already in use|BindException", line):
+            error_info = {"type": "server_error", "error": "port_conflict", "fix": "Change the server port in Settings > Network, or close the program using this port"}
+
+        # Out of memory
+        if not error_info and re.search(r"OutOfMemoryError", line):
+            error_info = {"type": "server_error", "error": "out_of_memory", "fix": "Increase RAM allocation in Settings > System > Max RAM"}
+
+        # Mod loading failure
+        if not error_info and re.search(r"Failed to start|LoadingFailedException", line):
+            error_info = {"type": "server_error", "error": "mod_loading", "fix": "Check the console logs for which mod failed, or remove recently added mods"}
+
+        if error_info:
+            error_info["server_id"] = self.server_id
+            self.output_callback(error_info)
 
     def send_command(self, command, silent: bool = False):
         if (

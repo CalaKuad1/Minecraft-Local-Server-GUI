@@ -5,10 +5,11 @@ import multiprocessing
 # --- CRITICAL: REDIRECT STREAMS IN FROZEN EXE ---
 # If running as a PyInstaller --noconsole EXE, stdout/stderr are None, which crashes many libraries.
 if getattr(sys, "frozen", False) and sys.platform == "win32":
-    null_device = open(os.devnull, "w")
-    sys.stdout = null_device
-    sys.stderr = null_device
-    # Also ensure freeze_support is called as early as possible
+    log_dir = os.path.join(os.getenv("APPDATA", ""), "MinecraftServerGUI")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = open(os.path.join(log_dir, "backend_crash.log"), "w", encoding="utf-8")
+    sys.stdout = log_file
+    sys.stderr = log_file
     multiprocessing.freeze_support()
 
 import asyncio
