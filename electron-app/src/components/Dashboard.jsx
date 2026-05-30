@@ -120,175 +120,6 @@ const PublicServerModal = ({ onClose, t }) => {
     );
 };
 
-// Custom Modal Component (Playit Claim)
-const PlayitClaimModal = ({ link, onClose, t }) => {
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                onClick={onClose}
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className="bg-[#0f0f0f] border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="bg-[#121212] p-6 border-b border-white/5 relative overflow-hidden">
-                    <div className="relative flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-500/10 rounded-sm border border-blue-500/20 text-blue-400 font-minecraft text-xl font-bold">
-                                P
-                            </div>
-                            <div>
-                                    <h2 className="text-xl font-minecraft tracking-widest text-white uppercase">{t('dashboard.playit.claim_title', 'Playit.gg Setup')}</h2>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{t('dashboard.playit.claim_desc', 'Authorization Required')}</p>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-sm transition-colors text-gray-500 hover:text-white">
-                            <X size={20} />
-                        </button>
-                    </div>
-                </div>
-                <div className="p-8 space-y-6 flex flex-col items-center text-center">
-                    <p className="text-gray-400 text-xs leading-relaxed font-medium uppercase tracking-wider opacity-80 mb-2">
-                        {link.includes('manage/tunnels') 
-                            ? "Tu agente de Playit ya est├í conectado. Sin embargo, no tienes ning├║n t├║nel configurado para Minecraft. Por favor, abre el panel de Playit, crea un t├║nel para Minecraft Java y copia tu nueva IP."
-                            : t('dashboard.playit.click_link', 'Click the link below to link this server to your Playit.gg account. Once authorized, the tunnel will connect automatically.')}
-                    </p>
-                    <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full px-5 py-4 bg-blue-500 hover:bg-blue-400 text-black font-minecraft tracking-widest text-sm uppercase transition-all rounded-sm shadow-[0_0_15px_rgba(59,130,246,0.5)] outline outline-offset-2 outline-transparent hover:outline-blue-500/50">
-                        <ExternalLink size={16} className="mr-2" />
-                        {link.includes('manage/tunnels') ? "Abrir Panel de Control" : t('dashboard.playit.open_browser', 'Open in Browser')}
-                    </a>
-                </div>
-                <div className="p-6 bg-[#121212] border-t border-white/5 flex justify-center">
-                    {!link.includes('manage/tunnels') && (
-                        <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest animate-pulse">{t('dashboard.playit.waiting', 'Waiting for authorization...')}</span>
-                        </div>
-                    )}
-                </div>
-            </motion.div>
-        </div>
-    );
-};
-
-// Custom Modal Component (Shutdown Timer)
-const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) => {
-    const [minutes, setMinutes] = useState(60);
-    const presets = [10, 30, 60, 120, 240];
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                onClick={onClose}
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className="bg-[#0f0f0f] border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="bg-[#121212] p-6 border-b border-white/5 relative overflow-hidden">
-                    <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-orange-500/10 rounded-sm border border-orange-500/20 text-orange-400 shadow-inner">
-                                <Clock size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-minecraft tracking-widest text-white uppercase">{t('dashboard.shutdown_timer.title')}</h2>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{t('dashboard.shutdown_timer.desc')}</p>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-sm transition-colors text-gray-500 hover:text-white">
-                            <X size={20} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Body */}
-                <div className="p-8 space-y-8">
-                    <div>
-                        <label className="text-[10px] font-minecraft text-gray-600 uppercase tracking-widest mb-4 block">{t('dashboard.shutdown_timer.set_duration')}</label>
-                        <div className="flex items-center gap-4">
-                            <div className="flex-1 relative group">
-                                <input
-                                    type="number"
-                                    value={minutes}
-                                    onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="relative w-full bg-black/40 border border-white/10 rounded-sm px-4 py-4 text-white focus:outline-none focus:border-orange-500/40 transition-colors text-2xl font-bold font-minecraft text-center tracking-widest"
-                                />
-                            </div>
-                            <span className="text-gray-500 font-minecraft uppercase tracking-widest text-xs select-none">{t('dashboard.shutdown_timer.minutes')}</span>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="text-[10px] font-minecraft text-gray-600 uppercase tracking-widest mb-4 block">{t('dashboard.shutdown_timer.presets')}</label>
-                        <div className="grid grid-cols-5 gap-2">
-                            {presets.map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => setMinutes(p)}
-                                    className={`py-2 rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all border ${minutes === p
-                                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/40'
-                                        : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10 hover:text-white'
-                                        }`}
-                                >
-                                    {p}m
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {activeTimer && activeTimer.scheduled && (
-                        <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-sm flex items-center gap-3 animate-in fade-in zoom-in duration-300">
-                            <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_#f97316]"></div>
-                            <p className="text-[10px] font-minecraft uppercase tracking-widest text-orange-400/80">
-                                {t('dashboard.shutdown_timer.starts_in').replace('{min}', Math.ceil(activeTimer.remaining_seconds / 60))}
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div className="p-6 bg-[#121212] border-t border-white/5 flex gap-4">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all border border-white/5"
-                    >
-                        {t('common.cancel')}
-                    </button>
-                    {(activeTimer?.scheduled) ? (
-                        <button
-                            onClick={() => { onCancel(); onClose(); }}
-                            className="flex-1 py-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all"
-                        >
-                            {t('dashboard.shutdown_timer.cancel')}
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => onSchedule(minutes)}
-                            className="flex-1 py-3 bg-orange-500 text-black rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all hover:bg-orange-400"
-                        >
-                            {t('dashboard.shutdown_timer.start')}
-                        </button>
-                    )}
-                </div>
-            </motion.div>
-        </div>
-    );
-};
-
 export default function Dashboard({ status: serverStatus, onRefresh }) {
     const { t } = useTranslation();
     // Local state for immediate UI feedback
@@ -420,11 +251,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const [tunnelAddress, setTunnelAddress] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
-    
-    // Load preferred provider from localStorage if available, default to pinggy
-    const defaultProvider = localStorage.getItem('preferredTunnelProvider') || 'pinggy';
-    const [tunnelProvider, setTunnelProvider] = useState(defaultProvider);
-    const [playitClaimLink, setPlayitClaimLink] = useState(null);
+    const [tunnelProvider] = useState('pinggy');
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
     const [dnsAddress, setDnsAddress] = useState(null);
@@ -457,21 +284,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
             return;
         }
 
-        if (item.type === 'playit_claim') {
-            setPlayitClaimLink(item.link);
-            return;
-        }
-
         if (item.type === 'tunnel_connected') {
             setTunnelAddress(item.address);
             setTunnelConnecting(false);
-            setPlayitClaimLink(null);
             return;
         }
         if (item.type === 'tunnel_disconnected') {
             setTunnelAddress(null);
             setTunnelConnecting(false);
-            setPlayitClaimLink(null);
             return;
         }
 
@@ -833,8 +653,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         ) : null}
                         {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">"{dnsAvailable}" is already taken — pick another name</div>}
                         <div>
-                            {tunnelAddress === "Check Playit.gg Dashboard" ? <span className="text-sm font-mono font-bold text-orange-400">Panel Playit.gg <button onClick={async () => { const ip = prompt("IP de Playit:"); if (ip) { try { await api.setTunnelAddress(ip); } catch (e) { /* ignore */ } } }} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-sm text-white uppercase cursor-pointer">Escribir IP</button></span>
-                            : !dnsAddress ? <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span> : null}
+                            {!dnsAddress ? <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span> : null}
                         </div>
                         {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-zinc-600 font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
                     </div>
@@ -881,9 +700,9 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
 
                 {showAdvanced && !tunnelAddress && <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/5">
                     <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Provider</span>
-                    <div className="w-24 rounded-sm border border-white/10 bg-white/5">
-                        <Select value={tunnelProvider} onChange={v => { setTunnelProvider(v); localStorage.setItem('preferredTunnelProvider', v); }} options={[{ value: 'pinggy', label: 'Pinggy' }, { value: 'playit', label: 'Playit.gg' }]} />
-                    </div>
+                        <div className="w-24 rounded-sm border border-white/10 bg-white/5">
+                            <Select value={tunnelProvider} onChange={() => {}} options={[{ value: 'pinggy', label: 'Pinggy' }]} />
+                        </div>
                     {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Region</span><div className="w-16 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
                     <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
@@ -979,13 +798,6 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     <PublicServerModal
                         onClose={() => setShowPublicModal(false)}
                         t={t}
-                    />
-                )}
-                {playitClaimLink && (
-                    <PlayitClaimModal 
-                        link={playitClaimLink} 
-                        onClose={() => api.stopTunnel()} 
-                        t={t} 
                     />
                 )}
                 {showShutdownModal && (
