@@ -666,10 +666,8 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                 await api.stopTunnel();
                                 setTunnelAddress(null);
                                 setTunnelConnecting(false);
-                                setPlayitClaimLink(null);
                             } else {
                                 setTunnelConnecting(true);
-                                setPlayitClaimLink(null);
                                 if (tunnelProvider === 'pinggy') localStorage.setItem('preferredTunnelProvider', 'pinggy');
                                 await api.startTunnel(tunnelRegion, tunnelProvider);
                             }
