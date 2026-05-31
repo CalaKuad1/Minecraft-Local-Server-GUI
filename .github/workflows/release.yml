@@ -175,6 +175,7 @@ jobs:
       - name: Build and Publish Electron
         run: |
           cd electron-app
-          npm run electron:build
+          npm run build
+          npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
