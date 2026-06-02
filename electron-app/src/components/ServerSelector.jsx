@@ -20,6 +20,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [booting, setBooting] = useState(null);
+    const [viewMode, setViewMode] = useState('grid');
     const dialog = useDialog();
 
     useEffect(() => {
@@ -146,8 +147,8 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             <div>
                                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 font-minecraft">{t('library.quick_filters')}</h3>
                                 <div className="space-y-2">
-                                    <FilterButton icon={<LayoutDashboard size={14}/>} label={t('library.grid_view')} active />
-                                    <FilterButton icon={<Server size={14}/>} label={t('library.detailed_view')} />
+                                    <FilterButton icon={<LayoutDashboard size={14}/>} label={t('library.grid_view')} active={viewMode === 'grid'} onClick={() => setViewMode('grid')} />
+                                    <FilterButton icon={<Server size={14}/>} label={t('library.detailed_view')} active={viewMode === 'detailed'} onClick={() => setViewMode('detailed')} />
                                 </div>
                             </div>
                         </div>
@@ -200,7 +201,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     <Clock size={18} className="text-emerald-400" />
                                     <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-minecraft">{t('library.recently_opened')}</h3>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className={`grid gap-6 ${viewMode === 'detailed' ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
                                     {recentlyOpened.map((server) => (
                                         <RecentCard key={server.id} server={server} onClick={() => handleSelect(server.id)} onBoot={(e) => handleBoot(server.id, e)} booting={booting === server.id} />
                                     ))}
@@ -223,7 +224,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     <p className="font-bold tracking-widest uppercase text-sm opacity-50 font-minecraft">{searchQuery ? t('library.no_matches') : t('library.empty_infrastructure')}</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                                <div className={`grid gap-6 ${viewMode === 'detailed' ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                                     {filteredServers.map((server) => (
                                         <ServerCard 
                                             key={server.id} 
@@ -262,9 +263,9 @@ function StatItem({ icon, label, value, active }) {
     );
 }
 
-function FilterButton({ icon, label, active }) {
+function FilterButton({ icon, label, active, onClick }) {
     return (
-        <button className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium tracking-wide transition-colors ${active ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+        <button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium tracking-wide transition-colors ${active ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
             <span className={`${active ? 'text-white' : 'text-gray-400'}`}>{icon}</span>
             {label}
         </button>

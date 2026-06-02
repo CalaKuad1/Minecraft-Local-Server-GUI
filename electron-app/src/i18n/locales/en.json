@@ -218,7 +218,8 @@
             "max_ram": "Max RAM Allocation",
             "min_ram": "Initial RAM Setup (Min)",
             "java_path": "Java Executable Path",
-            "java_path_desc": "Explicit path or system environment variables."
+            "java_path_desc": "Explicit path or system environment variables.",
+            "browse": "Browse"
         }
     }
 }

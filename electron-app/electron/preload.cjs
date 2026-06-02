@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+    openFile: () => ipcRenderer.invoke('dialog:openFile'),
     onCloseRequested: (callback) => {
         ipcRenderer.on('app-close-requested', (event, ...args) => {
             callback(event, ...args);

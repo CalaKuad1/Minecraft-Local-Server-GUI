@@ -260,6 +260,12 @@ export const api = {
         }
         return null;
     },
+    openFilePicker: async () => {
+        if (window.electron && window.electron.openFile) {
+            return await window.electron.openFile();
+        }
+        return null;
+    },
     openServerFolder: async () => {
         return await fetchJson(`${API_URL}/server/open-folder`, { method: 'POST' });
     },

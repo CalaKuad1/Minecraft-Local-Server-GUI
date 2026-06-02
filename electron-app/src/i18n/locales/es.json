@@ -218,7 +218,8 @@
             "max_ram": "Asignación Máxima de RAM",
             "min_ram": "RAM Inicial (Mín)",
             "java_path": "Ruta del Ejecutable Java",
-            "java_path_desc": "Ruta explícita o variables de entorno."
+            "java_path_desc": "Ruta explícita o variables de entorno.",
+            "browse": "Explorar"
         }
     }
 }

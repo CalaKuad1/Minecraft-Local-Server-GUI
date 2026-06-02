@@ -114,6 +114,9 @@ class ServerHandler:
 
     def _setup_java_for_minecraft(self, minecraft_version):
         """Configura automáticamente la versión correcta de Java para Minecraft."""
+        # Skip auto-setup if user has explicitly set a custom Java path
+        if self.java_path and self.java_path != "java":
+            return
         try:
             self._log(
                 f"Configuring Java for Minecraft {minecraft_version}...\n", "info"
@@ -581,71 +584,113 @@ allow-flight=false
             custom_env["PATH"] = f"{java_bin_dir}{path_sep}{custom_env.get('PATH', '')}"
             logging.info(f"Handler: Injected Environment - JAVA_HOME={java_root}")
 
-        # JAR-based startup (skipping run.sh/run.bat scripts to avoid
-        # readline/library conflicts on Linux/AppImage environments)
+        # Try to parse run.sh/run.bat to extract the java command
+        # (avoids executing sh/bat directly, which can cause readline/library crashes)
+        run_script = None
+        script_names = (
+            ["run.bat", "start.bat", "launch.bat"]
+            if sys.platform == "win32"
+            else ["run.sh", "start.sh", "launch.sh"]
+        )
+        for name in script_names:
+            p = os.path.join(self.server_path, name)
+            if os.path.exists(p):
+                run_script = p
+                break
+
+        if run_script:
+            parsed = self._parse_startup_script(run_script)
+            if parsed:
+                if "nogui" not in parsed:
+                    parsed.append("nogui")
+                command = [java_path] + parsed
+                self.output_callback(
+                    "Parsed startup script: using direct Java launch.\n", "info"
+                )
+                return command, custom_env
+
+        # Fallback: JAR-based startup
         self.output_callback(
-            "Starting server via JAR-based method (skipping startup scripts).\n", "info"
+            "Starting server via JAR-based method.\n", "info"
         )
         all_jars = glob.glob(os.path.join(self.server_path, "*.jar"))
         server_jar_path = None
 
-        non_installer_jars = [
-            j for j in all_jars if "installer" not in os.path.basename(j).lower()
-        ]
+        # Check for forge/neoforge server JAR in libraries/ first
+        lib_fallback = None
+        if self.server_type in ["forge", "neoforge"]:
+            lib_path = os.path.join(self.server_path, "libraries")
+            if os.path.exists(lib_path):
+                candidates = []
+                forge_path_marker = "neoforged/neoforge" if self.server_type == "neoforge" else "minecraftforge/forge"
+                for root, dirs, files in os.walk(lib_path):
+                    for file in files:
+                        if file.endswith(".jar") and "installer" not in file.lower():
+                            full_path = os.path.join(root, file)
+                            score = 0
+                            if forge_path_marker in root.replace("\\", "/"):
+                                score = 10
+                            elif self.server_type in file.lower():
+                                score = 5
+                            if "server" in file.lower():
+                                score += 2
+                            candidates.append((score, full_path))
+                if candidates:
+                    candidates.sort(key=lambda x: x[0], reverse=True)
+                    best = candidates[0]
+                    lib_fallback = best[1]
+                    # Only use library jar if it has "server" in the name
+                    if "server" in os.path.basename(best[1]).lower():
+                        server_jar_path = best[1]
 
-        if non_installer_jars:
-            # Look for common server jar names first
-            preferred_names = [
-                "server.jar",
-                "minecraft_server.jar",
-                "paper.jar",
-                "spigot.jar",
-                "fabric-server-launch.jar",
+        # Fallback to root-level jars
+        if not server_jar_path:
+            non_installer_jars = [
+                j for j in all_jars if "installer" not in os.path.basename(j).lower()
             ]
-            for name in preferred_names:
-                for jar in non_installer_jars:
-                    if os.path.basename(jar).lower() == name:
-                        server_jar_path = jar
+            if non_installer_jars:
+                preferred_names = [
+                    "server.jar",
+                    "minecraft_server.jar",
+                    "paper.jar",
+                    "spigot.jar",
+                    "fabric-server-launch.jar",
+                ]
+                for name in preferred_names:
+                    for jar in non_installer_jars:
+                        if os.path.basename(jar).lower() == name:
+                            server_jar_path = jar
+                            break
+                    if server_jar_path:
                         break
-                if server_jar_path:
-                    break
+                if not server_jar_path:
+                    server_jar_path = non_installer_jars[0]
+            elif all_jars:
+                server_jar_path = all_jars[0]
 
-            # If no preferred name is found, take the first non-installer jar
-            if not server_jar_path:
-                server_jar_path = non_installer_jars[0]
+        # If nothing found in root, fall back to best library candidate
+        if not server_jar_path and lib_fallback:
+            server_jar_path = lib_fallback
+            self.output_callback(
+                "Using library JAR as fallback. Consider reinstalling the server.\n",
+                "warning",
+            )
 
-        elif all_jars:  # Fallback if only installer jars are present for some reason
-            server_jar_path = all_jars[0]
-
-        if not server_jar_path:
-            # Special check for Forge/NeoForge libraries if run.bat is missing
-            if self.server_type in ["forge", "neoforge"]:
-                self.output_callback("Startup script missing. Checking libraries for server JAR...\n", "info")
-                lib_path = os.path.join(self.server_path, "libraries")
-                if os.path.exists(lib_path):
-                    # Search for any jar that looks like a forge/neoforge server jar
-                    for root, dirs, files in os.walk(lib_path):
-                        for file in files:
-                            if file.endswith(".jar") and ("forge" in file.lower() or "neoforge" in file.lower()) and "server" in file.lower():
-                                server_jar_path = os.path.join(root, file)
-                                break
-                        if server_jar_path: break
-                
-                if server_jar_path:
-                    self.output_callback(f"Found server JAR in libraries: {os.path.basename(server_jar_path)}\n", "success")
-                else:
-                    self.output_callback("Could not find server JAR in libraries. Installation might be incomplete.\n", "warning")
-
-        if not server_jar_path:
+        if server_jar_path:
+            lib_jar = "libraries" in server_jar_path
+            self.output_callback(
+                f"Found server JAR: {os.path.basename(server_jar_path)}{' (in libraries/)' if lib_jar else ''}\n",
+                "success",
+            )
+        else:
             # Audit directory before failing
             try:
                 files = os.listdir(self.server_path)
                 logging.info(f"Handler: Server Directory Audit: {files}")
             except Exception as ae:
                 logging.error(f"Handler: Directory Audit FAILED: {ae}")
-
             self.output_callback(
-                "Error: No server .jar file or run script found in the directory.\n",
+                "Error: No server .jar file found in the directory.\n",
                 "error",
             )
             return None, None
@@ -723,11 +768,40 @@ allow-flight=false
             )
             # Try to run it without nogui if it's an installer, 
             # though it probably won't start the server.
-            command.extend(["-jar", os.path.basename(server_jar_path)])
+            command.extend(["-jar", server_jar_path])
         else:
-            command.extend(["-jar", os.path.basename(server_jar_path), "--nogui"])
+            command.extend(["-jar", server_jar_path, "--nogui"])
 
         return command, custom_env
+
+    def _parse_startup_script(self, script_path):
+        """Extract Java command args from run.sh/run.bat without executing sh/bat."""
+        try:
+            with open(script_path, "r") as f:
+                content = f.read()
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                # Find the java invocation line
+                # Matches: "java @args.txt ... nogui" or "java @args.txt ..."
+                if re.match(r'^\s*java\s', stripped):
+                    # Extract tokens after 'java'
+                    # Handle quotes and @file args
+                    import shlex
+                    tokens = shlex.split(stripped, posix=sys.platform != "win32")
+                    # Find index of 'java' and take everything after it
+                    for i, token in enumerate(tokens):
+                        if token == "java":
+                            args = tokens[i + 1:]
+                            # Remove trailing shell variables like "$@" or "%*"
+                            args = [a for a in args if a not in ('"$@"', '$@', '%*')]
+                            if args:
+                                return args
+            return None
+        except Exception as e:
+            logging.warning(f"Handler: Could not parse startup script {script_path}: {e}")
+            return None
 
     def _is_java_version_compatible(
         self, installed_major: int, required_version: int
@@ -810,13 +884,23 @@ allow-flight=false
             logging.error(f"Handler: CRASH in _run_server thread:\n{error_details}")
             self._log(f"Server start failed: {e}\n", "error")
         finally:
-            # Esperar a que los hilos de salida terminen de procesar los últimos logs
-            # Esto evita que el estado se quede en 'stopping' si el log llega justo al final.
+            # Wait for reader threads to finish naturally first
             try:
                 if stdout_thread:
                     stdout_thread.join(timeout=2)
                 if stderr_thread:
                     stderr_thread.join(timeout=2)
+            except:
+                pass
+            # Force-close pipes only if threads are still alive (zombie prevention)
+            try:
+                if self.server_process:
+                    if stdout_thread and stdout_thread.is_alive():
+                        if self.server_process.stdout and not self.server_process.stdout.closed:
+                            self.server_process.stdout.close()
+                    if stderr_thread and stderr_thread.is_alive():
+                        if self.server_process.stderr and not self.server_process.stderr.closed:
+                            self.server_process.stderr.close()
             except:
                 pass
 
@@ -1012,7 +1096,8 @@ allow-flight=false
                 f"Handler: Log reader thread started for {level} (Chunked Binary mode)"
             )
 
-            buffer = b""
+            buffer = bytearray()
+            MAX_BUFFER = 1_048_576  # 1 MB cap to prevent memory leak
             while True:
                 chunk = pipe.read(4096)
                 if not chunk:
@@ -1029,7 +1114,20 @@ allow-flight=false
                         )
                     break
 
-                buffer += chunk
+                buffer.extend(chunk)
+                # Force-flush if buffer exceeds cap (prevents unbounded growth)
+                if len(buffer) > MAX_BUFFER:
+                    self._process_log_line(
+                        buffer.decode("utf-8", errors="replace"),
+                        level,
+                        re,
+                        join_pattern,
+                        leave_pattern,
+                        list_inline_pattern,
+                        list_header_pattern,
+                    )
+                    buffer = bytearray()
+                    continue
                 logging.debug(
                     f"Handler: Received chunk of {len(chunk)} bytes from {level}"
                 )
@@ -1052,7 +1150,7 @@ allow-flight=false
                             sep_len = 2  # Handle \r\n
 
                     line_bytes = buffer[:idx]
-                    buffer = buffer[idx + sep_len :]
+                    buffer = bytearray(buffer[idx + sep_len :])
 
                     line = line_bytes.decode("utf-8", errors="replace")
                     self._process_log_line(

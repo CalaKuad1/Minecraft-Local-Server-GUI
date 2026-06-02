@@ -209,6 +209,7 @@ class AppState:
         self.world_size_cache = {}
         self.world_size_inflight = set()
         self.world_size_lock = threading.Lock()
+        self.world_size_cache_max = 100
 
         # Multi-server management
         self.active_handlers = {}  # server_id -> ServerHandler
@@ -516,6 +517,12 @@ async def update_app_settings(request: Request):
         state.config_manager.config["app_settings"] = {}
     state.config_manager.config["app_settings"].update(body)
     state.config_manager.save()
+    # Also update active handlers' java_path
+    if "java_path" in body:
+        for handler in state.active_handlers.values():
+            handler.java_path = body["java_path"]
+        if state.server_handler:
+            state.server_handler.java_path = body["java_path"]
     return state.config_manager.config["app_settings"]
 
 
@@ -567,8 +574,14 @@ async def delete_server(server_id: str, delete_files: bool = False):
 
     # Delete the profile
     state.config_manager.delete_server(server_id)
+    # Clean up handler from active_handlers to prevent memory leaks
+    if server_id in state.active_handlers:
+        handler = state.active_handlers.pop(server_id)
+        try:
+            handler.stop()
+        except:
+            pass
     if state.selected_server_id == server_id:
-        state.server_handler = None
         state.selected_server_id = None
 
     # Optionally delete files
@@ -1580,6 +1593,11 @@ def get_worlds():
                                                 "size": f"{size_mb} MB",
                                                 "folder_mtime": expected_folder_mtime,
                                             }
+                                            # Evict oldest entries if cache exceeds limit
+                                            if len(state.world_size_cache) > state.world_size_cache_max:
+                                                excess = sorted(state.world_size_cache.keys())[:-state.world_size_cache_max]
+                                                for k in excess:
+                                                    del state.world_size_cache[k]
                                     finally:
                                         if state:
                                             with state.world_size_lock:

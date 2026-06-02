@@ -409,7 +409,25 @@ export default function Settings() {
                                 </div>
 
                                 <div className="pt-6 border-t border-white/5">
-                                    <SettingInput label={t('server_settings.system.java_path')} value={appSettings.java_path} onChange={(v) => handleAppChange('java_path', v)} placeholder="java" />
+                                    <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.system.java_path')}</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={appSettings.java_path}
+                                            placeholder="java"
+                                            onChange={(e) => handleAppChange('java_path', e.target.value)}
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-md px-4 py-2 text-white focus:border-emerald-500 focus:bg-black/60 outline-none transition-all font-mono text-sm"
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                const p = await api.openFilePicker();
+                                                if (p) handleAppChange('java_path', p);
+                                            }}
+                                            className="px-4 py-2 bg-white/5 border border-white/10 rounded-md text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-all font-minecraft"
+                                        >
+                                            {t('server_settings.system.browse')}
+                                        </button>
+                                    </div>
                                     <p className="text-[10px] text-zinc-600 uppercase tracking-widest mt-2">{t('server_settings.system.java_path_desc')}</p>
                                 </div>
                             </div>

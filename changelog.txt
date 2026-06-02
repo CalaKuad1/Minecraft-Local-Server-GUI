@@ -1,6 +1,16 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.2.6 - 2026-06-02 READLINE / STARTUP SCRIPTS FIX
+## Version 1.2.6 - 2026-06-02 MEMORY LEAK & STARTUP SCRIPTS FIX
+
+### CRITICAL FIX:
+- **Fixed massive memory leak in `api_server`** — The binary read buffer in log reader threads could grow unboundedly when output had no newlines. Now capped at 1MB and force-flushed.
+- **Fixed zombie reader threads** — Pipes are now closed before joining threads, preventing stuck daemon threads from holding references to old `ServerHandler` instances and their log history.
+- **Fixed `active_handlers` leak** — Deleting a server now properly removes its handler from memory.
+- **Fixed `world_size_cache` unbounded growth** — Cache now evicts oldest entries when exceeding 100 items.
+- **Reduced memory fragmentation** — Changed `bytes +=` concatenation to `bytearray.extend()` in log reader.
+
+### FIXED:
+- **Startup scripts (run.sh/run.bat) no longer executed** — The app now uses direct JAR-based startup instead of running `run.sh`/`run.bat` scripts. Fixes `undefined symbol: rl_macro_display_hook` crash on Gentoo Linux / AppImage environments (Issue #11)
 
 ### FIXED:
 - **Startup scripts (run.sh/run.bat) no longer executed** — The app now uses direct JAR-based startup instead of running `run.sh`/`run.bat` scripts. Fixes `undefined symbol: rl_macro_display_hook` crash on Gentoo Linux / AppImage environments (Issue #11)

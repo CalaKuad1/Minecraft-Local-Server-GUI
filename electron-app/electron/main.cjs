@@ -110,6 +110,19 @@ ipcMain.handle('dialog:openDirectory', async () => {
   }
 });
 
+ipcMain.handle('dialog:openFile', async () => {
+  const filters = [];
+  if (process.platform === 'win32') {
+    filters.push({ name: 'Executable', extensions: ['exe'] });
+  }
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: filters.length > 0 ? filters : undefined
+  });
+  if (canceled) return null;
+  return filePaths[0];
+});
+
 // Old handler removed - shutdown is now main-process driven
 
 

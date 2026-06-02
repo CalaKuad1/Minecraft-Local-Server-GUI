@@ -212,7 +212,8 @@
             "max_ram": "Allocation RAM Max",
             "min_ram": "Configuration RAM Initiale (Min)",
             "java_path": "Chemin de l'exécutable Java",
-            "java_path_desc": "Chemin explicite ou variables d'environnement."
+            "java_path_desc": "Chemin explicite ou variables d'environnement.",
+            "browse": "Parcourir"
         }
     }
 }
