@@ -581,42 +581,10 @@ allow-flight=false
             custom_env["PATH"] = f"{java_bin_dir}{path_sep}{custom_env.get('PATH', '')}"
             logging.info(f"Handler: Injected Environment - JAVA_HOME={java_root}")
 
-        run_script = None
-
-        # Universal check for startup scripts
-        if sys.platform == "win32":
-            script_path = os.path.join(self.server_path, "run.bat")
-            if os.path.exists(script_path):
-                run_script = script_path
-            else:
-                # Check for other common names
-                for alt in ["start.bat", "launch.bat", "run-server.bat"]:
-                    alt_path = os.path.join(self.server_path, alt)
-                    if os.path.exists(alt_path):
-                        run_script = alt_path
-                        break
-        else:  # For macOS and Linux
-            script_path = os.path.join(self.server_path, "run.sh")
-            if os.path.exists(script_path):
-                run_script = script_path
-            else:
-                for alt in ["start.sh", "launch.sh", "run-server.sh"]:
-                    alt_path = os.path.join(self.server_path, alt)
-                    if os.path.exists(alt_path):
-                        run_script = alt_path
-                        break
-
-        # If a run script is found, prioritize it
-        if run_script:
-            self.output_callback(
-                f"Detected startup script: {os.path.basename(run_script)}. Using it to launch.\n",
-                "info",
-            )
-            return [run_script, "--nogui"], custom_env
-
-        # Fallback to JAR-based startup if no script is found
+        # JAR-based startup (skipping run.sh/run.bat scripts to avoid
+        # readline/library conflicts on Linux/AppImage environments)
         self.output_callback(
-            "No startup script found. Using generic JAR startup method.\n", "info"
+            "Starting server via JAR-based method (skipping startup scripts).\n", "info"
         )
         all_jars = glob.glob(os.path.join(self.server_path, "*.jar"))
         server_jar_path = None
@@ -649,7 +617,7 @@ allow-flight=false
         elif all_jars:  # Fallback if only installer jars are present for some reason
             server_jar_path = all_jars[0]
 
-        if not server_jar_path and not run_script:
+        if not server_jar_path:
             # Special check for Forge/NeoForge libraries if run.bat is missing
             if self.server_type in ["forge", "neoforge"]:
                 self.output_callback("Startup script missing. Checking libraries for server JAR...\n", "info")
@@ -668,7 +636,7 @@ allow-flight=false
                 else:
                     self.output_callback("Could not find server JAR in libraries. Installation might be incomplete.\n", "warning")
 
-        if not server_jar_path and not run_script:
+        if not server_jar_path:
             # Audit directory before failing
             try:
                 files = os.listdir(self.server_path)

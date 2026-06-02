@@ -1,5 +1,12 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.6 - 2026-06-02 READLINE / STARTUP SCRIPTS FIX
+
+### FIXED:
+- **Startup scripts (run.sh/run.bat) no longer executed** — The app now uses direct JAR-based startup instead of running `run.sh`/`run.bat` scripts. Fixes `undefined symbol: rl_macro_display_hook` crash on Gentoo Linux / AppImage environments (Issue #11)
+
+---
+
 ## Version 1.2.5 - 2026-05-28 DNS PROXY, FIXED ADDRESSES & CONSOLE
 
 ### CRITICAL FIX:
