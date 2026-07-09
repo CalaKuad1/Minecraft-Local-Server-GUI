@@ -239,6 +239,47 @@ export const api = {
             body: JSON.stringify(serverConfig)
         });
     },
+    // Link an existing server folder: detect engine/version, then register it.
+    // (Previously this method was missing and the "Link Project" button in the
+    // Setup Wizard silently did nothing — api.importServer was undefined.)
+    importServer: async (path) => {
+        if (!path) throw new Error('A server path is required');
+
+        // Derive a friendly name from the folder name
+        const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'imported-server';
+
+        // Detect engine + version from the folder contents
+        let detected = { type: 'vanilla', version: null };
+        try {
+            detected = await fetchJson(`${API_URL}/setup/detect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            });
+        } catch (e) {
+            // Detection is best-effort; fall back to a generic vanilla profile
+            console.warn('Server detection failed, using defaults:', e);
+        }
+
+        const serverType = (detected && detected.type && detected.type !== 'unknown')
+            ? detected.type
+            : 'vanilla';
+        const version = (detected && detected.version) ? detected.version : null;
+
+        return await fetchJson(`${API_URL}/servers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                path,
+                type: serverType,
+                version,
+                ram_min: '2',
+                ram_max: '4',
+                ram_unit: 'G'
+            })
+        });
+    },
     selectServer: async (serverId) => {
         return await fetchJson(`${API_URL}/servers/select`, {
             method: 'POST',

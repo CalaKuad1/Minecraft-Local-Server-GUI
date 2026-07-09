@@ -1,5 +1,22 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.7 - 2026-07-09 PAPER INSTALL FIX, IMPORT FOLDER & LINUX MEMORY LEAK
+
+### CRITICAL FIX (Issue #15 — Can't install Paper server):
+- **Fixed Paper/Spigot/Fabric install failing with "Failed to download Server JAR."** — The download URL was built without lowercasing the server type, and mcutils.com returns HTTP 500 for capitalized types (e.g. "Paper"). The type is now normalized to lowercase before building the URL and the install dispatch.
+- **Added retry with backoff** for transient CDN/Cloudflare errors (5xx, connection resets) on server JAR downloads, plus a browser-like User-Agent to avoid bot-blocking.
+- **The real failure reason is now surfaced** to the UI (URL + HTTP status) instead of a generic message, so Paper/Spigot download issues can be diagnosed.
+- **Fixed "Link to folder" button doing nothing** in the Setup Wizard — `api.importServer` was missing from the frontend API client, so the button threw a silent TypeError. The import flow now detects the engine/version from the folder and registers the server profile, with on-screen loading/error feedback.
+
+### CRITICAL FIX (Issue #4 — Massive RAM leak on Linux):
+- **Truncated oversized log lines (8KB cap) before storing them** in the in-memory deques and async log queue. Previously a force-flushed 1MB chunk (newline-less server output) could be retained per entry, allowing gigabytes to pile up across the bounded deques (1000 + 500 + 2000 entries).
+- **Reused the binary read buffer** (`del`/`clear`) instead of allocating a new `bytearray` for every flushed line, reducing allocator churn and glibc arena growth that kept RSS high even after a server stopped.
+- **Returned freed heap memory to the OS on Linux** via `malloc_trim(0)` after a server stops or is force-killed, so the backend's RSS actually drops instead of holding peak usage indefinitely.
+- **Fixed backend log routing**: `api_client.py` and `java_manager.py` called `logging.basicConfig()` at import time (before `api_server` configured the root logger), which silently prevented the `backend_debug.log` FileHandler from ever being installed. The root logger level is now INFO (was DEBUG), removing the huge volume of compressible per-chunk debug garbage that filled disk/RAM.
+- **Capped the Server List Ping JSON payload** at 1MB and bounded the Varint reader, preventing unbounded string growth from a misbehaving server.
+
+---
+
 ## Version 1.2.6 - 2026-06-02 MEMORY LEAK & STARTUP SCRIPTS FIX
 
 ### CRITICAL FIX:

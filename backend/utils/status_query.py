@@ -51,11 +51,22 @@ def get_server_status(host='127.0.0.1', port=25565, timeout=0.6):
                 if not (byte & 0x80):
                     return val
                 shift += 7
+                # A valid Varint is at most 5 bytes (32-bit). Guard against a
+                # malicious/broken server sending endless continuation bytes.
+                if shift >= 35:
+                    raise Exception("Varint too large")
 
         _length = read_varint(sock)
         _packet_id = read_varint(sock)
         json_length = read_varint(sock)
-        
+
+        # Cap the JSON payload we are willing to buffer. A real Server List Ping
+        # response is a few KB; anything bigger means something is wrong and we
+        # must not grow `json_str` unboundedly in memory.
+        MAX_JSON_LENGTH = 1_048_576  # 1 MB
+        if json_length > MAX_JSON_LENGTH:
+            raise Exception(f"Status JSON too large: {json_length}")
+
         json_str = b""
         while len(json_str) < json_length:
             chunk = sock.recv(json_length - len(json_str))

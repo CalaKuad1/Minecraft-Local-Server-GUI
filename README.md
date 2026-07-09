@@ -28,7 +28,23 @@
 
 ---
 
-## What's New in v1.2.5
+## What's New in v1.2.7
+
+### Fixed Server Installation (Paper/Spigot/Fabric)
+- **Paper install fixed** — Installing Paper (and Spigot/Fabric) no longer fails with "Failed to download Server JAR." The server type is now lowercased before hitting the mcutils API, which returned HTTP 500 for capitalized types.
+- **Reliable downloads** — Server JAR downloads now retry on transient CDN/Cloudflare errors with backoff, and the real failure reason (URL + status) is shown in the UI instead of a generic message.
+
+### Fixed "Link to folder"
+- **Import existing server works again** — The "Link Project" button in the Setup Wizard was silently broken (missing API method). It now detects the engine/version from your folder and registers the server, with loading and error feedback.
+
+### Linux Memory Leak Fix
+- **Massive RAM leak resolved** — On Linux, `api_server` could hold gigabytes after a server stopped. Log lines are now truncated before being stored in memory, the read buffer is reused, freed heap is returned to the OS via `malloc_trim`, and the backend no longer generates huge volumes of per-chunk debug log garbage.
+- **Real log file now works** — `backend_debug.log` is now actually written (a logging setup bug previously sent everything to stderr).
+
+<details>
+<summary><strong>Earlier versions</strong></summary>
+
+### What's New in v1.2.5
 
 ### Fixed Server Addresses (DNS)
 - **Permanent domain** — Your server gets a permanent address like `survival.play.tudominio.app` that never changes
@@ -47,9 +63,6 @@
 - **Auto-restart on crash** — Toggle to auto-restart server on unexpected shutdown
 - **Auto-Tunnel** — Tunnel starts automatically with the server (toggle in Advanced)
 - **Boot from library** — "Boot" button on server cards in the library
-
-<details>
-<summary><strong>Earlier versions</strong></summary>
 
 ### Auto-Restart on Crash
 - Server automatically restarts after unexpected shutdowns — toggle it on/off from the Dashboard header
@@ -78,6 +91,8 @@
 ### NeoForge Support & Modpacks
 - **NeoForge** as a new server engine + **Modpacks** tab for browsing and installing from Modrinth
 - **Multi-Language (i18n)** — English, Spanish, French, and Russian with language selector in App Settings
+
+</details>
 
 </details>
 

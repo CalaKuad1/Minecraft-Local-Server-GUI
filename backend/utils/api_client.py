@@ -4,13 +4,18 @@ import io
 import logging
 import json
 import os
+import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 import re
 import zipfile
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# NOTE: Do NOT call logging.basicConfig() here. This module is imported by
+# api_server.py BEFORE api_server configures the root logger, and basicConfig is
+# a no-op once the root logger already has handlers. Configuring the root logger
+# here would prevent api_server's FileHandler from ever being installed (logs
+# would silently go to stderr instead of backend_debug.log). Let api_server own
+# the root logger configuration; module-level logging.* calls propagate to it.
 
 def get_server_versions(server_type):
     """Fetches available server versions for a given type from mcutils.com API."""
@@ -186,48 +191,84 @@ def fetch_username_from_uuid(uuid_str):
 
 def download_server_jar(server_type, server_version, save_path, progress_callback):
     """Downloads the server.jar file for a given type and version with progress."""
+    # CRITICAL: mcutils.com API is case-sensitive and returns HTTP 500 for
+    # capitalized server types (e.g. "Paper"). Always normalize to lowercase.
+    server_type = (server_type or "").lower()
     download_url = f"https://mcutils.com/api/server-jars/{server_type}/{server_version}/download"
     return download_file_from_url(download_url, save_path, progress_callback)
 
-def download_file_from_url(download_url, save_path, progress_callback):
-    """Downloads a file from a specific URL with progress."""
+# A browser-like User-Agent avoids bot-blocking by Cloudflare-fronted CDNs
+# (mcutils.com, fill-data.papermc.io, piston-data.mojang.com).
+_DOWNLOAD_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+}
+
+def download_file_from_url(download_url, save_path, progress_callback, retries=3):
+    """Downloads a file from a specific URL with progress.
+
+    Retries on transient failures (Cloudflare 500/429, connection resets) and
+    returns False on failure. The last error is logged with the URL + status so
+    callers can surface a useful message instead of a generic one.
+    """
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    try:
-        with requests.get(download_url, stream=True, timeout=30) as r:
-            r.raise_for_status()
-            total_size_raw = r.headers.get('content-length')
-            total_size = int(total_size_raw) if total_size_raw else 0
-            bytes_downloaded = 0
-            last_reported_mb = 0
-            
-            logging.info(f"Downloading {download_url} - Total size: {total_size if total_size > 0 else 'unknown'}")
-            
-            with open(save_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=65536): # 64KB chunks for better throughput
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    bytes_downloaded += len(chunk)
-                    
-                    if total_size > 0:
-                        progress = (bytes_downloaded / total_size) * 100
-                        progress_callback(progress)
-                    else:
-                        # Fallback: Report "activity" every 1MB
-                        current_mb = bytes_downloaded // (1024 * 1024)
-                        if current_mb > last_reported_mb:
-                            last_reported_mb = current_mb
-                            # Send a small incremental progress or just trigger the callback
-                            # to keep the UI alive. We'll send a "mock" slow progress
-                            mock_progress = min(current_mb * 5, 95) # Caps at 95 until real finish
-                            progress_callback(mock_progress)
-                            logging.debug(f"Downloaded {current_mb}MB (unknown total size)")
-                        
-        progress_callback(100)
-        return True
-    except Exception as e:
-        logging.error(f"Failed to download file: {e}")
-        return False
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            with requests.get(
+                download_url, stream=True, timeout=30, headers=_DOWNLOAD_HEADERS
+            ) as r:
+                if r.status_code >= 500:
+                    # Transient server/CDN error — retry with backoff
+                    last_error = f"HTTP {r.status_code} from {download_url}"
+                    logging.warning(
+                        f"Download attempt {attempt}/{retries} failed: {last_error}"
+                    )
+                    if attempt < retries:
+                        time.sleep(2 * attempt)
+                    continue
+                r.raise_for_status()
+                total_size_raw = r.headers.get('content-length')
+                total_size = int(total_size_raw) if total_size_raw else 0
+                bytes_downloaded = 0
+                last_reported_mb = 0
+
+                logging.info(f"Downloading {download_url} - Total size: {total_size if total_size > 0 else 'unknown'}")
+
+                with open(save_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=65536):  # 64KB chunks
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        bytes_downloaded += len(chunk)
+
+                        if total_size > 0:
+                            progress = (bytes_downloaded / total_size) * 100
+                            progress_callback(progress)
+                        else:
+                            # Fallback: Report "activity" every 1MB
+                            current_mb = bytes_downloaded // (1024 * 1024)
+                            if current_mb > last_reported_mb:
+                                last_reported_mb = current_mb
+                                mock_progress = min(current_mb * 5, 95)
+                                progress_callback(mock_progress)
+                                logging.debug(f"Downloaded {current_mb}MB (unknown total size)")
+
+            progress_callback(100)
+            return True
+        except requests.RequestException as e:
+            last_error = f"{e} ({download_url})"
+            logging.warning(f"Download attempt {attempt}/{retries} failed: {last_error}")
+            if attempt < retries:
+                time.sleep(2 * attempt)
+        except Exception as e:
+            last_error = f"{e} ({download_url})"
+            logging.error(f"Failed to download file: {last_error}")
+            return False
+    logging.error(f"Download failed after {retries} attempts: {last_error}")
+    # Stash the last error on the function so callers can surface a useful message
+    download_file_from_url.last_error = last_error
+    return False
 
 def download_and_extract_zip(url, extract_to_dir, progress_callback, contains_single_folder=True):
     """

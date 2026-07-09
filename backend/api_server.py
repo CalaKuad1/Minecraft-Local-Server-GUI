@@ -52,7 +52,7 @@ try:
 
     logging.basicConfig(
         filename=os.path.join(log_dir, "backend_debug.log"),
-        level=logging.DEBUG,
+        level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
     logging.info("Backend starting up...")
@@ -74,8 +74,15 @@ from utils.api_client import (
     get_forge_versions,
     get_neoforge_versions,
     download_server_jar,
+    download_file_from_url,
 )
 from utils.mods_manager import ModsManager
+
+
+# Maximum length of a single log line retained in memory (deques / async queue).
+# Matches server_handler.MAX_LOG_LINE_LEN — kept duplicated here to avoid a
+# circular import. Bounds retained memory when server output has no newlines.
+MAX_LOG_LINE_LEN = 8000
 
 
 @asynccontextmanager
@@ -371,6 +378,15 @@ class AppState:
                 if isinstance(message, str):
                     message = message.replace("\r", "")
                 msg_obj = {"message": message, "level": level, "server_id": server_id}
+
+            # Bound memory: truncate huge messages (e.g. a 1MB force-flushed log
+            # chunk) before they enter app_log_history (deque 500) or the async
+            # log queue (maxsize 2000). Without this, a chatty/idle server with
+            # newline-less output could retain gigabytes in these structures.
+            msg_text_check = msg_obj.get("message") if isinstance(msg_obj, dict) else None
+            if isinstance(msg_text_check, str) and len(msg_text_check) > MAX_LOG_LINE_LEN:
+                msg_obj = dict(msg_obj)
+                msg_obj["message"] = msg_text_check[:MAX_LOG_LINE_LEN] + " …[truncated]"
 
             # Store in app-level history for Dashboard polling
             # Skip verbose installer logs (recipe files, etc.) to avoid spam
@@ -883,6 +899,12 @@ def install_server(req: InstallRequest):
     def run_install():
         logging.info("Installation thread started")
         try:
+            # Normalize server type to lowercase so the mcutils download URL and
+            # the dispatch below behave consistently regardless of the casing the
+            # frontend sends (e.g. "Paper" vs "paper"). mcutils returns HTTP 500
+            # for capitalized types, which previously broke Paper installs.
+            server_type = (req.server_type or "").lower()
+
             # Helper to send structured progress
             def send_progress(pct, msg, **kwargs):
                 state.install_progress = pct
@@ -951,7 +973,7 @@ def install_server(req: InstallRequest):
                     send_progress(scaled, "Downloading server files...")
 
             # 3. Instalación del Servidor
-            if req.server_type.lower() == "forge":
+            if server_type == "forge":
                 # Crear un handler temporal con la ruta de Java CORRECTA explícita
                 temp_handler = ServerHandler(
                     install_path,
@@ -994,7 +1016,7 @@ def install_server(req: InstallRequest):
                     forge_ver, req.version, forge_progress
                 )
 
-            elif req.server_type.lower() == "neoforge":
+            elif server_type == "neoforge":
                 # NeoForge logic
                 temp_handler = ServerHandler(
                     install_path,
@@ -1035,13 +1057,18 @@ def install_server(req: InstallRequest):
                 temp_handler.install_neoforge_server(neoforge_ver, neoforge_progress)
 
             else:
-                # Vanilla / Paper / Fabric logic
+                # Vanilla / Paper / Spigot / Fabric logic
                 jar_path = os.path.join(install_path, "server.jar")
                 success = download_server_jar(
-                    req.server_type, req.version, jar_path, progress_callback
+                    server_type, req.version, jar_path, progress_callback
                 )
                 if not success:
-                    raise Exception("Failed to download Server JAR.")
+                    # Surface the real failure reason (URL/status/exception) instead
+                    # of a generic message so users can diagnose Paper/Spigot issues.
+                    reason = getattr(
+                        download_file_from_url, "last_error", None
+                    ) or "Unknown error"
+                    raise Exception(f"Failed to download Server JAR: {reason}")
 
             # 4. Configuración Final
             send_progress(95, "Finalizing configuration...")
@@ -1050,7 +1077,7 @@ def install_server(req: InstallRequest):
             new_server_data = {
                 "name": req.folder_name,
                 "path": install_path,
-                "type": req.server_type,
+                "type": server_type,
                 "version": req.version,
                 "ram_min": req.ram_min,
                 "ram_max": req.ram_max,

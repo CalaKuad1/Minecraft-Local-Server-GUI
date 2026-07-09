@@ -75,6 +75,8 @@ export default function SetupWizard({ onComplete, onCancel }) {
     const [installing, setInstalling] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState('Initializing deployment...');
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState('');
     const ws = useRef(null);
     const completedRef = useRef(false);
     const installedServerId = useRef(null);
@@ -211,13 +213,20 @@ export default function SetupWizard({ onComplete, onCancel }) {
 
     const handleImport = async () => {
         if (!existingPath) return;
+        setImporting(true);
+        setImportError('');
         try {
             const result = await api.importServer(existingPath);
             if (result && result.id) {
                 onComplete(result.id);
+            } else {
+                setImportError('Could not link the server folder. Is it a valid server directory?');
             }
         } catch (err) {
             console.error("Import failed", err);
+            setImportError(err.message || 'Failed to link the server folder.');
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -521,14 +530,20 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     </div>
                                 </div>
 
+                                {importError && (
+                                    <div className="text-[10px] text-red-400 font-minecraft uppercase tracking-widest mt-4">
+                                        {importError}
+                                    </div>
+                                )}
+
                                 <div className="mt-12 flex gap-4">
                                     <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
-                                    <button 
-                                        onClick={handleImport} 
-                                        disabled={!existingPath}
-                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30"
+                                    <button
+                                        onClick={handleImport}
+                                        disabled={!existingPath || importing}
+                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30 flex items-center gap-2"
                                     >
-                                        Link Project
+                                        {importing ? <><Loader2 size={12} className="animate-spin" /> Linking...</> : 'Link Project'}
                                     </button>
                                 </div>
                             </motion.div>

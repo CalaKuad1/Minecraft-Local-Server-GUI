@@ -19,6 +19,31 @@ import psutil
 import time
 from typing import Optional
 
+# Cap the length of a single log line kept in memory. Server output that contains
+# no newlines (e.g. progress bars, binary-ish blobs) can be force-flushed as a
+# single ~1MB chunk; without truncation each bounded deque would retain megabytes
+# per entry (1000 + 500 + 2000 entries => multiple GB). 8KB is plenty for any
+# real log line while keeping worst-case retained memory small.
+MAX_LOG_LINE_LEN = 8000
+
+
+def _malloc_trim():
+    """Return freed heap memory to the OS on Linux (no-op elsewhere).
+
+    glibc's malloc keeps freed allocations in its arena for reuse instead of
+    releasing them back to the kernel, so RSS can stay high (and even appear to
+    "leak") after a server stops. Calling malloc_trim(0) after a server exits
+    makes the backend give back that memory.
+    """
+    if sys.platform == "linux":
+        try:
+            import ctypes
+            libc = ctypes.CDLL("libc.so.6", use_errno=True)
+            if hasattr(libc, "malloc_trim"):
+                libc.malloc_trim(0)
+        except Exception:
+            pass
+
 
 class ServerHandler:
     def __init__(
@@ -100,6 +125,10 @@ class ServerHandler:
             message = message.rstrip()
             if not message:
                 return
+            # Bound memory: truncate force-flushed chunks (up to 1MB with no
+            # newlines) so the bounded deques don't retain megabytes per entry.
+            if len(message) > MAX_LOG_LINE_LEN:
+                message = message[:MAX_LOG_LINE_LEN] + " …[truncated]"
             msg_obj = {"message": message, "level": level, "server_id": self.server_id}
         else:
             msg_obj = message
@@ -954,6 +983,11 @@ allow-flight=false
                     }
                 )
 
+            # Return freed memory to the OS on Linux (glibc arena trimming).
+            # This is what makes the backend's RSS actually drop after a server
+            # stops instead of holding onto peak usage indefinitely.
+            _malloc_trim()
+
     def _process_log_line(
         self,
         line,
@@ -1126,11 +1160,11 @@ allow-flight=false
                         list_inline_pattern,
                         list_header_pattern,
                     )
-                    buffer = bytearray()
+                    # Reuse the same bytearray object (clear() may free the
+                    # underlying storage) instead of allocating a new one every
+                    # flush — reduces allocator churn and glibc arena growth.
+                    buffer.clear()
                     continue
-                logging.debug(
-                    f"Handler: Received chunk of {len(chunk)} bytes from {level}"
-                )
                 while b"\n" in buffer or b"\r" in buffer:
                     # Find the first line break
                     idx_n = buffer.find(b"\n")
@@ -1150,7 +1184,9 @@ allow-flight=false
                             sep_len = 2  # Handle \r\n
 
                     line_bytes = buffer[:idx]
-                    buffer = bytearray(buffer[idx + sep_len :])
+                    # Remove the consumed line in-place instead of creating a new
+                    # bytearray each iteration (avoids per-line allocation).
+                    del buffer[: idx + sep_len]
 
                     line = line_bytes.decode("utf-8", errors="replace")
                     self._process_log_line(
@@ -1250,6 +1286,7 @@ allow-flight=false
                         "server_id": self.server_id,
                     }
                 )
+            _malloc_trim()
 
     def wait_for_stop(self, timeout=30):
         """Blocks until the server process has exited or the timeout is reached."""

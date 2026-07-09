@@ -11,7 +11,11 @@ from pathlib import Path
 import logging
 from typing import Optional, Dict, Tuple, Callable
 
-logging.basicConfig(level=logging.INFO)
+# NOTE: Do NOT call logging.basicConfig() here — this module is imported by
+# api_server.py before api_server configures the root logger, and basicConfig is
+# a no-op once the root logger already has handlers. Configuring root here would
+# prevent api_server's FileHandler (backend_debug.log) from being installed.
+# Use a module logger; it propagates to the root logger api_server sets up.
 logger = logging.getLogger(__name__)
 
 
