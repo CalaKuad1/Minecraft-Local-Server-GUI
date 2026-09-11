@@ -28,7 +28,32 @@
 
 ---
 
-## What's New in v1.2.7
+## What's New in v1.2.8
+
+### Fixed a Massive Memory Leak
+- **Backend no longer eats RAM** — an infinite loop in the Server List Ping code made the backend grow ~25-45 MB/s while a server was online (reaching 18 GB). It now stays around 70 MB.
+
+### Security
+- **Local API locked down** — every request now requires a per-launch token, and CORS is restricted to the app, so a malicious website can no longer control your server through localhost.
+
+### Worlds & Backups
+- **Full backup control** — restore, delete, download and upload backups.
+- **Automatic backups** — schedule them by interval and choose how many to keep.
+
+### Custom Address (DNS)
+- **No more DNS quota errors** — the SRV record is created when the tunnel starts and removed when it stops/closes/is deleted, and the real error is shown if the DNS Worker fails.
+
+### Console
+- **Command history & autocomplete** — Up/Down history and Tab suggestions, plus logs that survive navigating back to the library.
+
+### Fixes & UI
+- Fixed the Schedule Shutdown crash, duplicate tunnels, the dead "Import World" button, icon 404s and log rotation.
+- Redesigned the Server Library and translated Players/Worlds/Mods/Plugins into English, Spanish, French and Russian.
+- **Auto-update** support, and builds now always ship the current backend.
+
+---
+
+## What's New in v1.2.7 (previous)
 
 ### Fixed Server Installation (Paper/Spigot/Fabric)
 - **Paper install fixed** — Installing Paper (and Spigot/Fabric) no longer fails with "Failed to download Server JAR." The server type is now lowercased before hitting the mcutils API, which returned HTTP 500 for capitalized types.

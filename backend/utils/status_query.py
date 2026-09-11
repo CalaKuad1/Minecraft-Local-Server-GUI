@@ -4,10 +4,26 @@ import json
 import time
 
 def pack_varint(d):
-    return b''.join(
-        bytes([(d & 0x7F) | 0x80]) if (d & ~0x7F) else bytes([d])
-        for d in iter(lambda: d >> 7, 0)
-    ) + bytes([d])
+    """Encode an integer as a Minecraft VarInt (unsigned 32-bit base-128).
+
+    The previous implementation used `iter(lambda: d >> 7, 0)`, where the
+    lambda always returned the *same* value (it never advanced `d`). For any
+    value >= 128 (e.g. the -1 protocol version = 0xFFFFFFFF) the sentinel 0 was
+    never reached, so the generator ran forever and `b''.join` accumulated
+    bytes until the backend ran out of memory (~25-45 MB/s). This is triggered
+    by the Server List Ping query, i.e. as soon as the server is online.
+    """
+    d &= 0xFFFFFFFF
+    out = bytearray()
+    while True:
+        byte = d & 0x7F
+        d >>= 7
+        if d:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            break
+    return bytes(out)
 
 def get_server_status(host='127.0.0.1', port=25565, timeout=0.6):
     """

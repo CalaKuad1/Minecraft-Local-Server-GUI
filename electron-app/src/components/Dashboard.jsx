@@ -7,7 +7,7 @@ import { Select } from './ui/Select';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
-const StatCard = ({ icon: Icon, label, value, sublabel, data = [] }) => {
+const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true }) => {
     return (
         <div className="bg-[#050505]/40 border border-white/5 rounded-sm p-5 flex flex-col transition-all group cursor-default hover:border-white/10 hover:bg-[#070707]/60 relative overflow-hidden h-[120px] min-w-0">
             <div className="flex items-center gap-2 mb-3 relative z-10">
@@ -17,7 +17,7 @@ const StatCard = ({ icon: Icon, label, value, sublabel, data = [] }) => {
             <div className="text-3xl font-minecraft text-white tracking-tight leading-none mb-1 mt-auto relative z-10">{value}</div>
             <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest relative z-10">{sublabel}</div>
 
-            {data.length > 0 && (
+            {data.length > 0 && active && (
                 <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity flex items-end">
                     <ResponsiveContainer width="100%" height="60%">
                         <AreaChart data={data}>
@@ -120,7 +120,111 @@ const PublicServerModal = ({ onClose, t }) => {
     );
 };
 
-export default function Dashboard({ status: serverStatus, onRefresh }) {
+// Schedule-shutdown modal. Previously referenced but never defined, which threw
+// "ShutdownTimerModal is not defined" and crashed the Dashboard.
+const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) => {
+    const [minutes, setMinutes] = useState(15);
+    const isActive = activeTimer?.scheduled;
+    const remaining = isActive ? Math.max(0, Math.ceil((activeTimer.remaining_seconds || 0) / 60)) : 0;
+    const presets = [5, 15, 30, 60];
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+            <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                onClick={onClose}
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#0f0f0f] border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="bg-[#121212] p-6 border-b border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-orange-500/10 rounded-sm border border-orange-500/20 text-orange-400">
+                            <Clock size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-minecraft tracking-widest text-white uppercase">{t('dashboard.shutdown_timer.title')}</h2>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{t('dashboard.shutdown_timer.desc')}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-sm text-zinc-500 hover:text-white transition-colors">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-5">
+                    {isActive ? (
+                        <div className="text-center py-4">
+                            <div className="text-[10px] uppercase tracking-widest text-orange-400 mb-1">{t('dashboard.shutdown_timer.timer_active')}</div>
+                            <div className="text-4xl font-minecraft text-white">
+                                {remaining} <span className="text-lg text-zinc-500">{t('dashboard.shutdown_timer.minutes')}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{t('dashboard.shutdown_timer.presets')}</div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {presets.map(p => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setMinutes(p)}
+                                            className={`py-2 rounded-sm border text-sm font-mono transition-colors ${minutes === p ? 'bg-orange-500/15 border-orange-500/40 text-orange-400' : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white'}`}
+                                        >
+                                            {p}m
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{t('dashboard.shutdown_timer.set_duration')}</div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number" min="1" value={minutes}
+                                        onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-sm px-4 py-2 text-white font-mono focus:border-orange-500 outline-none"
+                                    />
+                                    <span className="text-zinc-500 text-sm">{t('dashboard.shutdown_timer.minutes')}</span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="p-6 border-t border-white/5 flex justify-end gap-3">
+                    {isActive ? (
+                        <button
+                            onClick={() => { onCancel(); onClose(); }}
+                            className="px-6 py-2.5 rounded-sm border border-red-500/40 text-red-400 hover:bg-red-500/10 text-[10px] font-minecraft tracking-widest uppercase transition-all"
+                        >
+                            {t('dashboard.shutdown_timer.cancel')}
+                        </button>
+                    ) : (
+                        <>
+                            <button onClick={onClose} className="px-6 py-2.5 rounded-sm border border-white/5 text-zinc-500 hover:text-white hover:bg-white/5 text-[10px] font-minecraft tracking-widest uppercase transition-all">
+                                {t('common.cancel')}
+                            </button>
+                            <button
+                                onClick={() => { onSchedule(minutes); onClose(); }}
+                                className="px-6 py-2.5 rounded-sm bg-orange-500 text-black hover:bg-orange-400 text-[10px] font-minecraft tracking-widest uppercase transition-all"
+                            >
+                                {t('dashboard.shutdown_timer.start')}
+                            </button>
+                        </>
+                    )}
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
+export default function Dashboard({ status: serverStatus, onRefresh, active = true }) {
     const { t } = useTranslation();
     // Local state for immediate UI feedback
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
@@ -269,6 +373,14 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
     const scrollContainerRef = useRef(null);
     const userScrolledUpRef = useRef(false);
 
+    const MAX_MINI_LOGS = 50;
+    const appendLocalLog = useCallback((entry) => {
+        setLocalLogs(prev => {
+            const next = [...prev, entry];
+            return next.length > MAX_MINI_LOGS ? next.slice(next.length - MAX_MINI_LOGS) : next;
+        });
+    }, []);
+
     const handleWsMessage = useCallback((item) => {
         if (item.type === 'status_change') {
             lastWsStatusTime.current = Date.now();
@@ -296,16 +408,26 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
         }
 
         if (item.type === 'auto_restart') {
-            setLocalLogs(prev => [...prev, {
+            appendLocalLog({
                 message: `🔄 Auto-restarting (attempt ${item.attempt}/${item.max_attempts})...`,
                 level: 'warning',
                 time: new Date().toLocaleTimeString([], { hour12: false })
-            }]);
+            });
             return;
         }
 
         if (item.type === 'dns_updated') {
             setDnsAddress(item.address);
+            return;
+        }
+
+        if (item.type === 'dns_error') {
+            setDnsAddress(null);
+            setServerError({
+                error: 'dns_error',
+                fix: `Custom address could not be registered: ${item.error}`,
+                detail: item.subdomain ? `${item.subdomain}.play.ariser.app` : ''
+            });
             return;
         }
 
@@ -317,10 +439,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
         if (item.message !== undefined || item.level) {
             const msgText = typeof item.message === 'string' ? item.message : JSON.stringify(item.message || '');
 
-            setLocalLogs(prev => {
-                const newLogs = [...prev, { ...item, message: msgText }];
-                return newLogs.length > 50 ? newLogs.slice(newLogs.length - 50) : newLogs;
-            });
+            appendLocalLog({ ...item, message: msgText });
 
             const msg = msgText.toString();
             if (msg.includes("Done") && msg.includes("For help")) {
@@ -334,7 +453,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                 isStoppingRef.current = true;
             }
         }
-    }, [onRefresh]);
+    }, [onRefresh, appendLocalLog]);
 
     useEffect(() => {
         return subscribe('dashboard', handleWsMessage);
@@ -572,6 +691,7 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                                  serverError.error === 'port_conflict' ? 'Port Conflict' :
                                  serverError.error === 'out_of_memory' ? 'Out of Memory' :
                                  serverError.error === 'mod_loading' ? 'Mod Loading Error' :
+                                 serverError.error === 'dns_error' ? 'DNS Error' :
                                  'Server Error'}
                             </div>
                             <div className="text-[11px] text-zinc-400 leading-relaxed">
@@ -696,23 +816,24 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                     </div>
                 </div>
 
-                {showAdvanced && !tunnelAddress && <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/5">
+                {showAdvanced && <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
                     <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Provider</span>
                         <div className="w-24 rounded-sm border border-white/10 bg-white/5">
                             <Select value={tunnelProvider} onChange={() => {}} options={[{ value: 'pinggy', label: 'Pinggy' }]} />
                         </div>
-                    {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Region</span><div className="w-16 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
+                    {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Region</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
                     <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
                     <span className="text-[10px] text-zinc-600 font-bold">DNS: <span className="text-emerald-400">ON</span></span>
+                    {tunnelAddress && <span className="text-[10px] text-zinc-500 italic w-full">Region changes apply the next time you start the tunnel.</span>}
                 </div>}
             </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
                 <StatCard icon={Users} label={t('dashboard.players_online')} value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} ${t('status.online')}`} />
-                <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} />
-                <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} />
+                <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} active={active} />
+                <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} active={active} />
                 <StatCard icon={Activity} label={t('dashboard.uptime')} value={status.uptime || '--'} sublabel={t('dashboard.uptime_sub')} />
             </div>
             </div>
@@ -764,7 +885,10 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                         const input = e.target.elements.cmd.value;
                         if (!input.trim()) return;
 
-                        setLocalLogs(prev => [...prev, { message: `> ${input}`, level: 'input' }]);
+                        setLocalLogs(prev => {
+                            const next = [...prev, { message: `> ${input}`, level: 'input' }];
+                            return next.length > MAX_MINI_LOGS ? next.slice(next.length - MAX_MINI_LOGS) : next;
+                        });
 
                         try {
                             if (isConnected) {
@@ -774,7 +898,10 @@ export default function Dashboard({ status: serverStatus, onRefresh }) {
                             }
                             e.target.elements.cmd.value = '';
                         } catch (err) {
-                            setLocalLogs(prev => [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }]);
+                            setLocalLogs(prev => {
+                                const next = [...prev, { message: `Error: ${err.message}`, level: 'error', time: new Date().toLocaleTimeString([], { hour12: false }) }];
+                                return next.length > MAX_MINI_LOGS ? next.slice(next.length - MAX_MINI_LOGS) : next;
+                            });
                         }
                     }}
                     className="border-t border-white/5 bg-black/30 p-2 flex"

@@ -9,7 +9,6 @@ import logo from './assets/logo-minimal.png';
 // Effects
 import AbstractBackground from './components/effects/AbstractBackground';
 import NoiseGrain from './components/effects/NoiseGrain';
-import MagneticButton from './components/effects/MagneticButton';
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -97,7 +96,14 @@ function App() {
   const [showWizard, setShowWizard] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
   const { t, locale } = useTranslation();
+
+  useEffect(() => {
+    if (!window.electron || !window.electron.onUpdateStatus) return;
+    const off = window.electron.onUpdateStatus((status) => setUpdateStatus(status));
+    return () => { if (typeof off === 'function') off(); };
+  }, []);
 
   useEffect(() => {
     if (window.electron && window.electron.onCloseRequested) {
@@ -268,12 +274,12 @@ function App() {
           <div className="mx-auto w-full flex-1 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>
-              <Dashboard status={serverStatus} onRefresh={triggerRefresh} />
+              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} />
             </div>
 
             {/* Console - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'console' ? 'none' : undefined }}>
-              <Console key={selectedServer?.id} />
+              <Console key={selectedServer?.server_id || selectedServer?.id} serverId={selectedServer?.server_id || selectedServer?.id} />
             </div>
 
             {/* Animated transitions for other tabs */}
@@ -304,6 +310,26 @@ function App() {
           </div>
         </main>
       </div>
+
+      {updateStatus && ['available', 'downloading', 'downloaded', 'error'].includes(updateStatus.state) && (
+        <div className="fixed bottom-5 right-5 z-[9998] max-w-xs bg-[#0f0f0f] border border-white/10 rounded-sm shadow-2xl p-4 text-xs">
+          <div className="font-minecraft uppercase tracking-widest text-white mb-1">Update</div>
+          {updateStatus.state === 'available' && <div className="text-zinc-400">New version {updateStatus.version} found. Downloading…</div>}
+          {updateStatus.state === 'downloading' && <div className="text-zinc-400">Downloading… {updateStatus.percent}%</div>}
+          {updateStatus.state === 'downloaded' && (
+            <div className="text-zinc-400">
+              Version {updateStatus.version} ready.
+              <button
+                onClick={() => window.electron?.installUpdate?.()}
+                className="mt-2 w-full px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 rounded-sm font-minecraft uppercase tracking-wider hover:bg-emerald-500/25 transition-colors"
+              >
+                Restart &amp; install
+              </button>
+            </div>
+          )}
+          {updateStatus.state === 'error' && <div className="text-yellow-400">Update check failed: {updateStatus.message}</div>}
+        </div>
+      )}
     </div>
   );
 }

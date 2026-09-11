@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { api } from '../api';
+import { api, API_TOKEN } from '../api';
 import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
 import { Select } from './ui/Select';
 import AdvancedSettingsModal from './AdvancedSettingsModal';
@@ -26,7 +26,9 @@ export default function Settings() {
     });
 
     const [iconTs, setIconTs] = useState(Date.now());
+    const [iconExists, setIconExists] = useState(false);
     const API_BASE = "http://127.0.0.1:8000";
+    const FALLBACK_ICON = '/images/Dirt_background_BE1.webp';
 
     useEffect(() => {
         loadSettings();
@@ -41,8 +43,14 @@ export default function Settings() {
             setServerProps(props);
             setAppSettings(app);
             try {
-                const res = await fetch('http://127.0.0.1:8000/system/info');
+                const res = await fetch('http://127.0.0.1:8000/system/info', {
+                    headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {}
+                });
                 if (res.ok) setSystemInfo(await res.json());
+            } catch (_) {}
+            try {
+                const iconStatus = await api.getServerIconStatus();
+                setIconExists(!!(iconStatus && iconStatus.exists));
             } catch (_) {}
         } catch (e) {
             setError(e?.message || t('server_settings.error_loading'));
@@ -76,6 +84,7 @@ export default function Settings() {
         if (!file) return;
         try {
             await api.uploadServerIcon(file);
+            setIconExists(true);
             setIconTs(Date.now());
         } catch (err) {
             setError("Failed to upload icon: " + err.message);
@@ -284,8 +293,8 @@ export default function Settings() {
                                         <div className="flex flex-col items-center justify-center p-6 bg-black/30 rounded-md border border-white/5 border-dashed hover:border-emerald-500/50 transition-colors group">
                                             <div className="w-[64px] h-[64px] mb-6 relative drop-shadow-2xl">
                                                 <img
-                                                    src={`${API_BASE}/server/icon/image?t=${iconTs}`}
-                                                    onError={(e) => e.target.src = "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png"}
+                                                    src={iconExists ? `${API_BASE}/server/icon/image?t=${iconTs}` : FALLBACK_ICON}
+                                                    onError={() => { if (iconExists) setIconExists(false); }}
                                                     className="w-full h-full object-contain pixelated rounded-sm"
                                                     alt="Server Icon"
                                                 />
@@ -300,7 +309,7 @@ export default function Settings() {
                                         <div className="bg-black/80 p-4 rounded-sm flex items-center justify-center min-h-[140px] border border-white/5 relative overflow-hidden">
                                             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/images/Dirt_background_BE1.webp')", backgroundSize: '64px' }} />
                                             <div className="relative z-10 w-full flex justify-center">
-                                                <MotdPreview motd={serverProps['motd']} iconUrl={`${API_BASE}/server/icon/image?t=${iconTs}`} />
+                                                <MotdPreview motd={serverProps['motd']} iconUrl={iconExists ? `${API_BASE}/server/icon/image?t=${iconTs}` : undefined} />
                                             </div>
                                         </div>
                                     </div>
@@ -366,7 +375,7 @@ export default function Settings() {
                                 <div>
                                     <div className="flex justify-between items-end mb-4">
                                         <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.max_ram')}</label>
-                                        <span className="text-3xl font-minecraft text-emerald-400 tracking-wider shadow-emerald-500 drop-shadow-md">{appSettings.ram_max} GB</span>
+                                        <span className="text-3xl font-minecraft text-emerald-400 tracking-wider shadow-emerald-500 drop-shadow-md">{appSettings.ram_max} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
                                     </div>
                                     <input
                                         type="range"
@@ -398,7 +407,7 @@ export default function Settings() {
                                 <div>
                                     <div className="flex justify-between items-end mb-4">
                                         <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.min_ram')}</label>
-                                        <span className="text-xl font-minecraft text-zinc-300 tracking-wider">{appSettings.ram_min} GB</span>
+                                        <span className="text-xl font-minecraft text-zinc-300 tracking-wider">{appSettings.ram_min} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
                                     </div>
                                     <input
                                         type="range" min="1" max={appSettings.ram_max || 16} step="1"

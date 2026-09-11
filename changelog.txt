@@ -1,5 +1,62 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.8 - 2026-09-11 RELIABILITY, SECURITY, BACKUPS & UI
+
+### CRITICAL FIX: Backend memory leak (reached 18 GB)
+- Fixed an infinite loop in the Server List Ping `pack_varint` helper. Every time
+  a server was online, the status query never returned and the backend allocated
+  memory forever (~25-45 MB/s). The backend could climb past 18 GB; now it stays
+  around 70 MB.
+- Diagnosed with py-spy (the stuck thread was in `pack_varint`) and verified with
+  a flood test (1.6M log lines) plus a long-running SLP check.
+
+### SECURITY
+- The backend now requires a per-launch random token (`X-MLSG-Token`) on every
+  HTTP request and `?token=` on the WebSocket, and CORS is restricted to the
+  app's own origins. Before, any web page open in the browser could control the
+  local server (start/stop, console commands, jar install, file access).
+
+### WORLDS & BACKUPS
+- Restore, delete, download and upload world backups.
+- Automatic scheduled backups (interval + retention) via a background watchdog.
+- Zip-slip and path-traversal protection on restore.
+- Backups list is no longer capped at 8 items.
+
+### CUSTOM ADDRESS (DNS)
+- SRV record is created when the tunnel starts and removed when it stops, the app
+  closes, a server is deleted or its subdomain changes. This prevents DNS records
+  from accumulating (which filled the 200-record zone quota and caused
+  "Record quota exceeded").
+- The app now shows the real DNS error in the UI instead of failing silently.
+
+### CONSOLE
+- Command history (Up/Down) and Tab autocompletion with suggestions.
+- Logs are cached per server: returning to the library and re-entering no longer
+  clears the console.
+
+### FIXES
+- Fixed a crash: the Schedule Shutdown modal (`ShutdownTimerModal`) was
+  referenced but never defined, breaking the Dashboard.
+- Fixed duplicate SSH tunnel processes when starting the tunnel twice.
+- Fixed the dead "Import World" button, the broken `/configure` endpoint and the
+  RAM unit display.
+- Fixed the missing server icon fallback (no more 404s) and Recharts size
+  warnings when the Dashboard is hidden.
+- `backend_debug.log` now rotates (5 MB x 3) instead of growing forever.
+
+### UI
+- Redesigned the Server Library (status filters, grid/detailed views, recently
+  opened, empty state).
+- Unified the look of Players, Worlds, Mods and Plugins and translated them into
+  English, Spanish, French and Russian.
+
+### BUILD & TESTS
+- Removed the stale committed `backend/api_server.exe` (it was from v1.2.0 and
+  could ship an outdated backend). `npm run electron:build` now rebuilds the
+  Python backend first.
+- Added 16 backend unit tests (varint/SLP, config manager, backups).
+- Added auto-update support via electron-updater.
+
 ## Version 1.2.7 - 2026-07-09 PAPER INSTALL FIX, IMPORT FOLDER & LINUX MEMORY LEAK
 
 ### CRITICAL FIX (Issue #15 — Can't install Paper server):

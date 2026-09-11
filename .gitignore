@@ -82,6 +82,12 @@ backend/build/
 backend/dist/
 backend/*.spec
 
+# NEVER commit a prebuilt backend binary: it goes stale and gets bundled by
+# electron-builder, shipping an outdated (and previously leaky) backend.
+backend/api_server.exe
+backend/api_server
+backend/api_server_crash.log
+
 # Pixel icon dev scripts output
 pixel-paths.json
 pixel-icon-library-by-hackernoon/
@@ -96,3 +102,4 @@ refactorIcons.js
 test_playit_api.py
 test.png
 playit.exe
+cleanup-dns.ps1

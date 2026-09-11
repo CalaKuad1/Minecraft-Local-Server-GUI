@@ -14,6 +14,7 @@ if getattr(sys, "frozen", False) and sys.platform == "win32":
 
 import asyncio
 import collections
+import secrets
 import threading
 from fastapi import (
     FastAPI,
@@ -25,6 +26,7 @@ from fastapi import (
     UploadFile,
     File,
 )
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -50,11 +52,22 @@ try:
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    logging.basicConfig(
-        filename=os.path.join(log_dir, "backend_debug.log"),
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
+    from logging.handlers import RotatingFileHandler
+
+    _log_handler = RotatingFileHandler(
+        os.path.join(log_dir, "backend_debug.log"),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
     )
+    _log_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    )
+    _root_logger = logging.getLogger()
+    _root_logger.setLevel(logging.INFO)
+    # Guard against duplicate handlers if this module gets imported twice
+    if not any(isinstance(h, RotatingFileHandler) for h in _root_logger.handlers):
+        _root_logger.addHandler(_log_handler)
     logging.info("Backend starting up...")
     logging.info(f"CWD: {os.getcwd()}")
     logging.info(f"Python executable: {sys.executable}")
@@ -65,7 +78,7 @@ except Exception as e:
 # Ensure we can import from local modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from server.server_handler import ServerHandler
+from server.server_handler import ServerHandler, _malloc_trim
 from server.config_manager import ConfigManager
 from utils.java_manager import JavaManager
 from utils.server_detector import ServerDetector
@@ -83,6 +96,24 @@ from utils.mods_manager import ModsManager
 # Matches server_handler.MAX_LOG_LINE_LEN — kept duplicated here to avoid a
 # circular import. Bounds retained memory when server output has no newlines.
 MAX_LOG_LINE_LEN = 8000
+
+
+# --- Security: shared token + restricted CORS ---
+# The backend listens on 127.0.0.1 with full control over the Minecraft server
+# (start/stop, console commands, file writes, arbitrary jar install). Without
+# auth, any web page open in the user's browser could call it. Electron
+# generates a random token, passes it to the backend via the MLSG_TOKEN env var
+# and to the renderer via argv; every HTTP request must send it in
+# X-MLSG-Token and the WebSocket must pass it as ?token=.
+# If MLSG_TOKEN is not set (e.g. running the script standalone for debugging),
+# auth is disabled and a warning is logged.
+API_TOKEN = os.environ.get("MLSG_TOKEN", "").strip()
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "null",  # file:// renderer in the packaged app sends Origin: null
+    "file://",
+]
 
 
 @asynccontextmanager
@@ -116,14 +147,32 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Enable CORS
+# Enable CORS (restricted to the app's own origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def token_auth_middleware(request: Request, call_next):
+    """Require the shared token on every request when configured.
+
+    Exempts CORS preflight (OPTIONS), which the browser sends without custom
+    headers; the actual request carries the token.
+    """
+    if API_TOKEN and request.method != "OPTIONS":
+        # The server icon is rendered via <img src>, which cannot send custom
+        # headers. It only ever serves the fixed server-icon.png, so it is safe
+        # to leave unauthenticated.
+        if request.url.path != "/server/icon/image":
+            provided = request.headers.get("x-mlsg-token", "")
+            if not secrets.compare_digest(provided, API_TOKEN):
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 # --- Global State ---
@@ -206,6 +255,13 @@ class AppState:
         self.tunnel_process: Optional[subprocess.Popen] = None
         self.tunnel_address: Optional[str] = None
         self.dns_address: Optional[str] = None
+        # Serializes tunnel starts so two rapid clicks can't spawn two ssh
+        # processes (which happened: two tunnels for the same port).
+        self._tunnel_lock = threading.Lock()
+        self._tunnel_starting = False
+        # Subdomain whose SRV record is currently published, so it can be removed
+        # exactly (tunnel stop / server change) instead of leaking records.
+        self._dns_active_slug: Optional[str] = None
 
         # Install Progress Tracking
         self.install_progress: int = 0
@@ -224,11 +280,28 @@ class AppState:
         # App-level log history for Dashboard mini-console
         self.app_log_history = collections.deque(maxlen=500)
 
+        # --- Memory diagnostics ---
+        # The memory watchdog logs RSS + sizes of every in-memory structure once
+        # a minute so a leak can be pinpointed in production (backend_debug.log).
+        # Deep allocation tracing is opt-in (MLSG_MEMDEBUG=1 or GET /system/memory?trace=true)
+        # because tracemalloc adds overhead.
+        self._mem_watchdog_task: Optional[asyncio.Task] = None
+        self._tracemalloc_enabled = os.environ.get("MLSG_MEMDEBUG", "0") == "1"
+        self._last_mem_rss: Optional[float] = None
+
+        # Automatic world backups (per selected server)
+        self._auto_backup_task: Optional[asyncio.Task] = None
+        self._last_auto_backup = {}  # server_id -> epoch seconds
+
     def start_background_tasks(self):
         if self._log_queue is None:
             self._log_queue = asyncio.Queue(maxsize=2000)
         if self._log_broadcaster_task is None:
             self._log_broadcaster_task = asyncio.create_task(self._log_broadcaster())
+        if self._mem_watchdog_task is None:
+            self._mem_watchdog_task = asyncio.create_task(self._memory_watchdog())
+        if self._auto_backup_task is None:
+            self._auto_backup_task = asyncio.create_task(self._auto_backup_watchdog())
 
     def _enqueue_log_from_loop(self, msg_obj: dict):
         """Must be called from the asyncio loop thread."""
@@ -293,6 +366,144 @@ class AppState:
             for ws in dead:
                 if ws in self.active_websockets:
                     self.active_websockets.remove(ws)
+
+    def memory_snapshot(self, include_traces: bool = False) -> dict:
+        """Return a breakdown of everything the backend holds in memory.
+
+        Used by GET /system/memory and by the periodic watchdog log line so a
+        growth can be attributed to a concrete structure (log deques, event-loop
+        backlog, websockets, handlers, world-size cache ...).
+        """
+        try:
+            proc = psutil.Process()
+            rss_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+        except Exception:
+            rss_mb = None
+
+        # asyncio exposes the pending-callback deque as `_ready`, but uvloop
+        # (Linux) does not, so read it defensively.
+        try:
+            loop_ready = len(self.loop._ready) if self.loop else None
+        except Exception:
+            loop_ready = None
+
+        snap = {
+            "rss_mb": rss_mb,
+            "threads": threading.active_count(),
+            "active_websockets": len(self.active_websockets),
+            "active_handlers": len(self.active_handlers),
+            "app_log_history": len(self.app_log_history),
+            "log_queue": self._log_queue.qsize() if self._log_queue else None,
+            "log_queue_max": self._log_queue.maxsize if self._log_queue else None,
+            "loop_ready_backlog": loop_ready,
+            "world_size_cache": len(self.world_size_cache),
+            "world_size_inflight": len(self.world_size_inflight),
+        }
+
+        handler = self.server_handler
+        if handler is not None:
+            snap["handler"] = {
+                "server_id": handler.server_id,
+                "log_history": len(handler.log_history),
+                "tracked_players": len(handler.tracked_players),
+            }
+
+        if include_traces or self._tracemalloc_enabled:
+            try:
+                import tracemalloc
+
+                if not tracemalloc.is_tracing():
+                    tracemalloc.start(10)
+                current, peak = tracemalloc.get_traced_memory()
+                top = []
+                for stat in tracemalloc.take_snapshot().statistics("lineno")[:10]:
+                    top.append(
+                        {
+                            "location": str(stat.traceback),
+                            "size_kb": round(stat.size / 1024, 1),
+                        }
+                    )
+                snap["tracemalloc"] = {
+                    "current_mb": round(current / (1024 * 1024), 2),
+                    "peak_mb": round(peak / (1024 * 1024), 2),
+                    "top": top,
+                }
+                tracemalloc.stop()
+            except Exception as e:
+                snap["tracemalloc"] = {"error": str(e)}
+
+        return snap
+
+    async def _memory_watchdog(self):
+        """Logs the memory breakdown once a minute and trims the heap on Linux."""
+        while True:
+            try:
+                await asyncio.sleep(60)
+                snap = self.memory_snapshot()
+                rss = snap.get("rss_mb")
+                delta = ""
+                if isinstance(rss, (int, float)) and self._last_mem_rss is not None:
+                    delta = f" (Δ{rss - self._last_mem_rss:+.1f}MB)"
+                if isinstance(rss, (int, float)):
+                    self._last_mem_rss = rss
+                logging.info(
+                    f"[mem] RSS={rss}MB{delta} threads={snap['threads']} "
+                    f"ws={snap['active_websockets']} handlers={snap['active_handlers']} "
+                    f"app_logs={snap['app_log_history']} q={snap['log_queue']} "
+                    f"loop_ready={snap['loop_ready_backlog']} "
+                    f"world_cache={snap['world_size_cache']} "
+                    f"handler={snap.get('handler')}"
+                )
+                # Give freed heap back to the OS on Linux (no-op on Windows).
+                _malloc_trim()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logging.debug(f"[mem] watchdog error: {e}")
+
+    async def _auto_backup_watchdog(self):
+        """Create scheduled world backups for the selected server.
+
+        Runs the (blocking) zip creation in a worker thread so the event loop
+        keeps serving requests.
+        """
+        while True:
+            try:
+                await asyncio.sleep(60)
+                if not self.selected_server_id or not self.server_handler:
+                    continue
+
+                cfg = self.config_manager.get_server(self.selected_server_id) or {}
+                settings = cfg.get("auto_backup") or {}
+                if not settings.get("enabled"):
+                    continue
+
+                interval_min = max(5, int(settings.get("interval_minutes", 60)))
+                keep = max(1, int(settings.get("keep", 5)))
+                now = time.time()
+                last = self._last_auto_backup.get(self.selected_server_id, 0)
+                if now - last < interval_min * 60:
+                    continue
+
+                server_path = self.server_handler.server_path
+                world_name = _resolve_world_name(server_path)
+                name = await asyncio.to_thread(
+                    _create_world_backup_sync, server_path, world_name
+                )
+                self._last_auto_backup[self.selected_server_id] = time.time()
+                removed = _prune_backups(server_path, world_name, keep)
+                self.broadcast_log_sync(
+                    f"🗄️ Auto-backup created: {name}"
+                    + (f" (removed {removed} old)" if removed else ""),
+                    "info",
+                )
+                self.broadcast_log_sync(
+                    {"type": "backup_created", "name": name, "world": world_name}
+                )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logging.debug(f"[auto-backup] error: {e}")
 
     @property
     def server_handler(self):
@@ -416,6 +627,15 @@ class AppState:
 
                 # Thread-safe enqueue into the asyncio queue (only non-verbose logs)
                 if self.loop:
+                    # Safety valve: if the event loop is badly backed up (e.g. a
+                    # wedged websocket send), `call_soon_threadsafe` would queue
+                    # an unbounded number of callbacks, each pinning a log dict.
+                    # Drop the line instead of growing the backlog without bound.
+                    try:
+                        if len(self.loop._ready) > 5000:
+                            return
+                    except Exception:
+                        pass
                     try:
                         self.loop.call_soon_threadsafe(
                             self._enqueue_log_from_loop, msg_obj
@@ -587,6 +807,7 @@ async def delete_server(server_id: str, delete_files: bool = False):
     # Get server info before deleting profile
     server_info = state.config_manager.get_server(server_id)
     server_path = server_info.get("path") if server_info else None
+    dns_slug = (server_info.get("dns_subdomain") or "").strip() if server_info else ""
 
     # Delete the profile
     state.config_manager.delete_server(server_id)
@@ -599,6 +820,14 @@ async def delete_server(server_id: str, delete_files: bool = False):
             pass
     if state.selected_server_id == server_id:
         state.selected_server_id = None
+
+    # Free the DNS record so deleted servers don't keep leaking DNS entries
+    # (this is what filled the zone's record quota).
+    if dns_slug:
+        try:
+            _delete_dns_for_subdomain(state, dns_slug)
+        except Exception:
+            pass
 
     # Optionally delete files
     if delete_files and server_path and os.path.exists(server_path):
@@ -751,15 +980,23 @@ def send_console_command(cmd: CommandRequest):
 def configure_server(config: ServerConfig):
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
-    state.config_manager.set("server_path", config.server_path)
-    state.config_manager.set("server_type", config.server_type)
-    state.config_manager.set("ram_min", config.ram_min)
-    state.config_manager.set("ram_max", config.ram_max)
-    state.config_manager.set("ram_unit", config.ram_unit)
-    if config.minecraft_version:
-        state.config_manager.set("minecraft_version", config.minecraft_version)
-    state.config_manager.save()
-    state.initialize_handler()
+    if not state.selected_server_id:
+        raise HTTPException(status_code=400, detail="No server selected")
+    # NOTE: this endpoint used attributes that don't exist on ServerConfig
+    # (server_path/server_type/minecraft_version) and called a non-existent
+    # initialize_handler(), so it always raised. Update the selected profile.
+    updates = {
+        "path": config.path,
+        "type": config.type,
+        "ram_min": config.ram_min,
+        "ram_max": config.ram_max,
+        "ram_unit": config.ram_unit,
+    }
+    if config.version:
+        updates["version"] = config.version
+    state.config_manager.update_server(state.selected_server_id, updates)
+    if state.server_handler:
+        state.server_handler.update_ram(config.ram_max, config.ram_min, config.ram_unit)
     return {"message": "Configuration saved"}
 
 
@@ -802,9 +1039,6 @@ class DetectRequest(BaseModel):
 def detect_server_info(req: DetectRequest):
     detector = ServerDetector()
     return detector.detect(req.path)
-
-    threading.Thread(target=run_java_install, daemon=True).start()
-    return {"message": "Java installation started"}
 
 
 @app.post("/setup/java/install")
@@ -1114,6 +1348,12 @@ def install_server(req: InstallRequest):
 
 @app.websocket("/ws/console")
 async def websocket_console(websocket: WebSocket):
+    # WebSocket handshakes bypass CORS, so the shared token is the gate here.
+    if API_TOKEN:
+        provided = websocket.query_params.get("token", "")
+        if not secrets.compare_digest(provided, API_TOKEN):
+            await websocket.close(code=1008)
+            return
     await websocket.accept()
     # logging.info("WebSocket connected")
     if state:
@@ -1655,8 +1895,130 @@ def create_world(request: Request):
     pass
 
 
+# --- World backup helpers ---
+
+
+def _resolve_world_name(server_path, world_name=None):
+    """Return the world name to operate on, falling back to server.properties."""
+    world_name = (world_name or "").strip() or None
+    if not world_name:
+        props_path = os.path.join(server_path, "server.properties")
+        try:
+            if os.path.exists(props_path):
+                with open(props_path, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if line.startswith("level-name="):
+                            world_name = line.split("=", 1)[1].strip() or None
+                            break
+        except Exception:
+            world_name = None
+    return world_name or "world"
+
+
+def _backups_dir(server_path):
+    d = os.path.join(server_path, "world_backups")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _safe_backup_path(server_path, name):
+    """Resolve a backup filename inside world_backups, rejecting traversal."""
+    if not name or name != os.path.basename(name) or not name.lower().endswith(".zip"):
+        return None
+    backups_dir = os.path.abspath(_backups_dir(server_path))
+    candidate = os.path.abspath(os.path.join(backups_dir, name))
+    if os.path.dirname(candidate) != backups_dir:
+        return None
+    return candidate
+
+
+def _create_world_backup_sync(server_path, world_name):
+    """Create a zip backup of `world_name` and return its filename. Blocking."""
+    world_path = os.path.join(server_path, world_name)
+    if not os.path.isdir(world_path):
+        raise FileNotFoundError(f"World not found: {world_name}")
+
+    backups_dir = _backups_dir(server_path)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_name = f"{world_name}-{ts}.zip"
+    backup_path = os.path.join(backups_dir, backup_name)
+    counter = 1
+    while os.path.exists(backup_path):
+        backup_name = f"{world_name}-{ts}-{counter}.zip"
+        backup_path = os.path.join(backups_dir, backup_name)
+        counter += 1
+    try:
+        with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, dirnames, filenames in os.walk(world_path):
+                for filename in filenames:
+                    full_path = os.path.join(dirpath, filename)
+                    try:
+                        arcname = os.path.relpath(full_path, server_path)
+                        zf.write(full_path, arcname=arcname)
+                    except Exception:
+                        pass
+    except Exception:
+        try:
+            if os.path.exists(backup_path):
+                os.remove(backup_path)
+        except Exception:
+            pass
+        raise
+    return backup_name
+
+
+def _prune_backups(server_path, world_name, keep):
+    """Delete oldest backups for a world, keeping the newest `keep`."""
+    if not keep or keep <= 0:
+        return 0
+    backups_dir = _backups_dir(server_path)
+    try:
+        files = [
+            f
+            for f in os.listdir(backups_dir)
+            if f.lower().endswith(".zip") and f.startswith(f"{world_name}-")
+        ]
+    except Exception:
+        return 0
+    # Order by real mtime so same-second backups (name suffix -1, -2 ...) are
+    # pruned correctly; name sorting does not order those reliably.
+    files.sort(
+        key=lambda f: os.path.getmtime(os.path.join(backups_dir, f)), reverse=True
+    )
+    removed = 0
+    for f in files[keep:]:
+        try:
+            os.remove(os.path.join(backups_dir, f))
+            removed += 1
+        except Exception:
+            pass
+    return removed
+
+
+def _safe_extract_zip(zip_path, dest_dir):
+    """Extract a zip, rejecting entries that would escape dest_dir (zip-slip)."""
+    dest_abs = os.path.abspath(dest_dir)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in zf.infolist():
+            target = os.path.abspath(os.path.join(dest_abs, member.filename))
+            if target != dest_abs and not target.startswith(dest_abs + os.sep):
+                raise ValueError(f"Unsafe path in archive: {member.filename}")
+        zf.extractall(dest_abs)
+
+
 class WorldBackupRequest(BaseModel):
     world: Optional[str] = None
+
+
+class BackupRestoreRequest(BaseModel):
+    name: str
+    world: Optional[str] = None
+
+
+class BackupSettings(BaseModel):
+    enabled: bool = False
+    interval_minutes: int = 60
+    keep: int = 5
 
 
 @app.get("/worlds/backups")
@@ -1696,64 +2058,155 @@ def create_world_backup(req: WorldBackupRequest):
         raise HTTPException(status_code=400, detail="Server not configured")
 
     server_path = state.server_handler.server_path
-
-    world_name = (req.world or "").strip() or None
-    if not world_name:
-        props_path = os.path.join(server_path, "server.properties")
-        try:
-            if os.path.exists(props_path):
-                with open(props_path, "r", encoding="utf-8", errors="replace") as f:
-                    for line in f:
-                        if line.startswith("level-name="):
-                            world_name = line.split("=", 1)[1].strip() or None
-                            break
-        except Exception:
-            world_name = None
-
-    if not world_name:
-        world_name = "world"
-
+    world_name = _resolve_world_name(server_path, req.world)
     world_path = os.path.join(server_path, world_name)
     if not os.path.isdir(world_path):
         raise HTTPException(status_code=404, detail=f"World not found: {world_name}")
 
-    backups_dir = os.path.join(server_path, "world_backups")
-    os.makedirs(backups_dir, exist_ok=True)
-
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_name = f"{world_name}-{ts}.zip"
-    backup_path = os.path.join(backups_dir, backup_name)
-
     def run_backup():
         try:
             if state:
-                state.broadcast_log_sync(f"📦 Creating backup: {backup_name}", "info")
-
-            with zipfile.ZipFile(
-                backup_path, "w", compression=zipfile.ZIP_DEFLATED
-            ) as zf:
-                for dirpath, dirnames, filenames in os.walk(world_path):
-                    for filename in filenames:
-                        full_path = os.path.join(dirpath, filename)
-                        try:
-                            arcname = os.path.relpath(full_path, server_path)
-                            zf.write(full_path, arcname=arcname)
-                        except Exception:
-                            pass
-
+                state.broadcast_log_sync(f"📦 Creating backup of '{world_name}'...", "info")
+            name = _create_world_backup_sync(server_path, world_name)
             if state:
-                state.broadcast_log_sync(f"✅ Backup created: {backup_name}", "success")
+                state.broadcast_log_sync(f"✅ Backup created: {name}", "success")
+                state.broadcast_log_sync(
+                    {"type": "backup_created", "name": name, "world": world_name}
+                )
         except Exception as e:
-            try:
-                if os.path.exists(backup_path):
-                    os.remove(backup_path)
-            except Exception:
-                pass
             if state:
                 state.broadcast_log_sync(f"❌ Error creating backup: {e}", "error")
 
     threading.Thread(target=run_backup, daemon=True).start()
-    return {"status": "started", "name": backup_name}
+    return {"status": "started"}
+
+
+@app.delete("/worlds/backups/{name}")
+def delete_world_backup(name: str):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    path = _safe_backup_path(state.server_handler.server_path, name)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    try:
+        os.remove(path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete backup: {e}")
+    return {"status": "deleted", "name": name}
+
+
+@app.get("/worlds/backups/download/{name}")
+def download_world_backup(name: str):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    path = _safe_backup_path(state.server_handler.server_path, name)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    from fastapi.responses import FileResponse
+
+    return FileResponse(path, filename=name, media_type="application/zip")
+
+
+@app.post("/worlds/backups/restore")
+def restore_world_backup(req: BackupRestoreRequest):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    if state.server_handler.is_running():
+        raise HTTPException(
+            status_code=400, detail="Stop the server before restoring a backup"
+        )
+
+    server_path = state.server_handler.server_path
+    backup_path = _safe_backup_path(server_path, req.name)
+    if not backup_path or not os.path.isfile(backup_path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    tmp_dir = os.path.join(server_path, ".__restore_tmp")
+    if os.path.exists(tmp_dir):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    os.makedirs(tmp_dir, exist_ok=True)
+    try:
+        _safe_extract_zip(backup_path, tmp_dir)
+
+        # The archive stores paths relative to the server folder, so the world
+        # lives at tmp/<folder>/level.dat. Fall back to a root-level world.
+        source = None
+        if os.path.exists(os.path.join(tmp_dir, "level.dat")):
+            source = tmp_dir
+        else:
+            for entry in os.listdir(tmp_dir):
+                candidate = os.path.join(tmp_dir, entry)
+                if os.path.isdir(candidate) and os.path.exists(
+                    os.path.join(candidate, "level.dat")
+                ):
+                    source = candidate
+                    break
+        if not source:
+            raise HTTPException(
+                status_code=400, detail="Backup does not contain a valid world"
+            )
+
+        target_name = (req.world or "").strip()
+        if target_name and (
+            target_name != os.path.basename(target_name) or not target_name
+        ):
+            raise HTTPException(status_code=400, detail="Invalid world name")
+        if not target_name:
+            target_name = os.path.basename(source) if source != tmp_dir else "world"
+
+        target_path = os.path.join(server_path, target_name)
+        if os.path.exists(target_path):
+            shutil.rmtree(target_path)
+        shutil.move(source, target_path)
+        state.broadcast_log_sync(
+            f"♻️ World '{target_name}' restored from {req.name}", "success"
+        )
+        return {"status": "restored", "world": target_name}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.post("/worlds/backups/upload")
+async def upload_world_backup(file: UploadFile = File(...)):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    filename = os.path.basename(file.filename or "")
+    if not filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip backups are allowed")
+    dest = os.path.join(_backups_dir(state.server_handler.server_path), filename)
+    with open(dest, "wb") as f:
+        f.write(await file.read())
+    state.broadcast_log_sync(f"⬆️ Backup imported: {filename}", "info")
+    return {"status": "imported", "name": filename}
+
+
+@app.get("/server/backup-settings")
+def get_backup_settings():
+    default = {"enabled": False, "interval_minutes": 60, "keep": 5}
+    if not state or not state.selected_server_id:
+        return default
+    cfg = state.config_manager.get_server(state.selected_server_id) or {}
+    ab = cfg.get("auto_backup") or {}
+    return {
+        "enabled": bool(ab.get("enabled", False)),
+        "interval_minutes": int(ab.get("interval_minutes", 60)),
+        "keep": int(ab.get("keep", 5)),
+    }
+
+
+@app.post("/server/backup-settings")
+def set_backup_settings(req: BackupSettings):
+    if not state or not state.selected_server_id:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    settings = {
+        "enabled": bool(req.enabled),
+        "interval_minutes": max(5, int(req.interval_minutes)),
+        "keep": max(1, int(req.keep)),
+    }
+    state.config_manager.update_server(
+        state.selected_server_id, {"auto_backup": settings}
+    )
+    return settings
 
 
 # --- DNS Proxy Helper ---
@@ -1787,8 +2240,46 @@ def _get_dns_settings(state):
         return {"enabled": False, "url": ""}
 
 
+def _call_dns_proxy(state, action, subdomain, target=""):
+    """Call the DNS proxy Worker. Returns (ok, payload). Never raises.
+
+    The Worker returns the real Cloudflare error (e.g. 81045 quota exceeded,
+    9060 invalid target) which we surface to the UI instead of failing silently.
+    """
+    settings = _get_dns_settings(state)
+    if not settings["enabled"] or not settings["url"] or not subdomain:
+        return False, {"error": "DNS proxy disabled or no subdomain"}
+    try:
+        import requests as req
+
+        r = req.post(
+            settings["url"],
+            json={"subdomain": subdomain, "target": target, "action": action},
+            timeout=8,
+        )
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        if not r.ok:
+            return False, {"error": data.get("error") or f"HTTP {r.status_code}"}
+        if isinstance(data, dict) and data.get("error"):
+            return False, {"error": data["error"]}
+        return True, data
+    except Exception as e:
+        return False, {"error": str(e)}
+
+
+def _delete_dns_for_subdomain(state, subdomain):
+    """Best-effort delete of a subdomain's SRV record (used on change/delete)."""
+    if not subdomain:
+        return False
+    ok, _ = _call_dns_proxy(state, "delete", subdomain)
+    return ok
+
+
 def _update_dns_record_proxy(state):
-    """Llama al proxy DNS para crear/actualizar el registro SRV."""
+    """Creates/updates the SRV record for the selected server, reporting errors."""
     settings = _get_dns_settings(state)
     if not settings["enabled"] or not settings["url"] or not state.tunnel_address:
         return
@@ -1804,49 +2295,42 @@ def _update_dns_record_proxy(state):
         state.server_handler.dns_subdomain = slug
         state.config_manager.update_server(state.selected_server_id, {"dns_subdomain": slug})
         state.broadcast_log_sync(f"🌐 Auto-generated subdomain: {slug}", "info")
-    try:
-        import requests as req
-        req.post(
-            settings["url"],
-            json={
-                "subdomain": slug,
-                "target": state.tunnel_address,
-                "action": "create",
-            },
-            timeout=5,
-        )
-        state.dns_address = f"{slug}.play.ariser.app"
+
+    ok, data = _call_dns_proxy(state, "create", slug, state.tunnel_address)
+    if not ok:
+        state.dns_address = None
+        err = data.get("error")
         state.broadcast_log_sync(
-            f"🌐 DNS updated: {state.dns_address} → {state.tunnel_address}", "info"
+            f"⚠️ DNS update failed for {slug}.play.ariser.app: {err}", "warning"
         )
-        state.broadcast_log_sync({
-            "type": "dns_updated",
-            "address": state.dns_address,
-            "target": state.tunnel_address,
-        })
-    except Exception as e:
-        state.broadcast_log_sync(f"⚠️ DNS update failed: {e}", "warning")
+        state.broadcast_log_sync(
+            {"type": "dns_error", "subdomain": slug, "error": err}
+        )
+        return
+
+    state.dns_address = f"{slug}.play.ariser.app"
+    state._dns_active_slug = slug
+    state.broadcast_log_sync(
+        f"🌐 DNS updated: {state.dns_address} → {state.tunnel_address}", "info"
+    )
+    state.broadcast_log_sync({
+        "type": "dns_updated",
+        "address": state.dns_address,
+        "target": state.tunnel_address,
+    })
 
 
 def _delete_dns_record_proxy(state):
-    """Limpia el registro SRV cuando el túnel se cierra."""
-    settings = _get_dns_settings(state)
-    if not settings["enabled"] or not settings["url"]:
-        return
-    try:
-        slug = _get_server_slug(state)
-        import requests as req
-        req.post(
-            settings["url"],
-            json={
-                "subdomain": slug,
-                "target": "",
-                "action": "delete",
-            },
-            timeout=5,
-        )
-    except Exception:
-        pass  # Silent cleanup, no need to spam logs on tunnel close
+    """Remove the published SRV record (tunnel stop / app exit).
+
+    Deletes exactly the subdomain that was published so the zone doesn't fill
+    up with records for tunnels that are no longer running.
+    """
+    slug = state._dns_active_slug or _get_server_slug(state)
+    if slug:
+        _delete_dns_for_subdomain(state, slug)
+    state._dns_active_slug = None
+    state.dns_address = None
 
 
 # --- Tunnel Management Endpoints (Pinggy) ---
@@ -1872,6 +2356,14 @@ def start_tunnel(
     try:
         if not state:
             raise HTTPException(status_code=500, detail="App state not initialized")
+
+        # Prevent concurrent starts: two rapid calls used to spawn two ssh.exe
+        # processes for the same port (the second overwrote state.tunnel_process,
+        # orphaning the first).
+        with state._tunnel_lock:
+            if state._tunnel_starting:
+                return {"message": "Tunnel is already starting...", "status": "connecting"}
+            state._tunnel_starting = True
 
         # Stop any existing tunnel before starting a new one
         if state.tunnel_process and state.tunnel_process.poll() is None:
@@ -2107,16 +2599,21 @@ def start_tunnel(
                 state.broadcast_log_sync("🔴 Tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_disconnected"})
                 state.tunnel_address = None
-                # Keep DNS record — subdomain stays reserved for this server
 
             except Exception as e:
                 logging.exception(f"Tunnel error: {e}")
                 state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
                 state.tunnel_address = None
+            finally:
+                state._tunnel_starting = False
+                # Remove the SRV: the tunnel is down, so the record is useless
+                # and keeping it would fill Cloudflare's record quota over time.
+                _delete_dns_record_proxy(state)
 
         threading.Thread(target=run_tunnel, daemon=True).start()
         return {"message": "Tunnel starting...", "status": "connecting"}
     except Exception as e:
+        state._tunnel_starting = False
         logging.exception(f"Error in start_tunnel endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2137,6 +2634,9 @@ def stop_tunnel():
         state.tunnel_address = None
         state.broadcast_log_sync("🔴 Tunnel stopped", "info")
         state.broadcast_log_sync({"type": "tunnel_disconnected"})
+
+    # Remove the DNS record (server is going offline).
+    _delete_dns_record_proxy(state)
 
     return {"message": "Tunnel stopped"}
 
@@ -2207,32 +2707,32 @@ async def set_dns_subdomain(request: Request):
 
     # Guardar en la config del servidor
     server_id = state.selected_server_id
+    old_subdomain = _get_server_slug(state)  # capture BEFORE changing
     state.config_manager.update_server(server_id, {"dns_subdomain": subdomain})
     state.server_handler.dns_subdomain = subdomain
 
     address = f"{subdomain}.play.ariser.app"
 
+    # Free the old record so renaming the subdomain doesn't leak DNS entries.
+    if old_subdomain and old_subdomain != subdomain:
+        _delete_dns_for_subdomain(state, old_subdomain)
+
     # Si el túnel está activo, actualizar DNS inmediatamente
     if state.tunnel_address and state.tunnel_process and state.tunnel_process.poll() is None:
-        try:
-            slug = _get_server_slug(state)
-            settings = _get_dns_settings(state)
-            if settings["enabled"] and settings["url"]:
-                import requests as req
-                req.post(
-                    settings["url"],
-                    json={"subdomain": slug, "target": state.tunnel_address, "action": "create"},
-                    timeout=5,
-                )
-                state.dns_address = address
-                state.broadcast_log_sync({
-                    "type": "dns_updated",
-                    "address": address,
-                    "target": state.tunnel_address,
-                })
-                state.broadcast_log_sync(f"🌐 DNS updated: {address} → {state.tunnel_address}", "info")
-        except Exception as e:
-            state.broadcast_log_sync(f"⚠️ DNS update failed: {e}", "warning")
+        ok, data = _call_dns_proxy(state, "create", subdomain, state.tunnel_address)
+        if ok:
+            state.dns_address = address
+            state.broadcast_log_sync({
+                "type": "dns_updated",
+                "address": address,
+                "target": state.tunnel_address,
+            })
+            state.broadcast_log_sync(f"🌐 DNS updated: {address} → {state.tunnel_address}", "info")
+        else:
+            state.dns_address = None
+            err = data.get("error")
+            state.broadcast_log_sync(f"⚠️ DNS update failed for {address}: {err}", "warning")
+            state.broadcast_log_sync({"type": "dns_error", "subdomain": subdomain, "error": err})
 
     return {"subdomain": subdomain, "address": address}
 
@@ -2440,6 +2940,11 @@ def shutdown_app():
         # Stop any running tunnel
         if state and state.tunnel_process and state.tunnel_process.poll() is None:
             logging.info("Stopping tunnel process...")
+            # Remove the SRV before tearing the tunnel down.
+            try:
+                _delete_dns_record_proxy(state)
+            except Exception:
+                pass
             try:
                 state.tunnel_process.terminate()
                 state.tunnel_process.wait(timeout=3)
@@ -2492,6 +2997,11 @@ def start_parent_watchdog(forced_parent_pid=None):
                 logging.warning(
                     "Parent process lost. Shutting down backend and servers..."
                 )
+                # Remove the published DNS record before dying so it doesn't leak.
+                try:
+                    _delete_dns_record_proxy(state)
+                except Exception:
+                    pass
                 # Stop ALL active server handlers, not just the selected one
                 if state and state.active_handlers:
                     for server_id, handler in state.active_handlers.items():
@@ -2792,6 +3302,21 @@ def get_running_servers():
         if handler.is_running() or handler.is_starting():
             return {"any_running": True}
     return {"any_running": False}
+
+
+@app.get("/system/memory")
+def get_memory_info(trace: bool = False):
+    """Memory breakdown of the backend process.
+
+    Poll this from the UI/console while the server runs to see which structure
+    grows. Pass ?trace=true to enable tracemalloc and get the top allocation
+    sites (heavier; leave it off unless diagnosing).
+    """
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    if trace:
+        state._tracemalloc_enabled = True
+    return state.memory_snapshot(include_traces=trace)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
 const path = require('path');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const http = require('http');
 
@@ -8,9 +9,36 @@ let pythonProcess;
 let isQuitting = false;
 let tray = null;
 
+// Prevent multiple instances: each instance would spawn its own backend
+// (only one can bind port 8000), leaking processes and RAM.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // Identify if we are in dev mode
 const isDev = !app.isPackaged;
 const API_PORT = 8000;
+
+// Shared secret between the renderer, Electron and the Python backend.
+// Generated fresh on every launch; never written to disk.
+const API_TOKEN = crypto.randomBytes(32).toString('hex');
+
+// Auto-update (optional: only present once `npm install` pulled electron-updater)
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require('electron-updater'));
+} catch (_) {
+  autoUpdater = null;
+}
 
 // Ensure Windows shows the correct app name in taskbar/start menu grouping
 // (must match electron-builder appId)
@@ -35,7 +63,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
-      preload: path.join(__dirname, 'preload.cjs')
+      preload: path.join(__dirname, 'preload.cjs'),
+      // Expose the API token to the preload script (sandbox-safe, synchronous).
+      additionalArguments: [`--mlsg-token=${API_TOKEN}`]
     },
     frame: false,
     backgroundColor: '#0f0f0f',
@@ -99,6 +129,24 @@ ipcMain.handle('window:close', () => {
   mainWindow.close();
 });
 
+// --- Auto-update IPC ---
+ipcMain.handle('update:check', async () => {
+  if (!autoUpdater || !app.isPackaged) return { state: 'disabled' };
+  try {
+    await autoUpdater.checkForUpdates();
+    return { state: 'checking' };
+  } catch (e) {
+    return { state: 'error', message: String(e?.message || e) };
+  }
+});
+
+ipcMain.handle('update:install', () => {
+  if (autoUpdater) {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  }
+});
+
 ipcMain.handle('dialog:openDirectory', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']
@@ -149,14 +197,16 @@ function startPythonBackend() {
     pythonProcess = spawn(binaryPath, ['--parent-pid', process.pid.toString()], {
       cwd: path.dirname(binaryPath),
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false
+      detached: false,
+      env: { ...process.env, MLSG_TOKEN: API_TOKEN }
     });
   } else {
     console.log(`Starting Python Script: ${scriptPath}`);
     pythonProcess = spawn(pythonCmd, [scriptPath, '--parent-pid', process.pid.toString()], {
       cwd: path.dirname(scriptPath),
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false
+      detached: false,
+      env: { ...process.env, MLSG_TOKEN: API_TOKEN }
     });
   }
 
@@ -166,8 +216,10 @@ function startPythonBackend() {
 
   let stderrOutput = '';
   pythonProcess.stderr.on('data', (data) => {
-    console.error(`[Python Err]: ${data}`);
-    stderrOutput += data.toString();
+    const text = data.toString();
+    console.error(`[Python Err]: ${text}`);
+    // Keep only the tail: this previously grew for the whole app lifetime.
+    stderrOutput = (stderrOutput + text).slice(-4000);
   });
 
   pythonProcess.on('error', (err) => {
@@ -315,10 +367,45 @@ const checkForRunningServers = () => {
   });
 };
 
+// --- Auto-update: check on start and every 3 hours ---
+function setupAutoUpdater() {
+  if (!autoUpdater || !app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  const send = (status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', status);
+    }
+  };
+
+  autoUpdater.on('checking-for-update', () => send({ state: 'checking' }));
+  autoUpdater.on('update-available', (info) => send({ state: 'available', version: info?.version }));
+  autoUpdater.on('update-not-available', () => send({ state: 'up-to-date' }));
+  autoUpdater.on('download-progress', (p) => send({ state: 'downloading', percent: Math.round(p?.percent || 0) }));
+  autoUpdater.on('update-downloaded', (info) => send({ state: 'downloaded', version: info?.version }));
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err);
+    send({ state: 'error', message: String(err?.message || err) });
+  });
+
+  const check = () => {
+    autoUpdater.checkForUpdatesAndNotify().catch((e) => {
+      console.error('Auto-update check failed:', e?.message || e);
+    });
+  };
+
+  check();
+  setInterval(check, 3 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(() => {
+  if (!gotTheLock) return;
   startPythonBackend();
   createWindow();
   createTray();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

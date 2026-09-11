@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Download, Send } from './ui/PixelIcons';
 import { api } from '../api';
-import { useWebSocket } from '../contexts/WebSocketContext';
+import { useWebSocket, getStoredLogs } from '../contexts/WebSocketContext';
 import { useTranslation } from '../contexts/LanguageContext';
 
 const LogBadge = ({ level }) => {
@@ -11,38 +11,92 @@ const LogBadge = ({ level }) => {
     return <span className="px-1.5 py-0.5 bg-white/5 text-white/40 border border-white/10 rounded mr-2 text-[10px] font-bold">INF</span>;
 };
 
-export default function Console() {
+// Common Minecraft server commands, for Tab-completion and suggestions.
+const MC_COMMANDS = [
+    'help', 'list', 'say', 'tell', 'me', 'msg', 'op', 'deop', 'kick', 'ban', 'ban-ip',
+    'pardon', 'pardon-ip', 'whitelist', 'save-all', 'save-off', 'save-on', 'stop',
+    'reload', 'gamemode', 'difficulty', 'time', 'weather', 'tp', 'teleport', 'give',
+    'effect', 'enchant', 'xp', 'clear', 'kill', 'spawnpoint', 'setworldspawn', 'seed',
+    'setblock', 'fill', 'clone', 'summon', 'particle', 'playsound', 'title', 'tellraw',
+    'execute', 'function', 'tag', 'scoreboard', 'team', 'datapack', 'worldborder',
+    'forceload', 'gamerule', 'advancement', 'recipe', 'attribute', 'publish', 'tps',
+    'plugins', 'version',
+];
+
+const MAX_LOGS = 800;
+
+export default function Console({ serverId }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
-    const [logs, setLogs] = useState([]);
+    const logIdRef = useRef(0);
+    // Seed from the global store so returning from the library keeps the history
+    // (including logs that arrived while this component was unmounted).
+    const [logs, setLogs] = useState(() => {
+        const stored = serverId ? getStoredLogs(serverId) : [];
+        return stored.slice(-MAX_LOGS).map(item => ({
+            ...item,
+            _id: ++logIdRef.current,
+            message: typeof item.message === 'string' ? item.message : String(item.message || ''),
+            time: item.time || new Date().toTimeString().slice(0, 5)
+        }));
+    });
     const [inputObj, setInputObj] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [levelFilter, setLevelFilter] = useState('all');
     const scrollRef = useRef(null);
     const userScrolledUpRef = useRef(false);
-    const MAX_LOGS = 800;
-    const logIdRef = useRef(0);
+
+    // Command history (persisted) + Tab completion
+    const [cmdHistory, setCmdHistory] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mlsg_cmd_history') || '[]'); } catch { return []; }
+    });
+    const historyPosRef = useRef(-1);
+    const draftRef = useRef('');
+
+    // Incoming logs arrive in batches of up to 200 (see backend broadcaster).
+    // Buffering them and flushing once per animation frame avoids hundreds of
+    // setState calls (and full list re-renders) per batch.
+    const pendingLogsRef = useRef([]);
+    const flushFrameRef = useRef(0);
+
+    const flushLogs = useCallback(() => {
+        flushFrameRef.current = 0;
+        const pending = pendingLogsRef.current;
+        if (pending.length === 0) return;
+        pendingLogsRef.current = [];
+        setLogs(prev => {
+            const next = prev.concat(pending);
+            return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
+        });
+    }, []);
+
+    const scheduleFlush = useCallback(() => {
+        if (flushFrameRef.current) return;
+        flushFrameRef.current = requestAnimationFrame(flushLogs);
+    }, [flushLogs]);
 
     useEffect(() => {
         const handleMsg = (item) => {
             if (item && typeof item === 'object' && item.type && item.message === undefined) return;
             if (item.message === undefined && !item.level) return;
 
-            const entry = {
+            pendingLogsRef.current.push({
                 ...item,
                 _id: ++logIdRef.current,
                 message: typeof item.message === 'string' ? item.message : String(item.message || ''),
                 time: item.time || new Date().toTimeString().slice(0, 5)
-            };
-
-            setLogs(prev => {
-                const next = [...prev, entry];
-                return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
             });
+            scheduleFlush();
         };
 
-        return subscribe('console', handleMsg);
-    }, [subscribe]);
+        const unsubscribe = subscribe('console', handleMsg);
+        return () => {
+            unsubscribe();
+            if (flushFrameRef.current) cancelAnimationFrame(flushFrameRef.current);
+            flushFrameRef.current = 0;
+            pendingLogsRef.current = [];
+        };
+    }, [subscribe, scheduleFlush]);
 
     // Polling fallback when WebSocket is disconnected
     useEffect(() => {
@@ -130,11 +184,56 @@ export default function Console() {
         });
     }, [logs, searchQuery, levelFilter]);
 
+    const suggestions = useMemo(() => {
+        const text = inputObj.trimStart();
+        if (!text || text.includes(' ')) return [];
+        const q = text.toLowerCase();
+        return MC_COMMANDS.filter(c => c.startsWith(q) && c !== q).slice(0, 6);
+    }, [inputObj]);
+
+    const handleInputKeyDown = useCallback((e) => {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (cmdHistory.length === 0) return;
+            if (historyPosRef.current === -1) draftRef.current = inputObj;
+            const pos = Math.min(historyPosRef.current + 1, cmdHistory.length - 1);
+            historyPosRef.current = pos;
+            setInputObj(cmdHistory[cmdHistory.length - 1 - pos]);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyPosRef.current === -1) return;
+            const pos = historyPosRef.current - 1;
+            historyPosRef.current = pos;
+            setInputObj(pos === -1 ? draftRef.current : cmdHistory[cmdHistory.length - 1 - pos]);
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const text = inputObj.trimStart();
+            if (!text || text.includes(' ')) return;
+            const q = text.toLowerCase();
+            const matches = MC_COMMANDS.filter(c => c.startsWith(q));
+            if (matches.length === 0) return;
+            if (matches.length === 1) { setInputObj(matches[0] + ' '); return; }
+            // Complete to the longest common prefix of all matches.
+            let lcp = matches[0];
+            for (const m of matches) {
+                while (!m.startsWith(lcp)) lcp = lcp.slice(0, -1);
+            }
+            setInputObj(lcp.length > q.length ? lcp : matches[0] + ' ');
+        }
+    }, [cmdHistory, inputObj]);
+
     const sendCommand = useCallback(async (e) => {
         e.preventDefault();
         if (!inputObj.trim()) return;
 
         const cmd = inputObj;
+        historyPosRef.current = -1;
+        draftRef.current = '';
+        setCmdHistory(prev => {
+            const next = prev[prev.length - 1] === cmd ? prev : [...prev, cmd].slice(-100);
+            try { localStorage.setItem('mlsg_cmd_history', JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
         setLogs(prev => {
             const next = [...prev, { _id: ++logIdRef.current, message: `> ${cmd}`, level: 'input', time: new Date().toTimeString().slice(0, 5) }];
             return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
@@ -234,20 +333,34 @@ export default function Console() {
                 )}
             </div>
 
-            <form onSubmit={sendCommand} className="p-2 bg-[#050505] border-t border-white/5 flex gap-2">
-                <span className="text-white/30 flex items-center justify-center pl-4 font-bold pointer-events-none">~/minecraft $</span>
-                    <input
-                        type="text"
-                        value={inputObj}
-                        onChange={(e) => setInputObj(e.target.value)}
-                        className="flex-1 bg-transparent border-none outline-none text-white placeholder-zinc-700 font-mono text-xs pl-2"
-                        placeholder={t('nav.console') + "..."}
-                        autoFocus
-                    />
-                <button type="submit" className="text-primary hover:text-white p-2 transition-colors">
-                    <Send size={16} />
-                </button>
-            </form>
+            <div className="relative">
+                {suggestions.length > 0 && (
+                    <div className="absolute bottom-full left-2 mb-1 flex flex-wrap items-center gap-1 max-w-[calc(100%-1rem)]">
+                        {suggestions.map(s => (
+                            <button key={s} type="button" onClick={() => setInputObj(s + ' ')}
+                                className="px-2 py-0.5 bg-[#0f0f0f] border border-white/10 rounded-sm text-[10px] font-mono text-zinc-400 hover:text-white hover:border-white/30 transition-colors">
+                                {s}
+                            </button>
+                        ))}
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono text-zinc-600">Tab</span>
+                    </div>
+                )}
+                <form onSubmit={sendCommand} className="p-2 bg-[#050505] border-t border-white/5 flex gap-2">
+                    <span className="text-white/30 flex items-center justify-center pl-4 font-bold pointer-events-none">~/minecraft $</span>
+                        <input
+                            type="text"
+                            value={inputObj}
+                            onChange={(e) => setInputObj(e.target.value)}
+                            onKeyDown={handleInputKeyDown}
+                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-zinc-700 font-mono text-xs pl-2"
+                            placeholder={t('nav.console') + "..."}
+                            autoFocus
+                        />
+                    <button type="submit" className="text-primary hover:text-white p-2 transition-colors">
+                        <Send size={16} />
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }

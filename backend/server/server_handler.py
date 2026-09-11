@@ -1457,20 +1457,6 @@ allow-flight=false
             lines.append(f"{key}={value}\n")
         with open(props_path, "w") as f:
             f.writelines(lines)
-        """Parses server.properties into a dict."""
-        props = {}
-        props_file = os.path.join(self.server_path, "server.properties")
-        if os.path.exists(props_file):
-            try:
-                with open(props_file, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            key, value = line.split("=", 1)
-                            props[key.strip()] = value.strip()
-            except Exception as e:
-                self.output_callback(f"Error reading server.properties: {e}\n", "error")
-        return props
 
     def get_stats(self):
         # If the process doesn't exist, return zeros immediately

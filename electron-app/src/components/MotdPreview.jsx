@@ -65,8 +65,8 @@ export default function MotdPreview({ motd, iconUrl }) {
         });
     };
 
-    // Use default icon if none provided
-    const displayIcon = iconUrl || "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png";
+    // Use default icon if none provided (local asset; the old remote URL 404s)
+    const displayIcon = iconUrl || "/images/Dirt_background_BE1.webp";
 
     return (
         <div className="w-full max-w-2xl bg-black/80 p-2 rounded flex items-center gap-3 font-minecraft text-white select-none border border-white/10 relative overflow-hidden group">
@@ -79,7 +79,7 @@ export default function MotdPreview({ motd, iconUrl }) {
                     src={displayIcon}
                     alt="Server Icon"
                     className="w-full h-full object-contain pixelated"
-                    onError={(e) => { e.target.src = "https://static.wikia.nocookie.net/minecraft_gamepedia/images/4/44/Grass_Block_Revision_6.png" }}
+                    onError={(e) => { e.target.src = "/images/Dirt_background_BE1.webp" }}
                 />
             </div>
 

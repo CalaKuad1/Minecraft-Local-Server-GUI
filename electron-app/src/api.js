@@ -1,12 +1,20 @@
 const API_URL = "http://127.0.0.1:8000";
 
+// Shared secret injected by Electron (see electron/preload.cjs). Required by the
+// backend on every request; absent when running the backend standalone in dev.
+export const API_TOKEN = (typeof window !== 'undefined' && window.electron && window.electron.apiToken) || '';
+
 const fetchJson = async (url, options, timeoutMs = 8000) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const mergedOptions = {
         ...(options || {}),
-        signal: controller.signal
+        signal: controller.signal,
+        headers: {
+            ...(options && options.headers ? options.headers : {}),
+            ...(API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {})
+        }
     };
 
     try {
@@ -225,6 +233,52 @@ export const api = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ world })
+        });
+    },
+    deleteWorldBackup: async (name) => {
+        return await fetchJson(`${API_URL}/worlds/backups/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+    },
+    restoreWorldBackup: async (name, world = null) => {
+        return await fetchJson(`${API_URL}/worlds/backups/restore`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, world })
+        }, 180000);
+    },
+    uploadWorldBackup: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return await fetchJson(`${API_URL}/worlds/backups/upload`, {
+            method: 'POST',
+            body: formData
+        }, 180000);
+    },
+    downloadWorldBackup: async (name) => {
+        // <a download> can't send the auth header, so fetch the blob and save it.
+        const res = await fetch(`${API_URL}/worlds/backups/download/${encodeURIComponent(name)}`, {
+            headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {}
+        });
+        if (!res.ok) throw new Error(`Download failed (${res.status})`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    },
+    getBackupSettings: async () => {
+        return await fetchJson(`${API_URL}/server/backup-settings`);
+    },
+    updateBackupSettings: async (settings) => {
+        return await fetchJson(`${API_URL}/server/backup-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
         });
     },
 

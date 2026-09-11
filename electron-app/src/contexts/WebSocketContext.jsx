@@ -1,7 +1,36 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { API_TOKEN } from '../api';
 
-const WS_URL = 'ws://127.0.0.1:8000/ws/console';
+const WS_URL = `ws://127.0.0.1:8000/ws/console${API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''}`;
 const RECONNECT_DELAY = 3000;
+
+// Global per-server log store. Kept at module scope so a component that
+// unmounts (e.g. the Console when returning to the library) doesn't lose the
+// history, and logs received while unmounted are still captured.
+const LOG_STORE_MAX = 800;
+const logStore = new Map(); // serverId -> items[]
+const GLOBAL_LOG_KEY = '__global__';
+
+function storeLog(item) {
+    if (!item || typeof item !== 'object') return;
+    if (item.message === undefined && !item.level) return;
+    const key = item.server_id || GLOBAL_LOG_KEY;
+    const arr = logStore.get(key) || [];
+    arr.push(item);
+    if (arr.length > LOG_STORE_MAX) arr.splice(0, arr.length - LOG_STORE_MAX);
+    logStore.set(key, arr);
+    if (logStore.size > 25) {
+        // Bound the number of tracked servers.
+        for (const k of logStore.keys()) {
+            if (k !== key && k !== GLOBAL_LOG_KEY) { logStore.delete(k); break; }
+        }
+    }
+}
+
+export function getStoredLogs(serverId) {
+    if (serverId && logStore.has(serverId)) return logStore.get(serverId);
+    return logStore.get(GLOBAL_LOG_KEY) || [];
+}
 
 const WebSocketContext = createContext(null);
 
@@ -45,6 +74,7 @@ export function WebSocketProvider({ children }) {
                 const data = JSON.parse(event.data);
                 const items = (data.type === 'batch' && Array.isArray(data.items)) ? data.items : [data];
                 for (const item of items) {
+                    storeLog(item);
                     listenersRef.current.forEach((fn) => {
                         try { fn(item, data); } catch (e) { console.error('[WS listener error]', e); }
                     });
