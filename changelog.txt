@@ -1,36 +1,28 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.2.10 - 2026-09-12 HOTFIX: DNS cleanup safety
-
-### FIXED (important)
-- The startup DNS cleanup added in v1.2.9 could delete SRV records that did not
-  belong to the current install when the DNS Worker/domain is shared by many
-  users. Cleanup now only removes subdomains tracked in this install's own
-  config, so it can never touch another user's records.
-
-### NOTE
-- Do not use v1.2.9; update to v1.2.10.
-
-## Version 1.2.9 - 2026-09-12 HOTFIX: DNS record quota & auto-cleanup
+## Version 1.2.9 - 2026-09-12 DNS: quota cleanup, safety & verification
 
 ### FIXED
 - The custom address (DNS) feature could stop working once the Cloudflare zone
   reached its record limit ("81045 Record quota exceeded"), because SRV records
   from deleted or renamed servers were never removed.
-- The app now deletes the SRV record when a server is deleted or its subdomain
-  changes, and shows the real DNS error in the UI instead of failing silently.
-- The SRV record is created when the tunnel starts and removed when it stops /
-  the app closes, so records no longer accumulate.
+- The app now deletes the SRV record when a server is deleted, its subdomain
+  changes, the tunnel stops or the app closes, so records no longer accumulate.
+- The SRV record is created when the tunnel starts and removed when it stops,
+  so it only exists while the server is actually online.
+- The DNS Worker now returns the real Cloudflare error instead of failing
+  silently, and the app shows it in the UI.
+- Startup DNS cleanup and the "Clean DNS" button only remove subdomains created
+  by THIS install (safe when the DNS Worker/domain is shared with other users).
 
 ### NEW
-- Automatic DNS cleanup: on startup the app asks the DNS Worker to delete any
-  SRV record that doesn't belong to a currently configured server.
-- "Clean DNS" button in the Dashboard (Advanced tunnel settings) to run it
-  manually.
+- DNS verification: after creating the record the app checks (via DNS-over-HTTPS)
+  that `<sub>.play.ariser.app` actually resolves to the current tunnel, and shows
+  a **DNS ✓ / ✗** badge on the Dashboard. There is also a **"Verify DNS"** button
+  in the Dashboard (Advanced tunnel settings).
 
 ### NOTE
-- DNS cleanup requires the updated Worker with the `prune` action
-  (MLSG DNS Worker v1.2). The old Worker version returned errors silently.
+- Requires MLSG DNS Worker v1.2 (`prune`/`list` actions and error reporting).
 
 ## Version 1.2.8 - 2026-09-11 RELIABILITY, SECURITY, BACKUPS & UI
 

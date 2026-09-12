@@ -262,6 +262,8 @@ class AppState:
         self.tunnel_process: Optional[subprocess.Popen] = None
         self.tunnel_address: Optional[str] = None
         self.dns_address: Optional[str] = None
+        # Last DNS verification result (None=unknown, True=ok, False=failed)
+        self._dns_ok: Optional[bool] = None
         # Serializes tunnel starts so two rapid clicks can't spawn two ssh
         # processes (which happened: two tunnels for the same port).
         self._tunnel_lock = threading.Lock()
@@ -2340,6 +2342,96 @@ def _delete_dns_for_subdomain(state, subdomain):
     return ok
 
 
+def _dns_srv_lookup(fqdn):
+    """Resolve an SRV record via DNS-over-HTTPS. Returns (results, error)."""
+    try:
+        import requests
+
+        r = requests.get(
+            "https://cloudflare-dns.com/dns-query",
+            params={"name": fqdn, "type": "SRV"},
+            headers={"accept": "application/dns-json"},
+            timeout=6,
+        )
+        data = r.json()
+    except Exception as e:
+        return None, str(e)
+
+    results = []
+    for a in data.get("Answer") or []:
+        if a.get("type") == 33 and a.get("data"):
+            parts = a["data"].split()
+            if len(parts) >= 4:
+                try:
+                    results.append(
+                        {"port": int(parts[2]), "target": parts[3].rstrip(".")}
+                    )
+                except ValueError:
+                    pass
+    return results, None
+
+
+def _verify_dns_record(slug, tunnel_address, attempts=4, delay=3.0):
+    """Check that <slug>.play.ariser.app resolves to the current tunnel.
+
+    Retries because DNS propagation can take a few seconds.
+    """
+    if not slug or not tunnel_address or ":" not in tunnel_address:
+        return False, {"error": "no tunnel address"}
+    host, port = tunnel_address.rsplit(":", 1)
+    try:
+        port_i = int(port)
+    except ValueError:
+        return False, {"error": "invalid tunnel address"}
+
+    fqdn = f"_minecraft._tcp.{slug}.play.ariser.app"
+    last = None
+    for i in range(attempts):
+        results, err = _dns_srv_lookup(fqdn)
+        if err:
+            last = err
+        elif results:
+            for rr in results:
+                if rr["target"].lower() == host.lower() and rr["port"] == port_i:
+                    return True, {"fqdn": fqdn, "target": f"{host}:{port_i}"}
+            last = f"points to {results[0]['target']}:{results[0]['port']}"
+        else:
+            last = "no SRV record yet"
+        if i < attempts - 1:
+            time.sleep(delay)
+    return False, {"error": last or "not resolved", "fqdn": fqdn}
+
+
+def _verify_and_notify_dns(state, slug, address):
+    """Verify the DNS record and notify the UI (success or failure)."""
+    ok, data = _verify_dns_record(slug, address)
+    state._dns_ok = ok
+    if ok:
+        state.broadcast_log_sync(
+            f"✅ DNS verified: {slug}.play.ariser.app → {address}", "success"
+        )
+        state.broadcast_log_sync(
+            {
+                "type": "dns_verified",
+                "address": f"{slug}.play.ariser.app",
+                "target": address,
+            }
+        )
+    else:
+        state.broadcast_log_sync(
+            f"⚠️ DNS verification failed for {slug}.play.ariser.app: {data.get('error')}",
+            "warning",
+        )
+        state.broadcast_log_sync(
+            {
+                "type": "dns_error",
+                "subdomain": slug,
+                "error": f"Verification failed: {data.get('error')}",
+                "direct": address,
+            }
+        )
+
+
 def _update_dns_record_proxy(state):
     """Creates/updates the SRV record for the selected server, reporting errors."""
     settings = _get_dns_settings(state)
@@ -2361,17 +2453,24 @@ def _update_dns_record_proxy(state):
     ok, data = _call_dns_proxy(state, "create", slug, state.tunnel_address)
     if not ok:
         state.dns_address = None
+        state._dns_ok = False
         err = data.get("error")
         state.broadcast_log_sync(
             f"⚠️ DNS update failed for {slug}.play.ariser.app: {err}", "warning"
         )
         state.broadcast_log_sync(
-            {"type": "dns_error", "subdomain": slug, "error": err}
+            {
+                "type": "dns_error",
+                "subdomain": slug,
+                "error": err,
+                "direct": state.tunnel_address,
+            }
         )
         return
 
     state.dns_address = f"{slug}.play.ariser.app"
     state._dns_active_slug = slug
+    state._dns_ok = None  # pending verification
     _track_dns_subdomain(state, slug)
     state.broadcast_log_sync(
         f"🌐 DNS updated: {state.dns_address} → {state.tunnel_address}", "info"
@@ -2381,6 +2480,12 @@ def _update_dns_record_proxy(state):
         "address": state.dns_address,
         "target": state.tunnel_address,
     })
+    # Verify the record actually resolves and tell the UI (async, with retries).
+    threading.Thread(
+        target=_verify_and_notify_dns,
+        args=(state, slug, state.tunnel_address),
+        daemon=True,
+    ).start()
 
 
 def _delete_dns_record_proxy(state):
@@ -2840,6 +2945,88 @@ def cleanup_dns_records():
         raise HTTPException(status_code=500, detail="App state not initialized")
     deleted = _cleanup_own_dns_records(state, reason="manual")
     return {"status": "ok", "deleted": deleted}
+
+
+@app.post("/server/dns-verify")
+def verify_dns_record():
+    """Verify that the current server's custom address actually resolves."""
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    slug = _get_server_slug(state)
+    if not slug:
+        return {"verified": False, "error": "No subdomain configured"}
+
+    if state.tunnel_address:
+        ok, data = _verify_dns_record(slug, state.tunnel_address, attempts=3, delay=2.0)
+        return {
+            "verified": ok,
+            "address": f"{slug}.play.ariser.app",
+            "target": state.tunnel_address,
+            "detail": data,
+        }
+
+    # No active tunnel: only check whether a record exists (it would be stale).
+    fqdn = f"_minecraft._tcp.{slug}.play.ariser.app"
+    results, err = _dns_srv_lookup(fqdn)
+    if results:
+        return {
+            "verified": True,
+            "address": f"{slug}.play.ariser.app",
+            "detail": {"records": results},
+            "note": "No active tunnel; the record exists but may be stale",
+        }
+    return {
+        "verified": False,
+        "address": f"{slug}.play.ariser.app",
+        "error": err or "No SRV record found",
+    }
+
+
+# Cloudflare Free plan DNS record limit (used for the usage indicator).
+DNS_ZONE_CAPACITY = 200
+
+
+@app.get("/server/dns-usage")
+def get_dns_usage():
+    """Usage/availability of the DNS zone for the UI indicator."""
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    try:
+        capacity = int(
+            state.config_manager.config.get("app_settings", {})
+            .get("dns_capacity", DNS_ZONE_CAPACITY)
+            or DNS_ZONE_CAPACITY
+        )
+    except Exception:
+        capacity = DNS_ZONE_CAPACITY
+
+    ok, data = _call_dns_proxy(state, "list")
+    used = srv = None
+    error = None
+    if ok:
+        used = data.get("total")
+        srv = data.get("srv")
+        if used is None:
+            used = data.get("count")
+        if srv is None:
+            srv = data.get("count")
+    else:
+        error = data.get("error")
+
+    available = None
+    if isinstance(used, int):
+        available = max(0, capacity - used)
+
+    return {
+        "used": used,
+        "capacity": capacity,
+        "available": available,
+        "srv": srv,
+        "healthy": state._dns_ok,
+        "address": state.dns_address,
+        "direct": state.tunnel_address,
+        "error": error,
+    }
 
 
 @app.get("/server/online-mode")

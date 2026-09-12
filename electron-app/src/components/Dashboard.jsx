@@ -333,6 +333,20 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         }).catch(() => {});
     }, [serverStatus?.server_id]);
 
+    // DNS usage/availability indicator (polls the Worker)
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const u = await api.getDnsUsage();
+                if (!cancelled) setDnsUsage(u);
+            } catch (e) { /* ignore */ }
+        };
+        load();
+        const interval = setInterval(load, 30000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [serverStatus?.server_id]);
+
     // Reset logs ONLY when the server ID changes to a DIFFERENT, VALID ID
     useEffect(() => {
         if (serverStatus?.server_id && serverStatus.server_id !== lastIdRef.current) {
@@ -359,6 +373,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [history, setHistory] = useState({ cpu: [], ram: [] });
     const [autoRestart, setAutoRestart] = useState(false);
     const [dnsAddress, setDnsAddress] = useState(null);
+    const [dnsStatus, setDnsStatus] = useState('unknown'); // unknown | checking | ok | error
+    const [dnsUsage, setDnsUsage] = useState(null); // { used, capacity, srv, healthy }
     const [autoTunnel, setAutoTunnel] = useState(localStorage.getItem('autoTunnel') !== 'false');
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [dnsEditing, setDnsEditing] = useState(false);
@@ -418,14 +434,22 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
         if (item.type === 'dns_updated') {
             setDnsAddress(item.address);
+            setDnsStatus('checking');
+            return;
+        }
+
+        if (item.type === 'dns_verified') {
+            setDnsAddress(item.address);
+            setDnsStatus('ok');
+            setServerError(prev => (prev && prev.error === 'dns_error' ? null : prev));
             return;
         }
 
         if (item.type === 'dns_error') {
-            setDnsAddress(null);
+            setDnsStatus('error');
             setServerError({
                 error: 'dns_error',
-                fix: `Custom address could not be registered: ${item.error}`,
+                fix: `Custom address problem: ${item.error}${item.direct ? ` — you can still connect directly via ${item.direct}` : ''}`,
                 detail: item.subdomain ? `${item.subdomain}.play.ariser.app` : ''
             });
             return;
@@ -763,6 +787,13 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         ) : dnsAddress ? (
                             <div className="flex items-center gap-1.5 mb-1 group">
                                 <span className="text-sm font-mono font-bold text-emerald-400 select-all cursor-default">{dnsAddress}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-sm border font-bold uppercase tracking-wider ${
+                                    dnsStatus === 'ok' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                        : dnsStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                                            : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                }`} title="DNS verification status">
+                                    {dnsStatus === 'ok' ? 'DNS ✓' : dnsStatus === 'error' ? 'DNS ✗' : 'DNS …'}
+                                </span>
                                 <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" title="Copy">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                 </button>
@@ -772,6 +803,13 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             </div>
                         ) : null}
                         {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">"{dnsAvailable}" is already taken — pick another name</div>}
+                        {dnsStatus === 'error' && tunnelAddress && (
+                            <div className="flex flex-wrap items-center gap-2 mb-1 text-[10px] text-orange-400">
+                                <span>DNS failed — connect directly:</span>
+                                <span className="font-mono select-all text-orange-300">{tunnelAddress}</span>
+                                <button onClick={() => navigator.clipboard.writeText(tunnelAddress)} className="underline hover:text-white">copy</button>
+                            </div>
+                        )}
                         <div>
                             {!dnsAddress ? <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span> : null}
                         </div>
@@ -824,8 +862,38 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Region</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
                     <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
-                    <span className="text-[10px] text-zinc-600 font-bold">DNS: <span className="text-emerald-400">ON</span></span>
+                    <span className="text-[10px] text-zinc-600 font-bold" title="DNS records used / zone limit (Cloudflare Free = 200)">
+                        DNS: {dnsUsage && dnsUsage.used != null ? (
+                            <span className={
+                                dnsUsage.used / (dnsUsage.capacity || 1) > 0.9 ? 'text-red-400'
+                                    : dnsUsage.used / (dnsUsage.capacity || 1) > 0.7 ? 'text-yellow-400'
+                                        : 'text-emerald-400'
+                            }>{dnsUsage.used}/{dnsUsage.capacity}</span>
+                        ) : <span className="text-emerald-400">ON</span>}
+                    </span>
                     {tunnelAddress && <span className="text-[10px] text-zinc-500 italic w-full">Region changes apply the next time you start the tunnel.</span>}
+                    <button
+                        onClick={async () => {
+                            setDnsStatus('checking');
+                            try {
+                                const r = await api.verifyDns();
+                                if (r.verified) {
+                                    setDnsStatus('ok');
+                                    alert(`DNS OK: ${r.address}${r.note ? ` (${r.note})` : ''}`);
+                                } else {
+                                    setDnsStatus('error');
+                                    alert('DNS verification failed: ' + (r.error || r.detail?.error || 'unknown'));
+                                }
+                            } catch (e) {
+                                setDnsStatus('error');
+                                alert('DNS verification error: ' + (e.message || e));
+                            }
+                        }}
+                        className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
+                        title="Check that the custom address actually resolves"
+                    >
+                        Verify DNS
+                    </button>
                     <button
                         onClick={async () => {
                             try {
@@ -836,7 +904,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             }
                         }}
                         className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
-                        title="Remove SRV records that don't belong to your current servers"
+                        title="Remove SRV records this app created but no longer uses"
                     >
                         Clean DNS
                     </button>

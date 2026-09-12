@@ -402,6 +402,12 @@ export const api = {
     cleanupDns: async () => {
         return await fetchJson(`${API_URL}/server/dns-cleanup`, { method: 'POST' }, 60000);
     },
+    verifyDns: async () => {
+        return await fetchJson(`${API_URL}/server/dns-verify`, { method: 'POST' }, 60000);
+    },
+    getDnsUsage: async () => {
+        return await fetchJson(`${API_URL}/server/dns-usage`, {}, 30000);
+    },
 
     // --- Mods ---
     searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod', sort = 'downloads', category = null) => {
