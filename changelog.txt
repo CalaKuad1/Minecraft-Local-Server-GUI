@@ -1,5 +1,18 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.10 - 2026-09-12 DNS subdomain reservations
+
+### NEW
+- Each installation now sends a stable install id to the DNS Worker, which
+  reserves the chosen subdomain for that installation. A name stays yours even
+  while your server is offline, and other users can't take it.
+- Renaming a server's subdomain releases the old name (record + reservation).
+- The app re-publishes its SRV every 6 h so the Worker's scheduled cleanup can
+  safely remove records abandoned for over 48 h without affecting active tunnels.
+
+### NOTE
+- Requires MLSG DNS Worker v1.4 (KV binding `MLSG_DNS_KV` + cron trigger).
+
 ## Version 1.2.9 - 2026-09-12 DNS: quota cleanup, safety & verification
 
 ### FIXED

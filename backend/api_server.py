@@ -271,6 +271,7 @@ class AppState:
         # Subdomain whose SRV record is currently published, so it can be removed
         # exactly (tunnel stop / server change) instead of leaking records.
         self._dns_active_slug: Optional[str] = None
+        self._dns_refresh_task: Optional[asyncio.Task] = None
 
         # Install Progress Tracking
         self.install_progress: int = 0
@@ -311,6 +312,8 @@ class AppState:
             self._mem_watchdog_task = asyncio.create_task(self._memory_watchdog())
         if self._auto_backup_task is None:
             self._auto_backup_task = asyncio.create_task(self._auto_backup_watchdog())
+        if self._dns_refresh_task is None:
+            self._dns_refresh_task = asyncio.create_task(self._dns_refresh_watchdog())
 
     def _enqueue_log_from_loop(self, msg_obj: dict):
         """Must be called from the asyncio loop thread."""
@@ -513,6 +516,31 @@ class AppState:
                 break
             except Exception as e:
                 logging.debug(f"[auto-backup] error: {e}")
+
+    async def _dns_refresh_watchdog(self):
+        """Re-publish the SRV every 6h so the Worker's age-based cleanup never
+        removes the record of a long-running tunnel."""
+        while True:
+            try:
+                await asyncio.sleep(6 * 3600)
+                if (
+                    self.tunnel_address
+                    and self._dns_active_slug
+                    and self.tunnel_process
+                    and self.tunnel_process.poll() is None
+                ):
+                    await asyncio.to_thread(
+                        _call_dns_proxy,
+                        self,
+                        "create",
+                        self._dns_active_slug,
+                        self.tunnel_address,
+                    )
+                    logging.info("[dns] refreshed SRV record")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logging.debug(f"[dns] refresh error: {e}")
 
     @property
     def server_handler(self):
@@ -2249,6 +2277,19 @@ def _get_dns_settings(state):
         return {"enabled": False, "url": ""}
 
 
+def _install_id(state):
+    """Stable random id for this installation (used to reserve subdomains)."""
+    conf = state.config_manager.config
+    iid = conf.get("install_id")
+    if not iid:
+        import uuid
+
+        iid = str(uuid.uuid4())
+        conf["install_id"] = iid
+        state.config_manager.save()
+    return iid
+
+
 def _call_dns_proxy(state, action, subdomain="", target="", extra=None):
     """Call the DNS proxy Worker. Returns (ok, payload). Never raises.
 
@@ -2264,6 +2305,8 @@ def _call_dns_proxy(state, action, subdomain="", target="", extra=None):
         import requests as req
 
         payload = {"subdomain": subdomain, "target": target, "action": action}
+        if action in ("create", "delete", "check", "release", "reserve"):
+            payload["owner"] = _install_id(state)
         if extra:
             payload.update(extra)
         r = req.post(settings["url"], json=payload, timeout=30)
@@ -2876,16 +2919,23 @@ async def set_dns_subdomain(request: Request):
     # Guardar en la config del servidor
     server_id = state.selected_server_id
     old_subdomain = _get_server_slug(state)  # capture BEFORE changing
+
+    # Reserve the name for this installation (fails if another user has it).
+    ok, data = _call_dns_proxy(state, "reserve", subdomain)
+    if not ok:
+        raise HTTPException(
+            status_code=409, detail=data.get("error") or "Subdomain not available"
+        )
+
     state.config_manager.update_server(server_id, {"dns_subdomain": subdomain})
     state.server_handler.dns_subdomain = subdomain
 
     address = f"{subdomain}.play.ariser.app"
 
-    # Free the old record so renaming the subdomain doesn't leak DNS entries.
+    # Free the previous name (record + reservation) when renaming.
     if old_subdomain and old_subdomain != subdomain:
-        _delete_dns_for_subdomain(state, old_subdomain)
+        _call_dns_proxy(state, "release", old_subdomain)
 
-    # Si el túnel está activo, actualizar DNS inmediatamente
     if state.tunnel_address and state.tunnel_process and state.tunnel_process.poll() is None:
         ok, data = _call_dns_proxy(state, "create", subdomain, state.tunnel_address)
         if ok:
