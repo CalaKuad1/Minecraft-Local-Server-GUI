@@ -53,7 +53,8 @@
       {
         "provider": "github",
         "owner": "CalaKuad1",
-        "repo": "Minecraft-Local-Server-GUI"
+        "repo": "Minecraft-Local-Server-GUI",
+        "releaseType": "release"
       }
     ],
     "files": [
