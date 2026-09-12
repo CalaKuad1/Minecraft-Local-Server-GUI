@@ -138,6 +138,13 @@ async def lifespan(app: FastAPI):
 
             state.start_background_tasks()
             logging.info("Background tasks started in lifespan")
+
+            # Best-effort: prune orphaned DNS records on startup so the zone
+            # never fills up with records for servers that no longer exist.
+            if state.config_manager.get_all_servers():
+                threading.Thread(
+                    target=_cleanup_dns_records, args=(state, "startup"), daemon=True
+                ).start()
     except Exception as e:
         logging.error(f"Error in lifespan startup: {e}")
 
@@ -2240,23 +2247,24 @@ def _get_dns_settings(state):
         return {"enabled": False, "url": ""}
 
 
-def _call_dns_proxy(state, action, subdomain, target=""):
+def _call_dns_proxy(state, action, subdomain="", target="", extra=None):
     """Call the DNS proxy Worker. Returns (ok, payload). Never raises.
 
     The Worker returns the real Cloudflare error (e.g. 81045 quota exceeded,
     9060 invalid target) which we surface to the UI instead of failing silently.
     """
     settings = _get_dns_settings(state)
-    if not settings["enabled"] or not settings["url"] or not subdomain:
-        return False, {"error": "DNS proxy disabled or no subdomain"}
+    if not settings["enabled"] or not settings["url"]:
+        return False, {"error": "DNS proxy disabled"}
+    if action not in ("prune", "list") and not subdomain:
+        return False, {"error": "no subdomain"}
     try:
         import requests as req
 
-        r = req.post(
-            settings["url"],
-            json={"subdomain": subdomain, "target": target, "action": action},
-            timeout=8,
-        )
+        payload = {"subdomain": subdomain, "target": target, "action": action}
+        if extra:
+            payload.update(extra)
+        r = req.post(settings["url"], json=payload, timeout=30)
         try:
             data = r.json()
         except Exception:
@@ -2268,6 +2276,37 @@ def _call_dns_proxy(state, action, subdomain, target=""):
         return True, data
     except Exception as e:
         return False, {"error": str(e)}
+
+
+def _configured_subdomains(state):
+    """Subdomains of all configured servers (the ones we must keep)."""
+    subs = set()
+    for s in state.config_manager.get_all_servers():
+        slug = (s.get("dns_subdomain") or "").strip().lower()
+        if slug:
+            subs.add(slug)
+    return sorted(subs)
+
+
+def _cleanup_dns_records(state, reason="startup"):
+    """Ask the Worker to delete SRV records that don't belong to our servers.
+
+    This is what keeps the zone from filling up over time (orphaned records
+    from deleted servers, crashes, etc.).
+    """
+    if not state:
+        return
+    keep = _configured_subdomains(state)
+    ok, data = _call_dns_proxy(state, "prune", extra={"keep": keep})
+    if ok:
+        deleted = data.get("deleted", 0)
+        if deleted:
+            logging.info(f"[dns] cleanup ({reason}): deleted {deleted} stale SRV records")
+            state.broadcast_log_sync(
+                f"🧹 DNS cleanup: removed {deleted} stale record(s)", "info"
+            )
+    else:
+        logging.warning(f"[dns] cleanup ({reason}) failed: {data.get('error')}")
 
 
 def _delete_dns_for_subdomain(state, subdomain):
@@ -2763,6 +2802,28 @@ async def check_dns_subdomain(request: Request):
         return data
     except Exception as e:
         return {"available": True, "note": f"Could not verify: {e}"}
+
+
+@app.post("/server/dns-cleanup")
+def cleanup_dns_records():
+    """Delete SRV records that don't belong to any configured server."""
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    keep = _configured_subdomains(state)
+    ok, data = _call_dns_proxy(state, "prune", extra={"keep": keep})
+    if not ok:
+        raise HTTPException(
+            status_code=502, detail=data.get("error") or "DNS cleanup failed"
+        )
+    state.broadcast_log_sync(
+        f"🧹 DNS cleanup: removed {data.get('deleted', 0)} stale record(s)", "info"
+    )
+    return {
+        "status": "ok",
+        "kept": keep,
+        "deleted": data.get("deleted", 0),
+        "scanned": data.get("scanned"),
+    }
 
 
 @app.get("/server/online-mode")

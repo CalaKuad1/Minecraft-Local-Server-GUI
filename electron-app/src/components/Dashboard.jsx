@@ -826,6 +826,20 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
                     <span className="text-[10px] text-zinc-600 font-bold">DNS: <span className="text-emerald-400">ON</span></span>
                     {tunnelAddress && <span className="text-[10px] text-zinc-500 italic w-full">Region changes apply the next time you start the tunnel.</span>}
+                    <button
+                        onClick={async () => {
+                            try {
+                                const r = await api.cleanupDns();
+                                alert(`DNS cleanup: removed ${r.deleted ?? 0} stale record(s).`);
+                            } catch (e) {
+                                alert('DNS cleanup failed: ' + (e.message || e));
+                            }
+                        }}
+                        className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
+                        title="Remove SRV records that don't belong to your current servers"
+                    >
+                        Clean DNS
+                    </button>
                 </div>}
             </div>
 

@@ -1,5 +1,26 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.9 - 2026-09-12 HOTFIX: DNS record quota & auto-cleanup
+
+### FIXED
+- The custom address (DNS) feature could stop working once the Cloudflare zone
+  reached its record limit ("81045 Record quota exceeded"), because SRV records
+  from deleted or renamed servers were never removed.
+- The app now deletes the SRV record when a server is deleted or its subdomain
+  changes, and shows the real DNS error in the UI instead of failing silently.
+- The SRV record is created when the tunnel starts and removed when it stops /
+  the app closes, so records no longer accumulate.
+
+### NEW
+- Automatic DNS cleanup: on startup the app asks the DNS Worker to delete any
+  SRV record that doesn't belong to a currently configured server.
+- "Clean DNS" button in the Dashboard (Advanced tunnel settings) to run it
+  manually.
+
+### NOTE
+- DNS cleanup requires the updated Worker with the `prune` action
+  (MLSG DNS Worker v1.2). The old Worker version returned errors silently.
+
 ## Version 1.2.8 - 2026-09-11 RELIABILITY, SECURITY, BACKUPS & UI
 
 ### CRITICAL FIX: Backend memory leak (reached 18 GB)
