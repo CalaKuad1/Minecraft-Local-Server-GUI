@@ -1,5 +1,16 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.10 - 2026-09-12 HOTFIX: DNS cleanup safety
+
+### FIXED (important)
+- The startup DNS cleanup added in v1.2.9 could delete SRV records that did not
+  belong to the current install when the DNS Worker/domain is shared by many
+  users. Cleanup now only removes subdomains tracked in this install's own
+  config, so it can never touch another user's records.
+
+### NOTE
+- Do not use v1.2.9; update to v1.2.10.
+
 ## Version 1.2.9 - 2026-09-12 HOTFIX: DNS record quota & auto-cleanup
 
 ### FIXED

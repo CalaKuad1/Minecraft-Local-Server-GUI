@@ -139,11 +139,11 @@ async def lifespan(app: FastAPI):
             state.start_background_tasks()
             logging.info("Background tasks started in lifespan")
 
-            # Best-effort: prune orphaned DNS records on startup so the zone
-            # never fills up with records for servers that no longer exist.
+            # Best-effort: remove SRV records this install created but no longer
+            # uses (safe for shared Workers: only touches our own subdomains).
             if state.config_manager.get_all_servers():
                 threading.Thread(
-                    target=_cleanup_dns_records, args=(state, "startup"), daemon=True
+                    target=_cleanup_own_dns_records, args=(state, "startup"), daemon=True
                 ).start()
     except Exception as e:
         logging.error(f"Error in lifespan startup: {e}")
@@ -2288,25 +2288,48 @@ def _configured_subdomains(state):
     return sorted(subs)
 
 
-def _cleanup_dns_records(state, reason="startup"):
-    """Ask the Worker to delete SRV records that don't belong to our servers.
+def _track_dns_subdomain(state, slug):
+    """Remember the subdomains this installation created (for safe cleanup).
 
-    This is what keeps the zone from filling up over time (orphaned records
-    from deleted servers, crashes, etc.).
+    Used so cleanup only ever deletes records WE created, never those of other
+    users sharing the same DNS Worker/domain.
+    """
+    if not state or not slug:
+        return
+    conf = state.config_manager.config
+    known = conf.setdefault("dns_known_subdomains", [])
+    slug = slug.strip().lower()
+    if slug and slug not in known:
+        known.append(slug)
+        state.config_manager.save()
+
+
+def _cleanup_own_dns_records(state, reason="startup"):
+    """Delete SRV records this installation created but no longer needs.
+
+    SAFE for a shared Worker: it only removes subdomains this app tracked in
+    its own config, so it can never delete another user's records.
     """
     if not state:
-        return
-    keep = _configured_subdomains(state)
-    ok, data = _call_dns_proxy(state, "prune", extra={"keep": keep})
-    if ok:
-        deleted = data.get("deleted", 0)
-        if deleted:
-            logging.info(f"[dns] cleanup ({reason}): deleted {deleted} stale SRV records")
-            state.broadcast_log_sync(
-                f"🧹 DNS cleanup: removed {deleted} stale record(s)", "info"
-            )
-    else:
-        logging.warning(f"[dns] cleanup ({reason}) failed: {data.get('error')}")
+        return 0
+    conf = state.config_manager.config
+    configured = set(_configured_subdomains(state))
+    known = [s.strip().lower() for s in conf.get("dns_known_subdomains", []) if s]
+    stale = [s for s in known if s not in configured]
+    deleted = 0
+    for s in stale:
+        ok, _ = _call_dns_proxy(state, "delete", s)
+        if ok:
+            deleted += 1
+    # Keep only what's currently configured.
+    conf["dns_known_subdomains"] = sorted(configured)
+    state.config_manager.save()
+    if deleted:
+        logging.info(f"[dns] cleanup ({reason}): deleted {deleted} own stale record(s)")
+        state.broadcast_log_sync(
+            f"🧹 DNS cleanup: removed {deleted} stale record(s)", "info"
+        )
+    return deleted
 
 
 def _delete_dns_for_subdomain(state, subdomain):
@@ -2349,6 +2372,7 @@ def _update_dns_record_proxy(state):
 
     state.dns_address = f"{slug}.play.ariser.app"
     state._dns_active_slug = slug
+    _track_dns_subdomain(state, slug)
     state.broadcast_log_sync(
         f"🌐 DNS updated: {state.dns_address} → {state.tunnel_address}", "info"
     )
@@ -2761,6 +2785,7 @@ async def set_dns_subdomain(request: Request):
         ok, data = _call_dns_proxy(state, "create", subdomain, state.tunnel_address)
         if ok:
             state.dns_address = address
+            _track_dns_subdomain(state, subdomain)
             state.broadcast_log_sync({
                 "type": "dns_updated",
                 "address": address,
@@ -2806,24 +2831,15 @@ async def check_dns_subdomain(request: Request):
 
 @app.post("/server/dns-cleanup")
 def cleanup_dns_records():
-    """Delete SRV records that don't belong to any configured server."""
+    """Remove SRV records this install created but no longer uses.
+
+    Safe on a shared Worker: it only deletes subdomains tracked in our own
+    config, never other users' records.
+    """
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
-    keep = _configured_subdomains(state)
-    ok, data = _call_dns_proxy(state, "prune", extra={"keep": keep})
-    if not ok:
-        raise HTTPException(
-            status_code=502, detail=data.get("error") or "DNS cleanup failed"
-        )
-    state.broadcast_log_sync(
-        f"🧹 DNS cleanup: removed {data.get('deleted', 0)} stale record(s)", "info"
-    )
-    return {
-        "status": "ok",
-        "kept": keep,
-        "deleted": data.get("deleted", 0),
-        "scanned": data.get("scanned"),
-    }
+    deleted = _cleanup_own_dns_records(state, reason="manual")
+    return {"status": "ok", "deleted": deleted}
 
 
 @app.get("/server/online-mode")
