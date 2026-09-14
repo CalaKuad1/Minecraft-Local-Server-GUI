@@ -1,5 +1,18 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.2.11 - 2026-09-12 Fix DNS verification false negatives
+
+### FIXED
+- DNS verification no longer uses a public resolver (which could cache NXDOMAIN
+  and report "no SRV record yet" even when the record was correct). It now asks
+  the DNS Worker directly (Cloudflare API), so the "DNS ok" badge and the error
+  banner are accurate.
+- Releases now auto-publish instead of being left as GitHub drafts, so the
+  in-app auto-update actually sees them.
+
+### NOTE
+- Requires MLSG DNS Worker with the `get` action (v1.5).
+
 ## Version 1.2.10 - 2026-09-12 DNS subdomain reservations
 
 ### NEW

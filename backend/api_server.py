@@ -2414,10 +2414,12 @@ def _dns_srv_lookup(fqdn):
     return results, None
 
 
-def _verify_dns_record(slug, tunnel_address, attempts=4, delay=3.0):
-    """Check that <slug>.play.ariser.app resolves to the current tunnel.
+def _verify_dns_record(state, slug, tunnel_address, attempts=6, delay=3.0):
+    """Check that the SRV record exists and points to the current tunnel.
 
-    Retries because DNS propagation can take a few seconds.
+    Asks the Worker (Cloudflare API) instead of a public resolver: propagation /
+    negative-caching on resolvers (1.1.1.1) made the old DoH check report false
+    "no SRV record yet" errors even when the record was fine.
     """
     if not slug or not tunnel_address or ":" not in tunnel_address:
         return False, {"error": "no tunnel address"}
@@ -2427,27 +2429,28 @@ def _verify_dns_record(slug, tunnel_address, attempts=4, delay=3.0):
     except ValueError:
         return False, {"error": "invalid tunnel address"}
 
-    fqdn = f"_minecraft._tcp.{slug}.play.ariser.app"
     last = None
     for i in range(attempts):
-        results, err = _dns_srv_lookup(fqdn)
-        if err:
-            last = err
-        elif results:
-            for rr in results:
-                if rr["target"].lower() == host.lower() and rr["port"] == port_i:
-                    return True, {"fqdn": fqdn, "target": f"{host}:{port_i}"}
-            last = f"points to {results[0]['target']}:{results[0]['port']}"
+        ok, data = _call_dns_proxy(state, "get", slug)
+        if not ok:
+            last = data.get("error")
+        elif data.get("exists"):
+            if (
+                (data.get("target") or "").lower() == host.lower()
+                and data.get("port") == port_i
+            ):
+                return True, {"fqdn": data.get("fqdn"), "target": f"{host}:{port_i}"}
+            last = f"record points to {data.get('target')}:{data.get('port')}"
         else:
-            last = "no SRV record yet"
+            last = "record not found yet"
         if i < attempts - 1:
             time.sleep(delay)
-    return False, {"error": last or "not resolved", "fqdn": fqdn}
+    return False, {"error": last or "not verified"}
 
 
 def _verify_and_notify_dns(state, slug, address):
     """Verify the DNS record and notify the UI (success or failure)."""
-    ok, data = _verify_dns_record(slug, address)
+    ok, data = _verify_dns_record(state, slug, address)
     state._dns_ok = ok
     if ok:
         state.broadcast_log_sync(
@@ -3007,7 +3010,7 @@ def verify_dns_record():
         return {"verified": False, "error": "No subdomain configured"}
 
     if state.tunnel_address:
-        ok, data = _verify_dns_record(slug, state.tunnel_address, attempts=3, delay=2.0)
+        ok, data = _verify_dns_record(state, slug, state.tunnel_address, attempts=3, delay=2.0)
         return {
             "verified": ok,
             "address": f"{slug}.play.ariser.app",
@@ -3016,19 +3019,18 @@ def verify_dns_record():
         }
 
     # No active tunnel: only check whether a record exists (it would be stale).
-    fqdn = f"_minecraft._tcp.{slug}.play.ariser.app"
-    results, err = _dns_srv_lookup(fqdn)
-    if results:
+    ok, data = _call_dns_proxy(state, "get", slug)
+    if ok and data.get("exists"):
         return {
             "verified": True,
             "address": f"{slug}.play.ariser.app",
-            "detail": {"records": results},
+            "detail": data,
             "note": "No active tunnel; the record exists but may be stale",
         }
     return {
         "verified": False,
         "address": f"{slug}.play.ariser.app",
-        "error": err or "No SRV record found",
+        "error": data.get("error") or "No SRV record found",
     }
 
 
