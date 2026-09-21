@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { api, API_TOKEN } from '../api';
 import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
 import { Select } from './ui/Select';

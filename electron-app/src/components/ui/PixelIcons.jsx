@@ -2,7 +2,7 @@
 // Do not edit manually
 import React from 'react';
 
-const Px = ({ children, size, className = '', strokeWidth, ...props }) => (
+const Px = ({ children, size, className = '', strokeWidth: _strokeWidth, ...props }) => (
   <svg
     viewBox="0 0 24 24"
     width={size || 20}

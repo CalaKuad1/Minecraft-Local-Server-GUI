@@ -9,10 +9,9 @@ contextBridge.exposeInMainWorld('electron', {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
     openFile: () => ipcRenderer.invoke('dialog:openFile'),
     onCloseRequested: (callback) => {
-        ipcRenderer.on('app-close-requested', (event, ...args) => {
-            callback(event, ...args);
-            // Do not return anything to avoid IPC race condition
-        });
+        const listener = (_event, ...args) => callback(...args);
+        ipcRenderer.on('app-close-requested', listener);
+        return () => ipcRenderer.removeListener('app-close-requested', listener);
     },
     confirmClose: () => ipcRenderer.send('app-close-confirmed'),
     // Auto-update

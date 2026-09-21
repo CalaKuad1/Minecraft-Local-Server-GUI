@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api, API_TOKEN } from '../api';
-import { Select, useSelectOptions } from './ui/Select';
+import { Select } from './ui/Select';
 import { Check, ChevronRight, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Cpu, Box, HardDrive, Terminal, Monitor } from './ui/PixelIcons';
 import fabricLogo from '../assets/engines/fabric.png';
 import forgeLogo from '../assets/engines/forge.png';
@@ -105,6 +105,9 @@ export default function SetupWizard({ onComplete, onCancel }) {
                         setLoaderVersion('');
                     }
                 }
+            }).catch(err => {
+                console.error("Failed to load versions:", err);
+                setVersionsList([]);
             }).finally(() => setLoadingVersions(false));
         }
     }, [serverType, step, mode]);
@@ -160,7 +163,9 @@ export default function SetupWizard({ onComplete, onCancel }) {
                     const data = JSON.parse(event.data);
                     if (data.type === 'batch') data.items.forEach(handleData);
                     else handleData(data);
-                } catch (e) { }
+                } catch (e) {
+                    console.error('[SetupWizard] Failed to parse WebSocket message:', e);
+                }
             };
 
             const intervalId = setInterval(async () => {
@@ -176,7 +181,9 @@ export default function SetupWizard({ onComplete, onCancel }) {
                             clearInterval(intervalId);
                         }
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.error('[SetupWizard] Progress check error:', e);
+                }
             }, 1000);
 
             return () => {
@@ -343,7 +350,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                             <Select
                                                 value={version}
                                                 onChange={handleVersionChange}
-                                                options={useSelectOptions(versionsList)}
+                                                options={versionsList}
                                                 placeholder={loadingVersions ? "Loading..." : "Select version"}
                                                 disabled={loadingVersions}
                                                 className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
@@ -360,7 +367,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                 <Select
                                                     value={loaderVersion}
                                                     onChange={setLoaderVersion}
-                                                    options={useSelectOptions(loaderVersionsList)}
+                                                    options={loaderVersionsList}
                                                     placeholder="Select loader version"
                                                     className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
                                                 />

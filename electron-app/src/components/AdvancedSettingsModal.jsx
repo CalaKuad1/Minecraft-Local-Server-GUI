@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Search, Save, Settings as SettingsIcon, AlertCircle } from './ui/PixelIcons';
 
 export default function AdvancedSettingsModal({ onClose, properties, onSave }) {
     const [localProps, setLocalProps] = useState({ ...properties });
     const [searchTerm, setSearchTerm] = useState('');
-    const [debugMode, setDebugMode] = useState(false);
 
     const booleanKeys = [
         'allow-flight', 'allow-nether', 'broadcast-console-to-ops', 'broadcast-rcon-to-ops',
@@ -83,7 +82,7 @@ export default function AdvancedSettingsModal({ onClose, properties, onSave }) {
                     {filteredKeys.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-500">
                             <Search size={48} className="mb-4 opacity-20" />
-                            <p>No properties found matching "{searchTerm}"</p>
+                            <p>No properties found matching &quot;{searchTerm}&quot;</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">

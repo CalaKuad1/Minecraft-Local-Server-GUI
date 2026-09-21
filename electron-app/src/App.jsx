@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, Globe, Github, Package, Plug } from './components/ui/PixelIcons';
 import { api } from './api';
@@ -97,7 +97,7 @@ function App() {
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!window.electron || !window.electron.onUpdateStatus) return;
@@ -107,9 +107,10 @@ function App() {
 
   useEffect(() => {
     if (window.electron && window.electron.onCloseRequested) {
-      window.electron.onCloseRequested(() => {
+      const off = window.electron.onCloseRequested(() => {
         setIsStopping(true);
       });
+      return () => { if (typeof off === 'function') off(); };
     }
   }, []);
 
@@ -128,7 +129,9 @@ function App() {
     try {
       const status = await api.getStatus();
       setServerStatus(status);
-    } catch (e) { }
+    } catch (e) {
+      console.error('Failed to refresh status:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -143,9 +146,6 @@ function App() {
           if (!cancelled) {
             setServerStatus((prev) => {
               if (!prev) return status;
-              const PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
-              const prevP = PRIORITY[prev.status] ?? 0;
-              const newP = PRIORITY[status.status] ?? 0;
 
               if (prev.status === 'online' && status.status === 'starting' && prev.pid === status.pid) {
                 return prev;
@@ -160,10 +160,10 @@ function App() {
               return isSameStatus(prev, status) ? prev : status;
             });
           }
-          // Aumentar el tiempo de polling a 3000ms (3s) para reducir carga en PCs lentos
+          // Polling time 3000ms (3s)
           timer = setTimeout(tick, 3000);
         } catch (e) {
-          timer = setTimeout(tick, 5000); // Si falla, esperar más
+          timer = setTimeout(tick, 5000); // Wait longer on failure
         }
       };
 
@@ -173,30 +173,30 @@ function App() {
         if (timer) clearTimeout(timer);
       };
     }
-  }, [selectedServer]);
+  }, [selectedServer, isSameStatus]);
 
   const handleServerSelected = useCallback(async (serverId = null) => {
-    if (!serverId) {
+    let targetId = serverId;
+    if (!targetId) {
       // If no ID provided, we just want to refresh or load default
       try {
         const servers = await api.getServers();
         if (servers && servers.length > 0) {
-          serverId = servers[servers.length - 1].id;
+          targetId = servers[servers.length - 1].id;
         }
       } catch (e) { return; }
     }
 
-    if (!serverId) return;
+    if (!targetId) return;
 
     // 1. Limpieza visual inmediata antes de la carga (solo si es un cambio de servidor)
-    if (selectedServer?.id !== serverId) {
+    if (selectedServer?.id !== targetId) {
       setSelectedServer(null);
       setServerStatus(null);
     }
 
     try {
-      // Ahora selectServer devuelve el estado actual también, aprovechémoslo
-      const response = await api.selectServer(serverId);
+      const response = await api.selectServer(targetId);
 
       // Actualización atómica
       if (response.server_status) {
@@ -208,10 +208,10 @@ function App() {
         setSelectedServer(status);
       }
     } catch (e) {
-      setSelectedServer({ id: serverId }); // Fallback
+      setSelectedServer({ id: targetId }); // Fallback
     }
     setActiveTab('dashboard');
-  }, []);
+  }, [selectedServer?.id]);
 
   const handleBackToLibrary = async () => {
     setSelectedServer(null);

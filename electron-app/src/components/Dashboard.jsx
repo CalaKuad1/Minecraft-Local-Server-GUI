@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe } from './ui/PixelIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -224,19 +224,54 @@ const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) =
     );
 };
 
+const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
+
 export default function Dashboard({ status: serverStatus, onRefresh, active = true }) {
     const { t } = useTranslation();
+    const { isConnected, subscribe, send } = useWebSocket();
+
     // Local state for immediate UI feedback
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
     const [localLogs, setLocalLogs] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [showPublicModal, setShowPublicModal] = useState(false);
+    const [showShutdownModal, setShowShutdownModal] = useState(false);
+    const [shutdownInfo, setShutdownInfo] = useState({ scheduled: false });
+    const [tunnelAddress, setTunnelAddress] = useState(null);
+    const [tunnelConnecting, setTunnelConnecting] = useState(false);
+    const [tunnelRegion, setTunnelRegion] = useState('eu');
+    const [tunnelProvider] = useState('pinggy');
+    const [history, setHistory] = useState({ cpu: [], ram: [] });
+    const [autoRestart, setAutoRestart] = useState(false);
+    const [dnsAddress, setDnsAddress] = useState(null);
+    const [dnsStatus, setDnsStatus] = useState('unknown'); // unknown | checking | ok | error
+    const [dnsUsage, setDnsUsage] = useState(null); // { used, capacity, srv, healthy }
+    const [autoTunnel, setAutoTunnel] = useState(localStorage.getItem('autoTunnel') !== 'false');
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [dnsEditing, setDnsEditing] = useState(false);
+    const [dnsAvailable, setDnsAvailable] = useState(null);
+    const [dnsSubdomain, setDnsSubdomain] = useState('');
+    const [onlineMode, setOnlineMode] = useState(true);
+    const [togglingMode, setTogglingMode] = useState(false);
+    const [serverError, setServerError] = useState(null);
 
     const isStoppingRef = useRef(serverStatus?.status === 'stopping');
     const lastIdRef = useRef(serverStatus?.server_id);
     const lastWsStatusTime = useRef(0);
-    const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
+    const logsEndRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+    const userScrolledUpRef = useRef(false);
+
+    // Derived status
+    const isOnline = localStatus === 'online';
+    const isStarting = localStatus === 'starting';
+    const isStopping = localStatus === 'stopping';
 
     // Derived values
     const status = serverStatus || { status: 'offline' };
+    const onlinePlayersLen = Array.isArray(status.online_players) ? status.online_players.length : 0;
+    const playersValue = (status.players !== undefined && status.players !== null) ? Number(status.players) : null;
+    const onlineCount = (Number.isFinite(playersValue) && playersValue > 0) ? playersValue : onlinePlayersLen;
 
     // Sync with polling props
     useEffect(() => {
@@ -356,38 +391,6 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             lastIdRef.current = serverStatus.server_id;
         }
     }, [serverStatus?.server_id]);
-
-
-    const onlinePlayersLen = Array.isArray(status.online_players) ? status.online_players.length : 0;
-    const playersValue = (status.players !== undefined && status.players !== null) ? Number(status.players) : null;
-    const onlineCount = (Number.isFinite(playersValue) && playersValue > 0) ? playersValue : onlinePlayersLen;
-
-    const [loading, setLoading] = useState(false);
-    const [showPublicModal, setShowPublicModal] = useState(false);
-    const [showShutdownModal, setShowShutdownModal] = useState(false);
-    const [shutdownInfo, setShutdownInfo] = useState({ scheduled: false });
-    const [tunnelAddress, setTunnelAddress] = useState(null);
-    const [tunnelConnecting, setTunnelConnecting] = useState(false);
-    const [tunnelRegion, setTunnelRegion] = useState('eu');
-    const [tunnelProvider] = useState('pinggy');
-    const [history, setHistory] = useState({ cpu: [], ram: [] });
-    const [autoRestart, setAutoRestart] = useState(false);
-    const [dnsAddress, setDnsAddress] = useState(null);
-    const [dnsStatus, setDnsStatus] = useState('unknown'); // unknown | checking | ok | error
-    const [dnsUsage, setDnsUsage] = useState(null); // { used, capacity, srv, healthy }
-    const [autoTunnel, setAutoTunnel] = useState(localStorage.getItem('autoTunnel') !== 'false');
-    const [showAdvanced, setShowAdvanced] = useState(false);
-    const [dnsEditing, setDnsEditing] = useState(false);
-    const [dnsAvailable, setDnsAvailable] = useState(null);
-    const [dnsSubdomain, setDnsSubdomain] = useState('');
-    const [onlineMode, setOnlineMode] = useState(true);
-    const [togglingMode, setTogglingMode] = useState(false);
-    const [serverError, setServerError] = useState(null);
-
-    const { isConnected, subscribe, send } = useWebSocket();
-    const logsEndRef = useRef(null);
-    const scrollContainerRef = useRef(null);
-    const userScrolledUpRef = useRef(false);
 
     const MAX_MINI_LOGS = 50;
     const appendLocalLog = useCallback((entry) => {
@@ -542,13 +545,15 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     };
 
     const handleStop = async () => {
-        // Si ya se est├í deteniendo, la segunda pulsaci├│n es un Force Kill
+        // If already stopping, second click is a Force Kill
         if (isStopping) {
-            if (confirm("┬┐El servidor no responde? ┬┐Quieres forzar el cierre inmediatemente? (Podr├¡a perderse el progreso no guardado)")) {
+            if (confirm(t('dashboard.force_stop_confirm', 'Server is not responding. Force close immediately? (Unsaved progress may be lost)'))) {
                 setLoading(true);
                 try {
                     await api.stop(true); // force = true
-                } catch (e) { }
+                } catch (e) {
+                    console.error('[Dashboard] Force stop failed:', e);
+                }
                 setLoading(false);
             }
             return;
@@ -587,10 +592,6 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             alert("Failed to cancel shutdown: " + error.message);
         }
     };
-
-    const isOnline = localStatus === 'online';
-    const isStarting = localStatus === 'starting';
-    const isStopping = localStatus === 'stopping';
 
     return (
         <div className="flex flex-col h-full animate-in fade-in zoom-in duration-500">
@@ -778,7 +779,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors">✕</button>
                                 </div>
                                 {dnsAvailable && <div className="flex items-center gap-1.5 mt-1.5">
-                                    <span className="text-[10px] text-red-400">"{dnsAvailable}" taken — try:</span>
+                                    <span className="text-[10px] text-red-400">&quot;{dnsAvailable}&quot; taken — try:</span>
                                     {[dnsAvailable+'-mc', dnsAvailable+'-sv', 'my-'+dnsAvailable].map(s => (
                                         <button key={s} type="button" onClick={() => { setDnsSubdomain(s); setDnsAvailable(null); }} className="text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors font-mono">{s}</button>
                                     ))}
@@ -802,7 +803,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 </button>
                             </div>
                         ) : null}
-                        {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">"{dnsAvailable}" is already taken — pick another name</div>}
+                        {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">&quot;{dnsAvailable}&quot; is already taken — pick another name</div>}
                         {dnsStatus === 'error' && tunnelAddress && (
                             <div className="flex flex-wrap items-center gap-2 mb-1 text-[10px] text-orange-400">
                                 <span>DNS failed — connect directly:</span>

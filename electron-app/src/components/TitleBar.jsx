@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Minus, Square, X } from './ui/PixelIcons';
 
 const TitleBar = () => {
     const handleMinimize = async () => {
-        try { await window.electron.minimize(); } catch (e) { }
+        try { await window.electron?.minimize(); } catch (e) { }
     };
 
     const handleMaximize = async () => {
-        try { await window.electron.maximize(); } catch (e) { }
+        try { await window.electron?.maximize(); } catch (e) { }
     };
 
     const handleClose = async () => {
-        try { await window.electron.close(); } catch (e) { }
+        try { await window.electron?.close(); } catch (e) { }
     };
 
     return (

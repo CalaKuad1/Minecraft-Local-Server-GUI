@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
 import { Plus, Server, Trash2, Play, Settings, Activity, Clock, FolderOpen, Search, Terminal, LayoutDashboard } from './ui/PixelIcons';
-import logo from '../assets/logo-minimal.png';
 import fabricLogo from '../assets/engines/fabric.png';
 import forgeLogo from '../assets/engines/forge.png';
 import neoforgeLogo from '../assets/engines/neoforge.png';

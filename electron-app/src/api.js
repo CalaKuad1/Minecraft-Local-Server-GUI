@@ -92,7 +92,7 @@ export const api = {
     cancelStop: async () => {
         return await fetchJson(`${API_URL}/server/cancel-stop`, { method: 'POST' });
     },
-    setup: async (serverType, version, path) => {
+    setup: async (_serverType, _version, _path) => {
         // ... (placeholder if needed or remove if used differently)
     },
     getVersions: async (type) => {

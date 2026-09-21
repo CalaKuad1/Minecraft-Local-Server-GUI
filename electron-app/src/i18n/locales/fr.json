@@ -63,7 +63,8 @@
             "click_link": "Cliquez sur le lien ci-dessous pour relier ce serveur à votre compte Playit.gg. Une fois autorisé, le tunnel se connectera automatiquement.",
             "open_browser": "Ouvrir dans le navigateur",
             "waiting": "En attente d'autorisation..."
-        }
+        },
+        "force_stop_confirm": "Le serveur ne répond pas. Forcer la fermeture immédiatement ? (Les données non enregistrées peuvent être perdues)"
     },
     "library": {
         "title": "Bibliothèque de Serveurs",

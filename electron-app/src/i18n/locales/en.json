@@ -63,7 +63,8 @@
             "click_link": "Click the link below to link this server to your Playit.gg account. Once authorized, the tunnel will connect automatically.",
             "open_browser": "Open in Browser",
             "waiting": "Waiting for authorization..."
-        }
+        },
+        "force_stop_confirm": "Server is not responding. Force close immediately? (Unsaved progress may be lost)"
     },
     "library": {
         "title": "Server Library",

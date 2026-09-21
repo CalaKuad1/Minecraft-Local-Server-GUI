@@ -2,9 +2,24 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from './PixelIcons';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export function Select({ value, onChange, options, placeholder = "Select option", className = "", disabled = false }) {
+// Helper to normalize simple arrays or mixed items to {value, label} objects
+export function toSelectOptions(simpleArray) {
+    if (!simpleArray || !Array.isArray(simpleArray)) return [];
+    return simpleArray.map(item => {
+        if (typeof item === 'object' && item !== null && 'value' in item) {
+            return item;
+        }
+        return { value: String(item), label: String(item) };
+    });
+}
+
+// Retain alias for compatibility
+export const useSelectOptions = toSelectOptions;
+
+export function Select({ value, onChange, options = [], placeholder = "Select option", className = "", disabled = false }) {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef(null);
+    const normalizedOptions = toSelectOptions(options);
 
     // Close on click outside
     useEffect(() => {
@@ -18,7 +33,7 @@ export function Select({ value, onChange, options, placeholder = "Select option"
     }, []);
 
     // Find label for current value
-    const selectedLabel = options.find(opt => opt.value === value)?.label || value || placeholder;
+    const selectedLabel = normalizedOptions.find(opt => opt.value === value)?.label || value || placeholder;
 
     return (
         <div className={`relative ${className}`} ref={containerRef}>
@@ -41,7 +56,7 @@ export function Select({ value, onChange, options, placeholder = "Select option"
                         transition={{ duration: 0.15 }}
                         className="absolute z-[200] w-full mt-1 bg-[#121212] border border-white/10 rounded-sm shadow-2xl overflow-hidden max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-white/10"
                     >
-                        {options.map((option) => (
+                        {normalizedOptions.map((option) => (
                             <button
                                 key={option.value}
                                 onClick={() => {
@@ -59,13 +74,4 @@ export function Select({ value, onChange, options, placeholder = "Select option"
             </AnimatePresence>
         </div>
     );
-}
-
-// Helper to normalize simple arrays to {value, label} objects
-export function useSelectOptions(simpleArray) {
-    if (!simpleArray) return [];
-    if (typeof simpleArray[0] === 'string') {
-        return simpleArray.map(item => ({ value: item, label: item }));
-    }
-    return simpleArray;
 }

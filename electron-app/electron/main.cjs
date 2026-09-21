@@ -50,7 +50,8 @@ try {
 } catch (_) { }
 
 function createWindow() {
-  const iconPath = path.join(__dirname, isDev ? '../public/images/icon.ico' : '../dist/images/icon.ico');
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'logo2.png';
+  const iconPath = path.join(__dirname, isDev ? `../public/images/${iconFile}` : `../dist/images/${iconFile}`);
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -114,19 +115,25 @@ function createWindow() {
 
 // IPC Handlers
 ipcMain.handle('window:minimize', () => {
-  mainWindow.minimize();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize();
+  }
 });
 
 ipcMain.handle('window:maximize', () => {
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow.maximize();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
   }
 });
 
 ipcMain.handle('window:close', () => {
-  mainWindow.close();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+  }
 });
 
 // --- Auto-update IPC ---
@@ -178,10 +185,26 @@ function startPythonBackend() {
   let scriptPath;
   let binaryPath;
   const isWin = process.platform === 'win32';
-  let pythonCmd = isWin ? 'python' : 'python3';
+  let pythonCmd = process.env.PYTHON || (isWin ? 'python' : 'python3');
 
   if (isDev) {
     scriptPath = path.join(__dirname, '../../backend/api_server.py');
+    if (!process.env.PYTHON) {
+      const fs = require('fs');
+      const venvPythonWin = path.join(__dirname, '../../backend/venv/Scripts/python.exe');
+      const venvPythonUnix = path.join(__dirname, '../../backend/venv/bin/python');
+      const envPythonWin = path.join(__dirname, '../../backend/env/Scripts/python.exe');
+      const envPythonUnix = path.join(__dirname, '../../backend/env/bin/python');
+      if (isWin && fs.existsSync(venvPythonWin)) {
+        pythonCmd = venvPythonWin;
+      } else if (!isWin && fs.existsSync(venvPythonUnix)) {
+        pythonCmd = venvPythonUnix;
+      } else if (isWin && fs.existsSync(envPythonWin)) {
+        pythonCmd = envPythonWin;
+      } else if (!isWin && fs.existsSync(envPythonUnix)) {
+        pythonCmd = envPythonUnix;
+      }
+    }
   } else {
     // Check for bundled binary in production
     const binaryName = isWin ? 'api_server.exe' : 'api_server';
@@ -201,7 +224,7 @@ function startPythonBackend() {
       env: { ...process.env, MLSG_TOKEN: API_TOKEN }
     });
   } else {
-    console.log(`Starting Python Script: ${scriptPath}`);
+    console.log(`Starting Python Script: ${scriptPath} (using ${pythonCmd})`);
     pythonProcess = spawn(pythonCmd, [scriptPath, '--parent-pid', process.pid.toString()], {
       cwd: path.dirname(scriptPath),
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -240,14 +263,19 @@ function startPythonBackend() {
 
 const checkBackend = () => {
   return new Promise((resolve, reject) => {
-    const req = http.get(`http://127.0.0.1:${API_PORT}/status`, (res) => {
+    const req = http.get({
+      hostname: '127.0.0.1',
+      port: API_PORT,
+      path: '/status',
+      headers: { 'X-MLSG-Token': API_TOKEN }
+    }, (res) => {
       if (res.statusCode === 200) {
         resolve(true);
       } else {
         reject(false);
       }
     });
-    req.on('error', (e) => {
+    req.on('error', () => {
       reject(false);
     });
     req.end();
@@ -264,7 +292,8 @@ const shutdownBackend = () => {
       hostname: '127.0.0.1',
       port: API_PORT,
       path: '/system/shutdown',
-      method: 'POST'
+      method: 'POST',
+      headers: { 'X-MLSG-Token': API_TOKEN }
     }, (res) => {
       console.log(`Backend stop request status: ${res.statusCode}`);
       // The backend now waits for servers in a thread. 
@@ -273,7 +302,7 @@ const shutdownBackend = () => {
       setTimeout(resolve, 3000);
     });
 
-    req.on('error', (e) => {
+    req.on('error', () => {
       console.log('Backend unreachable or already stopped.');
       resolve();
     });
@@ -349,7 +378,12 @@ function createTray() {
 // --- Helper: Check if any Minecraft server is running ---
 const checkForRunningServers = () => {
   return new Promise((resolve, reject) => {
-    const req = http.get(`http://127.0.0.1:${API_PORT}/servers/running`, (res) => {
+    const req = http.get({
+      hostname: '127.0.0.1',
+      port: API_PORT,
+      path: '/servers/running',
+      headers: { 'X-MLSG-Token': API_TOKEN }
+    }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {

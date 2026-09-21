@@ -945,6 +945,7 @@ allow-flight=false
             self.server_stopping = False
 
             # 2. Enviar mensaje de log final
+            restarted = False
             if not was_stopping:
                 self._log("Server stopped unexpectedly.\n", "error")
                 # Auto-restart on crash
@@ -967,14 +968,14 @@ allow-flight=false
                         )
                     time.sleep(self._restart_delay)
                     self.start()
-                    return  # Don't send offline status, start() will handle it
+                    restarted = True
             else:
                 self._log("Server stopped.\n", "info")
                 self._restart_count = 0  # Reset on clean stop
 
             # 3. NOTIFICAR AL FRONTEND VIA WEBSOCKET (Explicit event)
             # Esto asegura que el frontend limpie cualquier estado 'stopping' residual.
-            if self.output_callback:
+            if not restarted and self.output_callback:
                 self.output_callback(
                     {
                         "type": "status_change",
