@@ -65,6 +65,25 @@ class ConfigManagerTests(unittest.TestCase):
         cm = ConfigManager(self.path)
         self.assertEqual(cm.get_all_servers(), [])
 
+    def test_update_server_ram_settings(self):
+        server = self.cm.add_server(
+            {
+                "name": "Survival",
+                "path": self.tmp,
+                "type": "paper",
+                "version": "1.21",
+                "ram_min": "2",
+                "ram_max": "4",
+                "ram_unit": "G",
+            }
+        )
+        self.cm.update_server(
+            server["id"], {"ram_min": "4", "ram_max": "8", "ram_unit": "G"}
+        )
+        updated = self.cm.get_server(server["id"])
+        self.assertEqual(updated["ram_min"], "4")
+        self.assertEqual(updated["ram_max"], "8")
+
 
 if __name__ == "__main__":
     unittest.main()

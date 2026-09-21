@@ -1373,13 +1373,15 @@ allow-flight=false
             )
 
     def update_ram(self, ram_max, ram_min, ram_unit):
-        self.ram_max = ram_max
-        self.ram_min = ram_min
-        self.ram_unit = ram_unit
-        self.output_callback(
-            f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n",
-            "info",
-        )
+        self.ram_max = str(ram_max)
+        self.ram_min = str(ram_min)
+        self.ram_unit = str(ram_unit)
+        self._last_stats_time = 0
+        if self.output_callback:
+            self.output_callback(
+                f"RAM settings updated to {ram_min}-{ram_max}{ram_unit}. Changes will apply on next restart.\n",
+                "info",
+            )
 
     def ensure_java_compatibility(self, minecraft_version):
         """
@@ -1459,11 +1461,20 @@ allow-flight=false
         with open(props_path, "w") as f:
             f.writelines(lines)
 
+    def _get_ram_max_gb(self):
+        try:
+            val = float(self.ram_max) if hasattr(self, "ram_max") and self.ram_max else 0.0
+            return (val / 1024.0) if getattr(self, "ram_unit", "G") == "M" else val
+        except (ValueError, TypeError):
+            return 0.0
+
     def get_stats(self):
         # If the process doesn't exist, return zeros immediately
         if not self.server_process:
             self._cached_process = None
-            return {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
+            max_gb = self._get_ram_max_gb()
+            ram_str = f"0.0/{max_gb:.1f} GB" if max_gb > 0 else "0/0 GB"
+            return {"cpu": 0, "ram": ram_str, "uptime": "0h 0m"}
 
         # If it's been less than the interval, return cache (KEY OPTIMIZATION)
         current_time = time.time()
@@ -1520,7 +1531,7 @@ allow-flight=false
 
             # RAM
             ram_used_gb = mem.rss / (1024 * 1024 * 1024)
-            ram_max_gb = float(self.ram_max)
+            ram_max_gb = self._get_ram_max_gb()
 
             # Uptime
             uptime_seconds = time.time() - create_time
@@ -1540,7 +1551,9 @@ allow-flight=false
         except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
             # If process dies or we can't read it, reset cache
             self._cached_process = None
-            return {"cpu": 0, "ram": "0/0 GB", "uptime": "0h 0m"}
+            max_gb = self._get_ram_max_gb()
+            ram_str = f"0.0/{max_gb:.1f} GB" if max_gb > 0 else "0/0 GB"
+            return {"cpu": 0, "ram": ram_str, "uptime": "0h 0m"}
 
     def force_stop_state(self):
         """Forcefully resets the server's state variables, e.g., after a crash or EULA stop."""

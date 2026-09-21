@@ -778,7 +778,16 @@ async def list_servers():
 async def get_app_settings():
     if not state:
         return {}
-    return state.config_manager.config.get("app_settings", {})
+    settings = dict(state.config_manager.config.get("app_settings", {}))
+    # If a server is selected, merge that server's specific hardware config
+    # so Settings.jsx initializes with the current server's actual values
+    if state.selected_server_id:
+        server = state.config_manager.get_server(state.selected_server_id)
+        if server:
+            for field in ["ram_min", "ram_max", "ram_unit", "java_path"]:
+                if field in server and server[field] is not None:
+                    settings[field] = server[field]
+    return settings
 
 
 @app.put("/app-settings")
@@ -790,12 +799,29 @@ async def update_app_settings(request: Request):
         state.config_manager.config["app_settings"] = {}
     state.config_manager.config["app_settings"].update(body)
     state.config_manager.save()
+
     # Also update active handlers' java_path
     if "java_path" in body:
         for handler in state.active_handlers.values():
             handler.java_path = body["java_path"]
         if state.server_handler:
             state.server_handler.java_path = body["java_path"]
+
+    # Synchronize selected server profile and handler with RAM and Java settings
+    if state.selected_server_id:
+        server_updates = {}
+        for field in ["ram_min", "ram_max", "ram_unit", "java_path"]:
+            if field in body and body[field] is not None:
+                server_updates[field] = str(body[field])
+        if server_updates:
+            state.config_manager.update_server(state.selected_server_id, server_updates)
+
+    if state.server_handler and ("ram_max" in body or "ram_min" in body or "ram_unit" in body):
+        ram_max = str(body.get("ram_max", state.server_handler.ram_max))
+        ram_min = str(body.get("ram_min", state.server_handler.ram_min))
+        ram_unit = str(body.get("ram_unit", state.server_handler.ram_unit))
+        state.server_handler.update_ram(ram_max, ram_min, ram_unit)
+
     return state.config_manager.config["app_settings"]
 
 
@@ -891,11 +917,22 @@ def get_status():
     )
 
     if not state.server_handler:
+        ram_str = "0/0 GB"
+        if state.selected_server_id:
+            server = state.config_manager.get_server(state.selected_server_id)
+            if server and server.get("ram_max"):
+                try:
+                    val = float(server["ram_max"])
+                    if server.get("ram_unit") == "M":
+                        val /= 1024.0
+                    ram_str = f"0.0/{val:.1f} GB"
+                except (ValueError, TypeError):
+                    pass
         return {
             "status": "starting" if installing else "not_configured",
             "server_id": state.selected_server_id,
             "cpu": 0,
-            "ram": 0,
+            "ram": ram_str,
             "players": 0,
             "recent_logs": list(state.log_history)[-50:],
         }
@@ -913,6 +950,9 @@ def get_status():
         "version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],
         "ram": stats["ram"],
+        "ram_min": getattr(state.server_handler, "ram_min", "2"),
+        "ram_max": getattr(state.server_handler, "ram_max", "4"),
+        "ram_unit": getattr(state.server_handler, "ram_unit", "G"),
         "players": players_count,
         "max_players": state.server_handler.get_max_players(),
         "online_players": online_players,
