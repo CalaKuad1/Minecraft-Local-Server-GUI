@@ -273,6 +273,12 @@ class AppState:
         self._dns_active_slug: Optional[str] = None
         self._dns_refresh_task: Optional[asyncio.Task] = None
 
+        # Bedrock Tunnel (Geyser UDP)
+        self.bedrock_tunnel_process: Optional[subprocess.Popen] = None
+        self.bedrock_tunnel_address: Optional[str] = None
+        self._bedrock_tunnel_lock = threading.Lock()
+        self._bedrock_tunnel_starting = False
+
         # Install Progress Tracking
         self.install_progress: int = 0
         self.install_status_msg: str = ""
@@ -905,6 +911,88 @@ async def delete_server(server_id: str, delete_files: bool = False):
     return {"status": "deleted", "files_deleted": False}
 
 
+def _detect_geyser(state):
+    """Detect if GeyserMC and Floodgate are installed, and read the Bedrock port."""
+    info = {
+        "installed": False,
+        "bedrock_port": 19132,
+        "floodgate_installed": False,
+        "config_path": None,
+        "type": None,
+    }
+    if not state or not state.server_handler:
+        return info
+
+    server_path = state.server_handler.server_path
+    if not server_path or not os.path.exists(server_path):
+        return info
+
+    # Check plugins folder
+    plugins_dir = os.path.join(server_path, "plugins")
+    if os.path.exists(plugins_dir):
+        try:
+            for f in os.listdir(plugins_dir):
+                fl = f.lower()
+                if fl.endswith(".jar"):
+                    if "geyser" in fl:
+                        info["installed"] = True
+                        info["type"] = "plugin"
+                    if "floodgate" in fl:
+                        info["floodgate_installed"] = True
+        except Exception:
+            pass
+
+    # Check mods folder
+    mods_dir = os.path.join(server_path, "mods")
+    if os.path.exists(mods_dir):
+        try:
+            for f in os.listdir(mods_dir):
+                fl = f.lower()
+                if fl.endswith(".jar"):
+                    if "geyser" in fl:
+                        info["installed"] = True
+                        info["type"] = "mod"
+                    if "floodgate" in fl:
+                        info["floodgate_installed"] = True
+        except Exception:
+            pass
+
+    # Candidate config paths
+    config_candidates = [
+        os.path.join(server_path, "plugins", "Geyser-Spigot", "config.yml"),
+        os.path.join(server_path, "plugins", "Geyser-Paper", "config.yml"),
+        os.path.join(server_path, "plugins", "Geyser", "config.yml"),
+        os.path.join(server_path, "config", "Geyser-Fabric", "config.yml"),
+        os.path.join(server_path, "config", "Geyser-NeoForge", "config.yml"),
+        os.path.join(server_path, "config", "Geyser", "config.yml"),
+    ]
+
+    for cpath in config_candidates:
+        if os.path.exists(cpath):
+            info["config_path"] = cpath
+            info["installed"] = True
+            try:
+                with open(cpath, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                import re
+
+                match = re.search(
+                    r"bedrock:\s*(?:\n\s*#[^\n]*)*\n(?:\s+[^\n]+\n)*?\s+port:\s*(\d+)",
+                    content,
+                )
+                if match:
+                    info["bedrock_port"] = int(match.group(1))
+                    break
+                m2 = re.search(r"^\s*port:\s*(\d+)", content, re.MULTILINE)
+                if m2:
+                    info["bedrock_port"] = int(m2.group(1))
+                    break
+            except Exception as e:
+                logging.warning(f"Failed to read Geyser config {cpath}: {e}")
+
+    return info
+
+
 @app.get("/status")
 def get_status():
     if not state:
@@ -963,7 +1051,14 @@ def get_status():
             "active": state.tunnel_process is not None
             and state.tunnel_process.poll() is None,
             "address": state.tunnel_address,
+            "dns_address": state.dns_address,
         },
+        "bedrock_tunnel": {
+            "active": state.bedrock_tunnel_process is not None
+            and state.bedrock_tunnel_process.poll() is None,
+            "address": state.bedrock_tunnel_address,
+        },
+        "geyser": _detect_geyser(state),
         "auto_restart": {
             "enabled": state.server_handler.auto_restart,
             "attempt": state.server_handler._restart_count,
@@ -2921,7 +3016,251 @@ def set_tunnel_address(req: SetTunnelAddressRequest):
     return {"status": "success"}
 
 
+# --- Bedrock / GeyserMC Tunnel Endpoints (Pinggy UDP) ---
+
+def _get_pinggy_cli_path(state):
+    """Returns the path to the pinggy CLI executable, downloading it if necessary."""
+    sys_pinggy = shutil.which("pinggy")
+    if sys_pinggy:
+        return sys_pinggy
+
+    bin_dir = os.path.join(state.app_data_dir, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    exe_name = "pinggy.exe" if sys.platform == "win32" else "pinggy"
+    target_path = os.path.join(bin_dir, exe_name)
+
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+        return target_path
+
+    import platform
+
+    machine = platform.machine().lower()
+    is_arm = "arm" in machine or "aarch64" in machine
+
+    base_url = "https://github.com/Pinggy-io/cli-js/releases/download/v0.5.8"
+    if sys.platform == "win32":
+        filename = "pinggy-win-arm64.exe" if is_arm else "pinggy-win-x64.exe"
+    elif sys.platform == "darwin":
+        filename = "pinggy-macos-arm64" if is_arm else "pinggy-macos-x64"
+    else:
+        filename = "pinggy-linux-arm64" if is_arm else "pinggy-linux-x64"
+
+    url = f"{base_url}/{filename}"
+    logging.info(f"Downloading Pinggy CLI from {url} to {target_path}...")
+    state.broadcast_log_sync("📥 Downloading Pinggy CLI for Bedrock UDP tunnel...", "info")
+
+    try:
+        import requests
+
+        res = requests.get(url, stream=True, timeout=60)
+        res.raise_for_status()
+        with open(target_path, "wb") as f:
+            for chunk in res.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        if sys.platform != "win32":
+            os.chmod(target_path, 0o755)
+        logging.info(f"Pinggy CLI successfully saved to {target_path}")
+        state.broadcast_log_sync("✅ Pinggy CLI installed.", "success")
+        return target_path
+    except Exception as e:
+        logging.error(f"Failed to download Pinggy CLI: {e}")
+        state.broadcast_log_sync(f"❌ Failed to download Pinggy CLI: {e}", "error")
+        if os.path.exists(target_path):
+            try:
+                os.remove(target_path)
+            except Exception:
+                pass
+        return None
+
+
+@app.get("/server/geyser")
+def get_geyser_status():
+    if not state:
+        return {"installed": False, "bedrock_port": 19132, "floodgate_installed": False}
+    return _detect_geyser(state)
+
+
+@app.get("/tunnel/bedrock/status")
+def get_bedrock_tunnel_status():
+    if not state:
+        return {"active": False, "address": None, "host": None, "port": None}
+    active = (
+        state.bedrock_tunnel_process is not None
+        and state.bedrock_tunnel_process.poll() is None
+    )
+    b_host, b_port = (None, None)
+    if state.bedrock_tunnel_address and ":" in state.bedrock_tunnel_address:
+        b_host, b_port = state.bedrock_tunnel_address.rsplit(":", 1)
+    return {
+        "active": active,
+        "address": state.bedrock_tunnel_address,
+        "host": b_host,
+        "port": b_port,
+    }
+
+
+@app.post("/tunnel/bedrock/start")
+def start_bedrock_tunnel(region: str = Query("eu")):
+    try:
+        if not state:
+            raise HTTPException(status_code=500, detail="App state not initialized")
+
+        with state._bedrock_tunnel_lock:
+            if state._bedrock_tunnel_starting:
+                return {
+                    "message": "Bedrock tunnel is already starting...",
+                    "status": "connecting",
+                }
+            state._bedrock_tunnel_starting = True
+
+        # Stop existing tunnel before starting a new one
+        if state.bedrock_tunnel_process and state.bedrock_tunnel_process.poll() is None:
+            logging.info("Stopping existing Bedrock tunnel...")
+            try:
+                state.bedrock_tunnel_process.terminate()
+                state.bedrock_tunnel_process.wait(timeout=3)
+            except:
+                try:
+                    state.bedrock_tunnel_process.kill()
+                except:
+                    pass
+            state.bedrock_tunnel_process = None
+            state.bedrock_tunnel_address = None
+
+        cli_path = _get_pinggy_cli_path(state)
+        if not cli_path or not os.path.exists(cli_path):
+            state._bedrock_tunnel_starting = False
+            raise HTTPException(
+                status_code=500,
+                detail="Could not find or download the Pinggy CLI binary for Bedrock UDP tunneling.",
+            )
+
+        geyser_info = _detect_geyser(state)
+        bedrock_port = geyser_info.get("bedrock_port") or 19132
+
+        def run_bedrock_tunnel():
+            import subprocess
+            import re
+
+            connected_emitted = False
+            try:
+                host = f"{region}.free.pinggy.io"
+                logging.info(
+                    f"Starting Pinggy UDP tunnel ({region.upper()}) for Bedrock port {bedrock_port}..."
+                )
+                state.broadcast_log_sync(
+                    f"🎮 Starting Bedrock UDP tunnel ({region.upper()}) on port {bedrock_port}...",
+                    "info",
+                )
+
+                cmd = [
+                    cli_path,
+                    "-p",
+                    "443",
+                    f"-R0:localhost:{bedrock_port}",
+                    f"udp@{host}",
+                ]
+
+                state.bedrock_tunnel_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if sys.platform == "win32"
+                    else 0,
+                )
+
+                for line in iter(state.bedrock_tunnel_process.stdout.readline, ""):
+                    if not line:
+                        break
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+
+                    udp_match = re.search(r"udp://([a-zA-Z0-9\.\-]+:\d+)", line_str)
+                    if udp_match:
+                        new_addr = udp_match.group(1)
+                        if new_addr and new_addr != state.bedrock_tunnel_address:
+                            state.bedrock_tunnel_address = new_addr
+
+                    if not state.bedrock_tunnel_address:
+                        addr_match = re.search(
+                            r"([a-zA-Z0-9\.\-]+\.(?:pinggy|pinggy-free)\.link:\d+)",
+                            line_str,
+                        )
+                        if addr_match:
+                            new_addr = addr_match.group(1)
+                            if new_addr and new_addr != state.bedrock_tunnel_address:
+                                state.bedrock_tunnel_address = new_addr
+
+                    if state.bedrock_tunnel_address and not connected_emitted:
+                        logging.info(
+                            f"Bedrock tunnel established: {state.bedrock_tunnel_address}"
+                        )
+                        b_host, b_port = (
+                            state.bedrock_tunnel_address.rsplit(":", 1)
+                            if ":" in state.bedrock_tunnel_address
+                            else (state.bedrock_tunnel_address, "19132")
+                        )
+                        state.broadcast_log_sync(
+                            f"✅ Bedrock Public tunnel active! Address: {b_host} Port: {b_port}",
+                            "success",
+                        )
+                        state.broadcast_log_sync(
+                            {
+                                "type": "tunnel_bedrock_connected",
+                                "address": state.bedrock_tunnel_address,
+                                "host": b_host,
+                                "port": b_port,
+                            }
+                        )
+                        connected_emitted = True
+
+                state.broadcast_log_sync("🔴 Bedrock tunnel closed", "warning")
+                state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
+                state.bedrock_tunnel_address = None
+            except Exception as e:
+                logging.exception(f"Bedrock tunnel error: {e}")
+                state.broadcast_log_sync(f"❌ Bedrock tunnel error: {e}", "error")
+                state.bedrock_tunnel_address = None
+            finally:
+                state._bedrock_tunnel_starting = False
+                state.bedrock_tunnel_address = None
+
+        threading.Thread(target=run_bedrock_tunnel, daemon=True).start()
+        return {"message": "Bedrock tunnel starting...", "status": "connecting"}
+    except Exception as e:
+        state._bedrock_tunnel_starting = False
+        logging.exception(f"Error in start_bedrock_tunnel: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tunnel/bedrock/stop")
+def stop_bedrock_tunnel():
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    if state.bedrock_tunnel_process:
+        try:
+            state.bedrock_tunnel_process.terminate()
+            state.bedrock_tunnel_process.wait(timeout=3)
+        except:
+            try:
+                state.bedrock_tunnel_process.kill()
+            except:
+                pass
+        state.bedrock_tunnel_process = None
+        state.bedrock_tunnel_address = None
+        state.broadcast_log_sync("🔴 Bedrock tunnel stopped", "info")
+        state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
+    return {"message": "Bedrock tunnel stopped"}
+
+
 # --- DNS Subdomain Endpoints ---
+
 
 @app.get("/server/dns-subdomain")
 def get_dns_subdomain():
@@ -3311,6 +3650,21 @@ def shutdown_app():
                     pass
             state.tunnel_process = None
             state.tunnel_address = None
+
+        # Stop Bedrock tunnel
+        if state and state.bedrock_tunnel_process and state.bedrock_tunnel_process.poll() is None:
+            logging.info("Stopping Bedrock tunnel process...")
+            try:
+                state.bedrock_tunnel_process.terminate()
+                state.bedrock_tunnel_process.wait(timeout=3)
+            except:
+                try:
+                    state.bedrock_tunnel_process.kill()
+                except:
+                    pass
+            state.bedrock_tunnel_process = None
+            state.bedrock_tunnel_address = None
+
 
         # Stop servers
         if state and state.active_handlers:

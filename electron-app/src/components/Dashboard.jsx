@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe } from './ui/PixelIcons';
+import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe, Zap } from './ui/PixelIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { api } from '../api';
@@ -226,7 +226,7 @@ const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) =
 
 const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
 
-export default function Dashboard({ status: serverStatus, onRefresh, active = true }) {
+export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
 
@@ -241,7 +241,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
     const [tunnelProvider] = useState('pinggy');
+    const [bedrockAddress, setBedrockAddress] = useState(null);
+    const [bedrockConnecting, setBedrockConnecting] = useState(false);
+    const [geyserInfo, setGeyserInfo] = useState({ installed: false, bedrock_port: 19132, floodgate_installed: false });
     const [history, setHistory] = useState({ cpu: [], ram: [] });
+
     const [autoRestart, setAutoRestart] = useState(false);
     const [dnsAddress, setDnsAddress] = useState(null);
     const [dnsStatus, setDnsStatus] = useState('unknown'); // unknown | checking | ok | error
@@ -345,9 +349,21 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     setDnsAddress(serverStatus.tunnel.dns_address);
                 }
             }
+            if (serverStatus?.bedrock_tunnel) {
+                if (serverStatus.bedrock_tunnel.active && serverStatus.bedrock_tunnel.address) {
+                    setBedrockAddress(serverStatus.bedrock_tunnel.address);
+                    setBedrockConnecting(false);
+                } else if (!bedrockConnecting && bedrockAddress) {
+                    setBedrockAddress(null);
+                }
+            }
+            if (serverStatus?.geyser) {
+                setGeyserInfo(serverStatus.geyser);
+            }
             if (serverStatus?.auto_restart) {
                 setAutoRestart(serverStatus.auto_restart.enabled);
             }
+
         }
     }, [serverStatus]);
 
@@ -425,6 +441,17 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             setTunnelConnecting(false);
             return;
         }
+        if (item.type === 'tunnel_bedrock_connected') {
+            setBedrockAddress(item.address);
+            setBedrockConnecting(false);
+            return;
+        }
+        if (item.type === 'tunnel_bedrock_disconnected') {
+            setBedrockAddress(null);
+            setBedrockConnecting(false);
+            return;
+        }
+
 
         if (item.type === 'auto_restart') {
             appendLocalLog({
@@ -518,11 +545,28 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     setTunnelConnecting(false);
                 }
             } catch (e) { }
+
+            try {
+                const bStatus = await api.getBedrockTunnelStatus();
+                if (bStatus.active && bStatus.address) {
+                    setBedrockAddress(bStatus.address);
+                    setBedrockConnecting(false);
+                } else if (!bedrockConnecting) {
+                    setBedrockAddress(null);
+                    setBedrockConnecting(false);
+                }
+            } catch (e) { }
+
+            try {
+                const gInfo = await api.getGeyserStatus();
+                if (gInfo) setGeyserInfo(gInfo);
+            } catch (e) { }
         };
         checkTunnel();
         const interval = setInterval(checkTunnel, 5000);
         return () => clearInterval(interval);
-    }, [tunnelConnecting]); // Add dep to prevent clearing while connecting
+    }, [tunnelConnecting, bedrockConnecting]); // Add deps to prevent clearing while connecting
+
 
     const handleStart = async () => {
         setLoading(true);
@@ -912,7 +956,143 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 </div>}
             </div>
 
+            {/* Bedrock / GeyserMC Crossplay Section */}
+            {geyserInfo.installed ? (
+                <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-40 backdrop-blur-2xl">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div className={`p-2 rounded-sm border ${bedrockAddress ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
+                                <Zap size={16} />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-minecraft">
+                                        Bedrock Crossplay
+                                    </span>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold uppercase tracking-wider">
+                                        GeyserMC
+                                    </span>
+                                    {geyserInfo.floodgate_installed && (
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold uppercase tracking-wider" title="Floodgate allows Bedrock players to join without needing a Java account">
+                                            Floodgate Active
+                                        </span>
+                                    )}
+                                    {bedrockAddress ? (
+                                        <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">
+                                            ONLINE (UDP)
+                                        </span>
+                                    ) : (
+                                        <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-zinc-500 rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">
+                                            OFFLINE
+                                        </span>
+                                    )}
+                                </div>
+
+                                {bedrockAddress ? (
+                                    <div className="space-y-1 mt-1">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
+                                                <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Address:</span>
+                                                <span className="text-xs font-mono font-bold text-cyan-300 select-all">
+                                                    {bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress}
+                                                </span>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress)}
+                                                    className="p-1 hover:text-white text-zinc-500 transition-colors"
+                                                    title="Copy Server Address"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
+                                                <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Port:</span>
+                                                <span className="text-xs font-mono font-bold text-emerald-400 select-all">
+                                                    {bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132'}
+                                                </span>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132')}
+                                                    className="p-1 hover:text-white text-zinc-500 transition-colors"
+                                                    title="Copy Port"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="text-[10px] text-zinc-500">
+                                            Bedrock players enter Address &amp; Port into <span className="text-zinc-400">Play &gt; Servers &gt; Add Server</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-[11px] text-zinc-400 mt-0.5">
+                                        Local UDP Port: <span className="font-mono text-zinc-300">{geyserInfo.bedrock_port || 19132}</span>. Share server with iOS, Android, Windows Bedrock &amp; Consoles.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={async () => {
+                                try {
+                                    if (bedrockAddress) {
+                                        await api.stopBedrockTunnel();
+                                        setBedrockAddress(null);
+                                        setBedrockConnecting(false);
+                                    } else {
+                                        setBedrockConnecting(true);
+                                        await api.startBedrockTunnel(tunnelRegion);
+                                    }
+                                } catch (err) {
+                                    setBedrockConnecting(false);
+                                    alert('Bedrock tunnel error: ' + (err.response?.data?.detail || err.message));
+                                }
+                            }}
+                            disabled={bedrockConnecting && !bedrockAddress}
+                            className={`px-4 py-2 rounded-sm text-xs font-minecraft font-bold uppercase tracking-widest flex items-center gap-2 transition-all flex-shrink-0 ${
+                                bedrockAddress
+                                    ? 'bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10'
+                                    : bedrockConnecting
+                                        ? 'bg-transparent border border-yellow-500/30 text-yellow-400'
+                                        : 'bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/30'
+                            }`}
+                        >
+                            {bedrockAddress ? (
+                                <><Square size={12} /> Stop Bedrock</>
+                            ) : bedrockConnecting ? (
+                                <><div className="w-3 h-3 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting</>
+                            ) : (
+                                <><Zap size={12} /> Enable Bedrock</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-sm bg-white/5 border border-white/10 text-zinc-400">
+                            <Zap size={14} />
+                        </div>
+                        <div>
+                            <div className="text-xs font-bold text-zinc-300 font-minecraft">
+                                Bedrock &amp; Console Crossplay
+                            </div>
+                            <div className="text-[10px] text-zinc-500">
+                                Want iOS, Android, PlayStation, Xbox, Switch &amp; Windows Bedrock players to join? Install GeyserMC in Plugins.
+                            </div>
+                        </div>
+                    </div>
+                    {onNavigate && (
+                        <button
+                            onClick={() => onNavigate('plugins')}
+                            className="px-3 py-1.5 rounded-sm border border-white/10 bg-white/5 hover:bg-white/10 text-[10px] font-minecraft text-white tracking-widest uppercase transition-all flex-shrink-0"
+                        >
+                            Get GeyserMC
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Stats Grid */}
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
                 <StatCard icon={Users} label={t('dashboard.players_online')} value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} ${t('status.online')}`} />
                 <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} active={active} />

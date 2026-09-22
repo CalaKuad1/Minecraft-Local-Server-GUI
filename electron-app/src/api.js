@@ -382,6 +382,21 @@ export const api = {
             body: JSON.stringify({ address })
         });
     },
+
+    // --- Bedrock Tunnel (GeyserMC Crossplay) ---
+    getBedrockTunnelStatus: async () => {
+        return await fetchJson(`${API_URL}/tunnel/bedrock/status`);
+    },
+    startBedrockTunnel: async (region = "eu") => {
+        return await fetchJson(`${API_URL}/tunnel/bedrock/start?region=${region}`, { method: 'POST' }, 60000);
+    },
+    stopBedrockTunnel: async () => {
+        return await fetchJson(`${API_URL}/tunnel/bedrock/stop`, { method: 'POST' }, 15000);
+    },
+    getGeyserStatus: async () => {
+        return await fetchJson(`${API_URL}/server/geyser`);
+    },
+
     getDnsSubdomain: async () => {
         return await fetchJson(`${API_URL}/server/dns-subdomain`);
     },

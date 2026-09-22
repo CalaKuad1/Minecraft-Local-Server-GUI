@@ -274,8 +274,9 @@ function App() {
           <div className="mx-auto w-full flex-1 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>
-              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} />
+              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} />
             </div>
+
 
             {/* Console - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'console' ? 'none' : undefined }}>
