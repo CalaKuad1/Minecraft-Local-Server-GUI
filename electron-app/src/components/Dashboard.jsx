@@ -1023,6 +1023,9 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                         <div className="text-[10px] text-zinc-500">
                                             Bedrock players enter Address &amp; Port into <span className="text-zinc-400">Play &gt; Servers &gt; Add Server</span>
                                         </div>
+                                        <div className="text-[10px] text-amber-500/80">
+                                            Free Pinggy tunnels expire after ~60 min — restart the tunnel to renew it.
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="text-[11px] text-zinc-400 mt-0.5">

@@ -2878,6 +2878,8 @@ def start_tunnel(
                     stderr=subprocess.STDOUT,
                     stdin=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW
                     if sys.platform == "win32"
@@ -3271,6 +3273,8 @@ def start_bedrock_tunnel(region: str = Query("eu")):
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,
                 creationflags=subprocess.CREATE_NO_WINDOW
                 if sys.platform == "win32"
@@ -3330,6 +3334,11 @@ def start_bedrock_tunnel(region: str = Query("eu")):
                             "port": b_port,
                         }
                     )
+                    state.broadcast_log_sync(
+                        "⚠️ Free Pinggy tunnels expire after ~60 minutes; "
+                        "restart the tunnel from the dashboard to renew it.",
+                        "warning",
+                    )
                     connected_emitted = True
                     # Now it is running (not starting): allow a restart click to
                     # replace it without waiting for the process to exit.
@@ -3345,6 +3354,13 @@ def start_bedrock_tunnel(region: str = Query("eu")):
                 state.broadcast_log_sync(f"❌ Bedrock tunnel error: {e}", "error")
                 state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
         finally:
+            # If the read loop died for any reason, never leave the CLI
+            # process orphaned in the background.
+            if process is not None and process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception:
+                    pass
             if not _superseded():
                 state._bedrock_tunnel_starting = False
                 state.bedrock_tunnel_address = None
