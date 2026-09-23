@@ -278,6 +278,10 @@ class AppState:
         self.bedrock_tunnel_address: Optional[str] = None
         self._bedrock_tunnel_lock = threading.Lock()
         self._bedrock_tunnel_starting = False
+        # Incremented on every start/stop. A background start compares its
+        # captured generation and aborts when superseded, so stopping while
+        # the CLI is still downloading can never leave an orphan tunnel.
+        self._bedrock_tunnel_gen = 0
 
         # Install Progress Tracking
         self.install_progress: int = 0
@@ -1056,6 +1060,7 @@ def get_status():
         "bedrock_tunnel": {
             "active": state.bedrock_tunnel_process is not None
             and state.bedrock_tunnel_process.poll() is None,
+            "starting": state._bedrock_tunnel_starting,
             "address": state.bedrock_tunnel_address,
         },
         "geyser": _detect_geyser(state),
@@ -3018,8 +3023,74 @@ def set_tunnel_address(req: SetTunnelAddressRequest):
 
 # --- Bedrock / GeyserMC Tunnel Endpoints (Pinggy UDP) ---
 
-def _get_pinggy_cli_path(state):
-    """Returns the path to the pinggy CLI executable, downloading it if necessary."""
+PINGGY_CLI_VERSION = "v0.5.8"
+# Official SHA-256 digests published by the GitHub Releases API for
+# Pinggy-io/cli-js v0.5.8. A downloaded binary is only ever executed when it
+# matches its pinned size and hash, so a tampered/truncated download is
+# discarded instead of run.
+PINGGY_CLI_ASSETS = {
+    "pinggy-win-x64.exe": (
+        77937645,
+        "81d6446edaf9bc14dc68a767df7fe7357810c6aa6a5a037c877e693cad3ce3ea",
+    ),
+    "pinggy-win-arm64.exe": (
+        77188103,
+        "04b3a9e779f31de49f7c3deba144f45819740f22a1d64b009dfd6a86527d7652",
+    ),
+    "pinggy-macos-x64": (
+        100772576,
+        "1cf156b94d6b910f64e4d977d2e1509a2b513f40f2793692f24b17d04f3d6cba",
+    ),
+    "pinggy-macos-arm64": (
+        97443856,
+        "d77f5bf83986372b8d1f2cdd413d231acbf13ee68a971caf6d9a1bb1e68467e9",
+    ),
+    "pinggy-linux-x64": (
+        83097576,
+        "fc7fdb6a9454929b3df40f0a4476f84a3121a2bab3b8735296a29b394fb5ba1d",
+    ),
+    "pinggy-linux-arm64": (
+        79017970,
+        "d889c36a821895a6af9c4a8e11b92205fc931f7030c26116cb45e3ca76ee80f7",
+    ),
+}
+
+
+def _pick_pinggy_asset():
+    import platform
+
+    machine = platform.machine().lower()
+    is_arm = "arm" in machine or "aarch64" in machine
+    if sys.platform == "win32":
+        return "pinggy-win-arm64.exe" if is_arm else "pinggy-win-x64.exe"
+    if sys.platform == "darwin":
+        return "pinggy-macos-arm64" if is_arm else "pinggy-macos-x64"
+    return "pinggy-linux-arm64" if is_arm else "pinggy-linux-x64"
+
+
+def _verify_pinggy_binary(path, expected_size, expected_sha256):
+    """True when the file on disk matches the pinned size and SHA-256."""
+    import hashlib
+
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) != expected_size:
+            return False
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest() == expected_sha256
+    except OSError:
+        return False
+
+
+def _get_pinggy_cli_path(state, should_cancel=None):
+    """Returns the path to the verified pinggy CLI, downloading it if needed.
+
+    Runs inside the tunnel thread (never in the HTTP handler): the binary is
+    ~75-100 MB. Downloads go to a .part file and are renamed into place only
+    after size + SHA-256 verification.
+    """
     sys_pinggy = shutil.which("pinggy")
     if sys_pinggy:
         return sys_pinggy
@@ -3029,48 +3100,70 @@ def _get_pinggy_cli_path(state):
     exe_name = "pinggy.exe" if sys.platform == "win32" else "pinggy"
     target_path = os.path.join(bin_dir, exe_name)
 
-    if os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
+    filename = _pick_pinggy_asset()
+    expected_size, expected_sha256 = PINGGY_CLI_ASSETS[filename]
+    url = (
+        f"https://github.com/Pinggy-io/cli-js/releases/download/"
+        f"{PINGGY_CLI_VERSION}/{filename}"
+    )
+
+    if _verify_pinggy_binary(target_path, expected_size, expected_sha256):
         return target_path
 
-    import platform
+    if os.path.exists(target_path):
+        logging.warning("Existing Pinggy CLI failed verification; re-downloading.")
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
 
-    machine = platform.machine().lower()
-    is_arm = "arm" in machine or "aarch64" in machine
-
-    base_url = "https://github.com/Pinggy-io/cli-js/releases/download/v0.5.8"
-    if sys.platform == "win32":
-        filename = "pinggy-win-arm64.exe" if is_arm else "pinggy-win-x64.exe"
-    elif sys.platform == "darwin":
-        filename = "pinggy-macos-arm64" if is_arm else "pinggy-macos-x64"
-    else:
-        filename = "pinggy-linux-arm64" if is_arm else "pinggy-linux-x64"
-
-    url = f"{base_url}/{filename}"
+    part_path = target_path + ".part"
     logging.info(f"Downloading Pinggy CLI from {url} to {target_path}...")
-    state.broadcast_log_sync("📥 Downloading Pinggy CLI for Bedrock UDP tunnel...", "info")
+    state.broadcast_log_sync(
+        "📥 Downloading Pinggy CLI for Bedrock UDP tunnel (~75 MB)...", "info"
+    )
+
+    def _cancelled():
+        return should_cancel is not None and should_cancel()
 
     try:
+        if _cancelled():
+            return None
         import requests
 
-        res = requests.get(url, stream=True, timeout=60)
+        res = requests.get(url, stream=True, timeout=(10, 120))
         res.raise_for_status()
-        with open(target_path, "wb") as f:
-            for chunk in res.iter_content(chunk_size=8192):
+        downloaded = 0
+        with open(part_path, "wb") as f:
+            for chunk in res.iter_content(chunk_size=256 * 1024):
+                if _cancelled():
+                    raise RuntimeError("cancelled")
                 if chunk:
                     f.write(chunk)
+                    downloaded += len(chunk)
+        if downloaded != expected_size:
+            raise RuntimeError(
+                f"size mismatch (got {downloaded} bytes, expected {expected_size})"
+            )
+        if not _verify_pinggy_binary(part_path, expected_size, expected_sha256):
+            raise RuntimeError("SHA-256 checksum mismatch")
+
+        os.replace(part_path, target_path)
         if sys.platform != "win32":
             os.chmod(target_path, 0o755)
         logging.info(f"Pinggy CLI successfully saved to {target_path}")
-        state.broadcast_log_sync("✅ Pinggy CLI installed.", "success")
+        state.broadcast_log_sync("✅ Pinggy CLI installed and verified.", "success")
         return target_path
     except Exception as e:
         logging.error(f"Failed to download Pinggy CLI: {e}")
-        state.broadcast_log_sync(f"❌ Failed to download Pinggy CLI: {e}", "error")
-        if os.path.exists(target_path):
-            try:
-                os.remove(target_path)
-            except Exception:
-                pass
+        if str(e) != "cancelled":
+            state.broadcast_log_sync(f"❌ Failed to download Pinggy CLI: {e}", "error")
+        for p in (part_path,):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
         return None
 
 
@@ -3094,6 +3187,7 @@ def get_bedrock_tunnel_status():
         b_host, b_port = state.bedrock_tunnel_address.rsplit(":", 1)
     return {
         "active": active,
+        "starting": state._bedrock_tunnel_starting,
         "address": state.bedrock_tunnel_address,
         "host": b_host,
         "port": b_port,
@@ -3102,160 +3196,195 @@ def get_bedrock_tunnel_status():
 
 @app.post("/tunnel/bedrock/start")
 def start_bedrock_tunnel(region: str = Query("eu")):
-    try:
-        if not state:
-            raise HTTPException(status_code=500, detail="App state not initialized")
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
 
-        with state._bedrock_tunnel_lock:
-            if state._bedrock_tunnel_starting:
-                return {
-                    "message": "Bedrock tunnel is already starting...",
-                    "status": "connecting",
-                }
-            state._bedrock_tunnel_starting = True
+    with state._bedrock_tunnel_lock:
+        if state._bedrock_tunnel_starting:
+            return {
+                "message": "Bedrock tunnel is already starting...",
+                "status": "connecting",
+            }
+        state._bedrock_tunnel_starting = True
+        state._bedrock_tunnel_gen += 1
+        my_gen = state._bedrock_tunnel_gen
 
-        # Stop existing tunnel before starting a new one
-        if state.bedrock_tunnel_process and state.bedrock_tunnel_process.poll() is None:
-            logging.info("Stopping existing Bedrock tunnel...")
+    # Stop existing tunnel before starting a new one
+    if state.bedrock_tunnel_process and state.bedrock_tunnel_process.poll() is None:
+        logging.info("Stopping existing Bedrock tunnel...")
+        try:
+            state.bedrock_tunnel_process.terminate()
+            state.bedrock_tunnel_process.wait(timeout=3)
+        except Exception:
             try:
-                state.bedrock_tunnel_process.terminate()
-                state.bedrock_tunnel_process.wait(timeout=3)
-            except:
-                try:
-                    state.bedrock_tunnel_process.kill()
-                except:
-                    pass
-            state.bedrock_tunnel_process = None
-            state.bedrock_tunnel_address = None
+                state.bedrock_tunnel_process.kill()
+            except Exception:
+                pass
+        state.bedrock_tunnel_process = None
+        state.bedrock_tunnel_address = None
 
-        cli_path = _get_pinggy_cli_path(state)
-        if not cli_path or not os.path.exists(cli_path):
-            state._bedrock_tunnel_starting = False
-            raise HTTPException(
-                status_code=500,
-                detail="Could not find or download the Pinggy CLI binary for Bedrock UDP tunneling.",
+    def _superseded():
+        return state._bedrock_tunnel_gen != my_gen
+
+    def run_bedrock_tunnel():
+        import re
+        import subprocess
+
+        connected_emitted = False
+        process = None
+        try:
+            # Download + verification happen here, never in the HTTP handler:
+            # the CLI is ~75-100 MB and must not block the response.
+            cli_path = _get_pinggy_cli_path(state, _superseded)
+            if _superseded():
+                return
+            if not cli_path or not os.path.exists(cli_path):
+                state.broadcast_log_sync(
+                    "❌ Could not find or download the Pinggy CLI binary.", "error"
+                )
+                state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
+                return
+
+            geyser_info = _detect_geyser(state)
+            bedrock_port = geyser_info.get("bedrock_port") or 19132
+
+            host = f"{region}.free.pinggy.io"
+            logging.info(
+                f"Starting Pinggy UDP tunnel ({region.upper()}) for Bedrock port {bedrock_port}..."
+            )
+            state.broadcast_log_sync(
+                f"🎮 Starting Bedrock UDP tunnel ({region.upper()}) on port {bedrock_port}...",
+                "info",
             )
 
-        geyser_info = _detect_geyser(state)
-        bedrock_port = geyser_info.get("bedrock_port") or 19132
+            cmd = [
+                cli_path,
+                "-p",
+                "443",
+                f"-R0:localhost:{bedrock_port}",
+                f"udp@{host}",
+            ]
 
-        def run_bedrock_tunnel():
-            import subprocess
-            import re
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0,
+            )
+            with state._bedrock_tunnel_lock:
+                if _superseded():
+                    # Stop was requested while we were still starting up.
+                    try:
+                        process.terminate()
+                    except Exception:
+                        pass
+                    return
+                state.bedrock_tunnel_process = process
 
-            connected_emitted = False
-            try:
-                host = f"{region}.free.pinggy.io"
-                logging.info(
-                    f"Starting Pinggy UDP tunnel ({region.upper()}) for Bedrock port {bedrock_port}..."
-                )
-                state.broadcast_log_sync(
-                    f"🎮 Starting Bedrock UDP tunnel ({region.upper()}) on port {bedrock_port}...",
-                    "info",
-                )
+            for line in iter(process.stdout.readline, ""):
+                if not line:
+                    break
+                line_str = line.strip()
+                if not line_str:
+                    continue
 
-                cmd = [
-                    cli_path,
-                    "-p",
-                    "443",
-                    f"-R0:localhost:{bedrock_port}",
-                    f"udp@{host}",
-                ]
+                udp_match = re.search(r"udp://([a-zA-Z0-9\.\-]+:\d+)", line_str)
+                if udp_match:
+                    new_addr = udp_match.group(1)
+                    if new_addr and new_addr != state.bedrock_tunnel_address:
+                        state.bedrock_tunnel_address = new_addr
 
-                state.bedrock_tunnel_process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                    if sys.platform == "win32"
-                    else 0,
-                )
-
-                for line in iter(state.bedrock_tunnel_process.stdout.readline, ""):
-                    if not line:
-                        break
-                    line_str = line.strip()
-                    if not line_str:
-                        continue
-
-                    udp_match = re.search(r"udp://([a-zA-Z0-9\.\-]+:\d+)", line_str)
-                    if udp_match:
-                        new_addr = udp_match.group(1)
+                if not state.bedrock_tunnel_address:
+                    addr_match = re.search(
+                        r"([a-zA-Z0-9\.\-]+\.(?:pinggy|pinggy-free)\.link:\d+)",
+                        line_str,
+                    )
+                    if addr_match:
+                        new_addr = addr_match.group(1)
                         if new_addr and new_addr != state.bedrock_tunnel_address:
                             state.bedrock_tunnel_address = new_addr
 
-                    if not state.bedrock_tunnel_address:
-                        addr_match = re.search(
-                            r"([a-zA-Z0-9\.\-]+\.(?:pinggy|pinggy-free)\.link:\d+)",
-                            line_str,
-                        )
-                        if addr_match:
-                            new_addr = addr_match.group(1)
-                            if new_addr and new_addr != state.bedrock_tunnel_address:
-                                state.bedrock_tunnel_address = new_addr
+                if state.bedrock_tunnel_address and not connected_emitted:
+                    logging.info(
+                        f"Bedrock tunnel established: {state.bedrock_tunnel_address}"
+                    )
+                    b_host, b_port = (
+                        state.bedrock_tunnel_address.rsplit(":", 1)
+                        if ":" in state.bedrock_tunnel_address
+                        else (state.bedrock_tunnel_address, "19132")
+                    )
+                    state.broadcast_log_sync(
+                        f"✅ Bedrock Public tunnel active! Address: {b_host} Port: {b_port}",
+                        "success",
+                    )
+                    state.broadcast_log_sync(
+                        {
+                            "type": "tunnel_bedrock_connected",
+                            "address": state.bedrock_tunnel_address,
+                            "host": b_host,
+                            "port": b_port,
+                        }
+                    )
+                    connected_emitted = True
+                    # Now it is running (not starting): allow a restart click to
+                    # replace it without waiting for the process to exit.
+                    if not _superseded():
+                        state._bedrock_tunnel_starting = False
 
-                    if state.bedrock_tunnel_address and not connected_emitted:
-                        logging.info(
-                            f"Bedrock tunnel established: {state.bedrock_tunnel_address}"
-                        )
-                        b_host, b_port = (
-                            state.bedrock_tunnel_address.rsplit(":", 1)
-                            if ":" in state.bedrock_tunnel_address
-                            else (state.bedrock_tunnel_address, "19132")
-                        )
-                        state.broadcast_log_sync(
-                            f"✅ Bedrock Public tunnel active! Address: {b_host} Port: {b_port}",
-                            "success",
-                        )
-                        state.broadcast_log_sync(
-                            {
-                                "type": "tunnel_bedrock_connected",
-                                "address": state.bedrock_tunnel_address,
-                                "host": b_host,
-                                "port": b_port,
-                            }
-                        )
-                        connected_emitted = True
-
+            if not _superseded():
                 state.broadcast_log_sync("🔴 Bedrock tunnel closed", "warning")
                 state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
-                state.bedrock_tunnel_address = None
-            except Exception as e:
-                logging.exception(f"Bedrock tunnel error: {e}")
+        except Exception as e:
+            logging.exception(f"Bedrock tunnel error: {e}")
+            if not _superseded():
                 state.broadcast_log_sync(f"❌ Bedrock tunnel error: {e}", "error")
-                state.bedrock_tunnel_address = None
-            finally:
+                state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
+        finally:
+            if not _superseded():
                 state._bedrock_tunnel_starting = False
                 state.bedrock_tunnel_address = None
+                if state.bedrock_tunnel_process is process:
+                    state.bedrock_tunnel_process = None
 
-        threading.Thread(target=run_bedrock_tunnel, daemon=True).start()
-        return {"message": "Bedrock tunnel starting...", "status": "connecting"}
-    except Exception as e:
-        state._bedrock_tunnel_starting = False
-        logging.exception(f"Error in start_bedrock_tunnel: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    threading.Thread(target=run_bedrock_tunnel, daemon=True).start()
+    return {"message": "Bedrock tunnel starting...", "status": "connecting"}
 
 
 @app.post("/tunnel/bedrock/stop")
 def stop_bedrock_tunnel():
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
+
+    # Invalidate any in-flight start (including an ongoing CLI download) so a
+    # late background thread can never bring the tunnel back up after this stop.
+    with state._bedrock_tunnel_lock:
+        was_active = state._bedrock_tunnel_starting or (
+            state.bedrock_tunnel_process is not None
+        )
+        state._bedrock_tunnel_gen += 1
+        state._bedrock_tunnel_starting = False
+
     if state.bedrock_tunnel_process:
         try:
             state.bedrock_tunnel_process.terminate()
             state.bedrock_tunnel_process.wait(timeout=3)
-        except:
+        except Exception:
             try:
                 state.bedrock_tunnel_process.kill()
-            except:
+            except Exception:
                 pass
         state.bedrock_tunnel_process = None
+
+    if was_active:
         state.bedrock_tunnel_address = None
         state.broadcast_log_sync("🔴 Bedrock tunnel stopped", "info")
         state.broadcast_log_sync({"type": "tunnel_bedrock_disconnected"})
+
     return {"message": "Bedrock tunnel stopped"}
 
 

@@ -6,7 +6,13 @@ import pytest
 # Ensure backend modules can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from api_server import _detect_geyser, AppState, state
+from api_server import (
+    _detect_geyser,
+    _verify_pinggy_binary,
+    PINGGY_CLI_ASSETS,
+    AppState,
+    state,
+)
 
 
 def test_detect_geyser_empty_server():
@@ -57,3 +63,24 @@ bedrock:
         assert info["floodgate_installed"] is True
         assert info["bedrock_port"] == 19135
         assert info["type"] == "plugin"
+
+
+def test_pinggy_assets_are_pinned():
+    assert PINGGY_CLI_ASSETS, "expected pinned Pinggy assets"
+    for name, (size, sha256) in PINGGY_CLI_ASSETS.items():
+        assert size > 50 * 1024 * 1024, name
+        assert len(sha256) == 64, name
+
+
+def test_verify_pinggy_binary_checks_size_and_hash(tmp_path):
+    import hashlib
+
+    payload = b"fake-pinggy-binary"
+    path = tmp_path / "pinggy"
+    path.write_bytes(payload)
+    good_hash = hashlib.sha256(payload).hexdigest()
+
+    assert _verify_pinggy_binary(str(path), len(payload), good_hash) is True
+    assert _verify_pinggy_binary(str(path), len(payload), "0" * 64) is False
+    assert _verify_pinggy_binary(str(path), len(payload) + 1, good_hash) is False
+    assert _verify_pinggy_binary(str(tmp_path / "missing"), 0, good_hash) is False
