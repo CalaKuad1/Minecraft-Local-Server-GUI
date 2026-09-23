@@ -28,7 +28,28 @@
 
 ---
 
-## What's New in v1.2.8
+## What's New in v1.3.0
+
+### Bedrock & Console Crossplay (GeyserMC)
+- **Play with any device** — If GeyserMC is installed, the Dashboard detects it and shows a one-click **Bedrock Crossplay** panel. iOS, Android, Windows Bedrock, PlayStation, Xbox and Switch players can join your Java server.
+- **No port forwarding** — A public UDP tunnel (Pinggy) is created automatically, and the address + port are shown with copy buttons.
+- **Floodgate & port detection** — Floodgate is detected (badge) and the Bedrock port is read from Geyser's `config.yml`.
+- **Safe & cancellable download** — The Pinggy CLI is downloaded on first use (Windows/macOS/Linux, x64/arm64) and verified against the official size + SHA-256 before running.
+- **60-minute free tunnels** — Free Pinggy tunnels expire after ~60 minutes; restart from the Dashboard to renew.
+
+### Stability & Fixes (PRs #17 & #18)
+- **RAM fixed** — MB values now display correctly (512M → 0.5 GB) and RAM/Java settings are saved **per server** and applied without restarting.
+- **Windows tunnel crash fixed** — The CLI output is now decoded as UTF-8 (`charmap` error).
+- **Reliable internal API calls** — Status polling, tray and graceful shutdown now send the required token.
+- **Safer window handling** — Minimize/maximize/close can't crash during teardown; auto-restart no longer swallows errors; preload listener leak fixed.
+- **Better UX** — Force-stop confirmation localized (EN/ES/FR/RU), version dropdowns accept plain lists, and the lint/build pipeline is fixed.
+
+<sub>Thanks to [@awtawsif](https://github.com/awtawsif) for PRs #17 and #18.</sub>
+
+---
+
+<details>
+<summary><strong>What's New in v1.2.8 (previous)</strong></summary>
 
 ### Fixed a Massive Memory Leak
 - **Backend no longer eats RAM** — an infinite loop in the Server List Ping code made the backend grow ~25-45 MB/s while a server was online (reaching 18 GB). It now stays around 70 MB.
@@ -51,9 +72,10 @@
 - Redesigned the Server Library and translated Players/Worlds/Mods/Plugins into English, Spanish, French and Russian.
 - **Auto-update** support, and builds now always ship the current backend.
 
----
+</details>
 
-## What's New in v1.2.7 (previous)
+<details>
+<summary><strong>What's New in v1.2.7 (previous)</strong></summary>
 
 ### Fixed Server Installation (Paper/Spigot/Fabric)
 - **Paper install fixed** — Installing Paper (and Spigot/Fabric) no longer fails with "Failed to download Server JAR." The server type is now lowercased before hitting the mcutils API, which returned HTTP 500 for capitalized types.
@@ -65,6 +87,8 @@
 ### Linux Memory Leak Fix
 - **Massive RAM leak resolved** — On Linux, `api_server` could hold gigabytes after a server stopped. Log lines are now truncated before being stored in memory, the read buffer is reused, freed heap is returned to the OS via `malloc_trim`, and the backend no longer generates huge volumes of per-chunk debug log garbage.
 - **Real log file now works** — `backend_debug.log` is now actually written (a logging setup bug previously sent everything to stderr).
+
+</details>
 
 <details>
 <summary><strong>Earlier versions</strong></summary>
@@ -167,7 +191,8 @@
 ### Dashboard
 - **Real-time stats** — CPU, RAM, and uptime monitoring with sparkline graphs
 - **Auto-restart** — Toggle to automatically restart server on crash (max 3 attempts)
-- **Public Server** — Share your server globally via SSH tunnel (Pinggy/Playit)
+- **Public Server** — Share your server globally via SSH tunnel (Pinggy)
+- **Bedrock & Console Crossplay** — GeyserMC detection + one-click public UDP tunnel for iOS, Android and consoles
 - **Fixed Address (DNS)** — Permanent domain via Cloudflare proxy (e.g. `survival.play.yourdomain.com`)
 - **Region Selection** — EU, US, and Asia for best latency
 - **Local IP display** — Easy LAN connection for friends
@@ -287,7 +312,7 @@ The app automatically downloads the correct Java version for your Minecraft serv
 <summary><strong>Can my friends connect to my server?</strong></summary>
 
 For **LAN**: Share the Local IP shown in the dashboard.  
-For **Internet**: Use a tunneling service like [playit.gg](https://playit.gg) (recommended) or configure port forwarding on your router.
+For **Internet**: Use the built-in **Public Server** tunnel (Pinggy) from the Dashboard, or configure port forwarding on your router.
 </details>
 
 <details>
