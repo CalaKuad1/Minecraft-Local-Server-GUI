@@ -1,5 +1,43 @@
 # Minecraft Server GUI - Changelog
 
+## Version 1.3.0 - 2026-09-23 BEDROCK & CONSOLE CROSSPLAY + STABILITY
+
+### NEW
+- GeyserMC detection: the app scans plugins/ (Spigot/Paper), mods/ and config/
+  (Fabric/NeoForge) and shows a "Bedrock Crossplay" panel on the Dashboard when
+  Geyser is installed.
+- One-click Bedrock & console crossplay through a Pinggy UDP tunnel, no port
+  forwarding needed. The public address + port are shown with copy buttons for
+  iOS, Android, Windows Bedrock, PlayStation, Xbox and Switch.
+- Floodgate detection badge and automatic bedrock port detection from Geyser's
+  config.yml.
+- The Pinggy CLI is downloaded on first use (Windows/macOS/Linux, x64/arm64) and
+  verified against the official file size + SHA-256 before it is executed.
+- The download runs in the background and can be cancelled with Stop; the CLI
+  process is always cleaned up when the app closes.
+- Note: free Pinggy tunnels expire after ~60 minutes; restart the tunnel from
+  the Dashboard to renew it.
+
+### FIXED
+- Windows: the Pinggy CLI output is now decoded as UTF-8 (cp1252 "charmap"
+  crash on tunnel start).
+- Server crash auto-restart used a `return` inside a `finally` block, which
+  swallowed exceptions and skipped cleanup.
+- Internal HTTP calls from Electron (status polling, graceful shutdown,
+  running-servers check) now send the X-MLSG-Token header the API requires.
+- RAM display: MB values are converted to GB (a 512M server no longer shows as
+  "x/512 GB").
+- RAM/Java settings are now saved per server and applied without restarting
+  the server.
+- Window buttons (minimize/maximize/close) are safe during window teardown.
+- Preload close listener is cleaned up on unmount (no listener leak).
+- Version dropdowns (Paper/Fabric/Forge/NeoForge) accept plain string arrays.
+- Force-stop confirmation is now localized (EN/ES/FR/RU).
+- ESLint 8 flat config fixed; `npm run lint` runs clean again.
+
+### CREDITS
+- Thanks to @awtawsif for PRs #17 and #18.
+
 ## Version 1.2.11 - 2026-09-12 Fix DNS verification false negatives
 
 ### FIXED
