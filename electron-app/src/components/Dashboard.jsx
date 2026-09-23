@@ -551,7 +551,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 if (bStatus.active && bStatus.address) {
                     setBedrockAddress(bStatus.address);
                     setBedrockConnecting(false);
-                } else if (!bedrockConnecting) {
+                } else if (!bStatus.starting) {
+                    // Backend is neither connected nor starting: clear any stuck spinner.
                     setBedrockAddress(null);
                     setBedrockConnecting(false);
                 }
@@ -761,6 +762,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                  serverError.error === 'out_of_memory' ? 'Out of Memory' :
                                  serverError.error === 'mod_loading' ? 'Mod Loading Error' :
                                  serverError.error === 'dns_error' ? 'DNS Error' :
+                                 serverError.error === 'bedrock_tunnel' ? 'Bedrock Tunnel Error' :
                                  'Server Error'}
                             </div>
                             <div className="text-[11px] text-zinc-400 leading-relaxed">
@@ -1043,7 +1045,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     }
                                 } catch (err) {
                                     setBedrockConnecting(false);
-                                    alert('Bedrock tunnel error: ' + (err.response?.data?.detail || err.message));
+                                    setServerError({
+                                        error: 'bedrock_tunnel',
+                                        fix: 'Could not start the Bedrock tunnel. Check the console for details.',
+                                        detail: err.response?.data?.detail || err.message,
+                                    });
                                 }
                             }}
                             disabled={bedrockConnecting && !bedrockAddress}
