@@ -28,7 +28,29 @@
 
 ---
 
-## What's New in v1.3.0
+## What's New in v1.3.1
+
+### Mods & Plugins
+- **Accurate "Installed" badges** — projects whose jar name differs from their slug (e.g. Simple Voice Chat → `voicechat-*.jar`) are now detected correctly on the Mods and Plugins pages.
+- **Per-card download progress** — each card shows its own progress bar while installing, plus a success flash when it finishes.
+
+### Updates & App Settings
+- **Auto-update policy** — choose **Automatic**, **Ask me first** (checks automatically, downloads only when you press Download) or **Off**.
+- **Themed in-app dialogs** — browser popups are gone; deleting a server offers "Delete Profile Only" or "Delete Profile & Files" in one dialog.
+- **Save states & real version** — Settings and Worlds show unsaved changes and a brief "Saved" confirmation; App Settings shows the actual app version.
+
+### Reliability
+- **Hardened downloads** — server jars, Java, mods, plugins and modpacks now fail fast on permanent errors, retry only transient ones, verify the file size and never leave partial files behind.
+- **Transactional modpacks** — path-traversal entries are rejected, a failed install rolls the server folder back, and pre-existing files that were overwritten are restored.
+- **Cleaner server switching** — the app waits for the previous server to stop before switching, and the library shows a retryable error instead of failing silently.
+- **Setup Wizard** — defaults to `~/MinecraftServers` (fixes a literal `C:` folder being created on Linux/macOS).
+
+<sub>Thanks to [@awtawsif](https://github.com/awtawsif) for PRs #19 and #20.</sub>
+
+---
+
+<details>
+<summary><strong>What's New in v1.3.0 (previous)</strong></summary>
 
 ### Bedrock & Console Crossplay (GeyserMC)
 - **Play with any device** — If GeyserMC is installed, the Dashboard detects it and shows a one-click **Bedrock Crossplay** panel. iOS, Android, Windows Bedrock, PlayStation, Xbox and Switch players can join your Java server.
@@ -45,6 +67,8 @@
 - **Better UX** — Force-stop confirmation localized (EN/ES/FR/RU), version dropdowns accept plain lists, and the lint/build pipeline is fixed.
 
 <sub>Thanks to [@awtawsif](https://github.com/awtawsif) for PRs #17 and #18.</sub>
+
+</details>
 
 ---
 
@@ -173,6 +197,7 @@
 - **Auto-restart on crash** — Detects and restarts server automatically after unexpected shutdowns
 - **Start/Stop controls** with visual status indicators
 - **Server Conflict Guard** — Prevents running multiple servers simultaneously
+- **Reliable installs & updates** — downloads retry on transient errors, verify their size and never leave partial files behind
 
 </td>
 <td width="50%">
@@ -203,6 +228,8 @@
 - **Modpacks** — Browse and install complete modpacks
 - **Advanced filters** — Filter by loader, version, category, sort order
 - **Smart warning** — Vanilla/Paper show a hint to install a mod loader
+- **Install progress & Installed badges** — per-card progress bars and an accurate "Installed" state even when the jar name differs from the project slug
+- **Safe modpacks** — a failed install rolls the server folder back without touching your existing files
 
 </td>
 <td width="50%">
@@ -212,6 +239,7 @@
 - **server.properties GUI** — All options organized by category
 - **RAM allocation** — Customize min/max memory with smart system limits
 - **Player management** — Op, ban, whitelist with one click
+- **Auto-update policy** — Automatic, Ask me first, or Off
 
 ### Multi-Language
 - **4 languages** — English, Spanish, French, Russian
