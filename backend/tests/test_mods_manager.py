@@ -182,3 +182,31 @@ def test_delete_mod_rejects_path_traversal(tmp_path):
     real.write_bytes(b"jar")
     assert manager.delete_mod("../mods/real.jar", str(server_path)) is True
     assert not real.exists()
+
+def test_modpack_rollback_restores_overwritten_files(server, tmp_path, no_sleep):
+    """A failed install must restore files that already existed, not merely
+    skip deleting them: the hardened download pipeline removes the destination
+    on failure, so without a backup the user's file would be destroyed."""
+    server_path = tmp_path / "server"
+    mods_dir = server_path / "mods"
+    mods_dir.mkdir(parents=True)
+    pre_existing = mods_dir / "pre_existing.jar"
+    pre_existing.write_bytes(b"user-content")
+
+    _serve(server, "/new.jar", b"pack-content")
+    # /missing.jar is not routed -> 404 -> the install fails.
+
+    pack_url = _url(server, "/pack.mrpack")
+    server.routes["/pack.mrpack"] = _mrpack(
+        [
+            {"path": "mods/pre_existing.jar", "downloads": [_url(server, "/new.jar")]},
+            {"path": "mods/missing.jar", "downloads": [_url(server, "/missing.jar")]},
+        ]
+    )
+
+    result = ModsManager().install_modpack(pack_url, "pack.mrpack", str(server_path))
+
+    assert result.get("success") is False
+    assert pre_existing.read_bytes() == b"user-content", "overwritten file must be restored"
+    assert not (mods_dir / "missing.jar").exists()
+    assert not (server_path / "temp_modpack").exists()

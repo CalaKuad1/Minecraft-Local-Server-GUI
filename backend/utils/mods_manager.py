@@ -222,17 +222,42 @@ class ModsManager:
 
         mrpack_path = os.path.join(temp_dir, filename)
 
-        # Files created by this install, so a failed install can roll them back
-        # instead of leaving a half-installed modpack behind. Files that already
-        # existed before the install are never deleted on rollback.
+        # Transactional install journal. Every file the modpack writes to is
+        # backed up here *before* it is touched, so a failed install can restore
+        # the exact previous content — including files that existed before and
+        # were overwritten (e.g. the user's configs). Entries are
+        # (target_path, backup_path_or_None).
         installed_files = []
+        tracked_targets = set()
+        backup_dir = os.path.join(temp_dir, "backup")
+        backup_counter = 0
+
+        def _backup_and_track(target_path):
+            nonlocal backup_counter
+            if target_path in tracked_targets:
+                return
+            tracked_targets.add(target_path)
+            backup_path = None
+            if os.path.exists(target_path):
+                backup_counter += 1
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_path = os.path.join(backup_dir, f"{backup_counter:06d}")
+                try:
+                    shutil.copy2(target_path, backup_path)
+                except OSError as e:
+                    logging.warning(f"Could not back up {target_path}: {e}")
+                    backup_path = None
+            installed_files.append((target_path, backup_path))
 
         def cleanup_partial():
-            for path, pre_existing in reversed(installed_files):
-                if pre_existing:
-                    continue
+            # Restore overwritten files from their backups, then remove files
+            # this install created. Newly created directories are left alone.
+            for path, backup_path in reversed(installed_files):
                 try:
-                    if path and os.path.isfile(path) and os.path.exists(path):
+                    if backup_path and os.path.isfile(backup_path):
+                        os.makedirs(os.path.dirname(path), exist_ok=True)
+                        shutil.copy2(backup_path, path)
+                    elif path and os.path.isfile(path) and os.path.exists(path):
                         os.remove(path)
                 except OSError:
                     pass
@@ -325,13 +350,16 @@ class ModsManager:
                 if not os.path.exists(target_dir):
                     os.makedirs(target_dir)
 
+                # Back up any existing file before the download pipeline touches
+                # it: on failure the pipeline deletes the destination, so without
+                # this a failed attempt would destroy the user's previous file.
+                _backup_and_track(target_path)
+
                 # Try every mirror Modrinth provides; a file only counts as
                 # failed once all of its download URLs have been exhausted.
                 downloaded = False
-                pre_existing = os.path.exists(target_path)
                 for dl_url in download_urls:
                     if download_file_from_url(dl_url, target_path, None):
-                        installed_files.append((target_path, pre_existing))
                         downloaded = True
                         break
                 if not downloaded:
@@ -359,9 +387,8 @@ class ModsManager:
                         src_file = os.path.join(root, f)
                         dst_file = os.path.join(target_root, f)
                         try:
-                            pre_existing = os.path.exists(dst_file)
+                            _backup_and_track(dst_file)
                             shutil.copy2(src_file, dst_file)
-                            installed_files.append((dst_file, pre_existing))
                         except Exception as copy_err:
                             logging.error(f"Failed to copy override {f}: {copy_err}")
                             failed_files.append(os.path.join(rel_root, f))
