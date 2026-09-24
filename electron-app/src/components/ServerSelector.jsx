@@ -61,10 +61,27 @@ function formatRelative(iso) {
     return `${Math.floor(hours / 24)}d ago`;
 }
 
+// Poll the backend until the given server reports offline (or nothing is
+// running anymore). Returns false if it didn't settle within the timeout.
+const waitForServerOffline = async (serverId, timeoutMs = 10000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        try {
+            const list = await api.getServers();
+            const target = list.find((s) => s.id === serverId);
+            if (!target || !target.status || target.status === 'offline') return true;
+            if (!list.some((s) => s.status && s.status !== 'offline')) return true;
+        } catch (e) { /* transient backend hiccup — keep polling */ }
+        await new Promise((r) => setTimeout(r, 1500));
+    }
+    return false;
+};
+
 export default function ServerSelector({ onSelect, onAdd }) {
     const { t } = useTranslation();
     const [servers, setServers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -81,8 +98,10 @@ export default function ServerSelector({ onSelect, onAdd }) {
     const loadServers = async () => {
         try {
             setServers(await api.getServers());
+            setLoadError(null);
         } catch (err) {
             console.error("Failed to load servers", err);
+            setLoadError(err?.message || 'Failed to load servers');
         } finally {
             setLoading(false);
         }
@@ -90,22 +109,29 @@ export default function ServerSelector({ onSelect, onAdd }) {
 
     const checkConflict = async (targetId) => {
         const activeServer = servers.find(s => s.status && s.status !== 'offline');
-        if (activeServer && activeServer.id === targetId) return false;
-        if (activeServer) {
-            const result = await dialog.confirm(
-                `${activeServer.name} is ${activeServer.status}.\n\nYou must stop it before switching to a different server.`,
-                "Server Conflict",
-                { variant: "warning", confirmLabel: "Stop Server", cancelLabel: "Go Back" }
-            );
-            if (result) {
-                try {
-                    await api.selectServer(activeServer.id);
-                    await api.stop();
-                } catch (e) { console.error("Stop error", e); }
+        if (!activeServer || (targetId && activeServer.id === targetId)) return false;
+        const confirmed = await dialog.confirm(
+            `${activeServer.name} is ${activeServer.status}.\n\nYou must stop it before switching to a different server.`,
+            "Server Conflict",
+            { variant: "warning", confirmLabel: "Stop Server", cancelLabel: "Go Back" }
+        );
+        if (!confirmed) return true;
+        try {
+            await api.selectServer(activeServer.id);
+            await api.stop();
+            // Auto-continue: wait until the old server is actually offline, then
+            // let the caller's original action (boot / select / add) proceed.
+            const ready = await waitForServerOffline(activeServer.id);
+            loadServers();
+            if (!ready) {
+                await dialog.alert("The running server is still stopping. Try again in a few seconds.", { title: "Server Conflict", variant: "warning" });
+                return true;
             }
+            return false;
+        } catch (e) {
+            console.error("Stop error", e);
             return true;
         }
-        return false;
     };
 
     const handleBoot = async (serverId, e) => {
@@ -138,13 +164,20 @@ export default function ServerSelector({ onSelect, onAdd }) {
 
     const handleDelete = async (id, e) => {
         e?.stopPropagation();
-        if (!await dialog.confirm("Are you sure you want to delete this profile?", "Delete Server?", "destructive")) return;
-        const deleteFiles = await dialog.confirm("Do you also want to delete all server files?", "Delete Files?", "destructive");
+        const server = servers.find((s) => s.id === id);
+        // Single three-way dialog replaces two sequential confirms:
+        // Cancel | Delete Profile & Files (danger) | Delete Profile Only
+        const action = await dialog.confirm(
+            `Delete "${server?.name || 'this profile'}"?\n\nYou can remove only the profile, or also delete every server file on disk.`,
+            { title: t('library.delete_title'), variant: 'destructive', cancelLabel: t('common.cancel'), confirmLabel: t('library.delete_profile'), dangerLabel: t('library.delete_files') }
+        );
+        if (!action) return;
         try {
-            await api.deleteServer(id, deleteFiles);
+            await api.deleteServer(id, action === 'danger');
             loadServers();
         } catch (err) {
             console.error("Failed to delete", err);
+            dialog.alert(`Failed to delete: ${err.message}`, { title: 'Error', variant: 'destructive' });
         }
     };
 
@@ -208,7 +241,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             ))}
                         </div>
 
-                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-8 mb-3">{t('library.quick_filters')}</h3>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-8 mb-3">{t('library.view_mode')}</h3>
                         <div className="space-y-1">
                             <button onClick={() => setViewMode('grid')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm text-xs tracking-wide transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
                                 <span className={viewMode === 'grid' ? 'text-emerald-400' : 'text-zinc-500'}><LayoutDashboard size={14} /></span>
@@ -246,8 +279,18 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                 placeholder={t('library.search')}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-black/40 border border-white/5 rounded-sm pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 transition-colors font-minecraft tracking-wider"
+                                onKeyDown={(e) => { if (e.key === 'Escape') { setSearchQuery(''); e.target.blur(); } }}
+                                className="w-full bg-black/40 border border-white/5 rounded-sm pl-10 pr-9 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 transition-colors font-minecraft tracking-wider"
                             />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => { setSearchQuery(''); }}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+                                    title="Clear search"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            )}
                         </div>
                         <button
                             onClick={async () => { if (await checkConflict(null)) return; onAdd(); }}
@@ -258,7 +301,27 @@ export default function ServerSelector({ onSelect, onAdd }) {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                        {totalCount === 0 && !loading ? (
+                        {loadError && (
+                            <div className="mb-4 flex items-center justify-between gap-3 rounded-sm border border-red-500/20 bg-red-500/5 px-4 py-3 animate-in fade-in duration-200">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-400 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span className="text-[11px] text-red-300 truncate">{t('library.load_error')}</span>
+                                </div>
+                                <button
+                                    onClick={() => { setLoading(true); loadServers(); }}
+                                    className="px-3 py-1.5 rounded-sm border border-red-500/30 text-[10px] font-minecraft uppercase tracking-widest text-red-300 hover:bg-red-500/10 transition-colors shrink-0"
+                                >
+                                    {t('common.retry')}
+                                </button>
+                            </div>
+                        )}
+
+                        {loading && totalCount === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center py-24">
+                                <div className="w-8 h-8 border-2 border-white/10 border-t-emerald-400 rounded-full animate-spin mb-4" />
+                                <p className="text-zinc-500 text-sm font-minecraft uppercase tracking-widest">{t('common.loading')}</p>
+                            </div>
+                        ) : totalCount === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center py-24">
                                 <div className="p-5 rounded-sm bg-emerald-500/5 border border-emerald-500/15 mb-6">
                                     <Server size={48} className="text-emerald-400/60" />
@@ -370,7 +433,7 @@ function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
                 </div>
                 <button
                     onClick={onDelete}
-                    className="p-1.5 text-zinc-600 hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0"
+                    className="p-1.5 text-zinc-600 hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 shrink-0"
                     title={t('library.delete')}
                 >
                     <Trash2 size={14} />

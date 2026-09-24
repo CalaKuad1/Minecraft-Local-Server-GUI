@@ -315,7 +315,19 @@ function App() {
       {updateStatus && ['available', 'downloading', 'downloaded', 'error'].includes(updateStatus.state) && (
         <div className="fixed bottom-5 right-5 z-[9998] max-w-xs bg-[#0f0f0f] border border-white/10 rounded-sm shadow-2xl p-4 text-xs">
           <div className="font-minecraft uppercase tracking-widest text-white mb-1">Update</div>
-          {updateStatus.state === 'available' && <div className="text-zinc-400">New version {updateStatus.version} found. Downloading…</div>}
+          {updateStatus.state === 'available' && (
+            <div className="text-zinc-400">
+              New version {updateStatus.version} available.
+              {updateStatus.manual && (
+                <button
+                  onClick={() => window.electron?.downloadUpdate?.()}
+                  className="mt-2 w-full px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 rounded-sm font-minecraft uppercase tracking-wider hover:bg-emerald-500/25 transition-colors"
+                >
+                  Download
+                </button>
+              )}
+            </div>
+          )}
           {updateStatus.state === 'downloading' && <div className="text-zinc-400">Downloading… {updateStatus.percent}%</div>}
           {updateStatus.state === 'downloaded' && (
             <div className="text-zinc-400">

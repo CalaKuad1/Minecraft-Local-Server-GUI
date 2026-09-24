@@ -12,6 +12,8 @@ export default function Settings() {
     const [activeTab, setActiveTab] = useState('general');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [dirty, setDirty] = useState(false);
     const [error, setError] = useState(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [systemInfo, setSystemInfo] = useState(null);
@@ -41,6 +43,7 @@ export default function Settings() {
             const app = await api.getAppSettings();
             setServerProps(props);
             setAppSettings(app);
+            setDirty(false);
             try {
                 const res = await fetch('http://127.0.0.1:8000/system/info', {
                     headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {}
@@ -63,6 +66,9 @@ export default function Settings() {
         try {
             await api.updateServerProperties(serverProps);
             await api.updateAppSettings(appSettings);
+            setDirty(false);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
         } catch (e) {
             setError(e?.message || t('server_settings.error_saving'));
         }
@@ -71,10 +77,12 @@ export default function Settings() {
     };
 
     const handlePropChange = (key, value) => {
+        setDirty(true);
         setServerProps(prev => ({ ...prev, [key]: value }));
     };
 
     const handleAppChange = (key, value) => {
+        setDirty(true);
         setAppSettings(prev => ({ ...prev, [key]: value }));
     };
 
@@ -160,9 +168,19 @@ export default function Settings() {
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="w-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-all border border-emerald-500/30 font-minecraft uppercase tracking-wider text-xs group shadow-[0_0_15px_max(0px,rgba(16,185,129,0.1))] hover:shadow-[0_0_20px_max(0px,rgba(16,185,129,0.4))]"
+                            className={`w-full px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-all border font-minecraft uppercase tracking-wider text-xs group ${
+                                saved
+                                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_20px_max(0px,rgba(16,185,129,0.3))]'
+                                    : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black border-emerald-500/30 shadow-[0_0_15px_max(0px,rgba(16,185,129,0.1))] hover:shadow-[0_0_20px_max(0px,rgba(16,185,129,0.4))]'
+                            }`}
                         >
-                            <Save size={16} className="group-hover:animate-bounce" /> {saving ? t('server_settings.saving') : t('server_settings.save_config')}
+                            <span className="relative flex items-center gap-3">
+                                <Save size={16} className="group-hover:animate-bounce" />
+                                {saving ? t('server_settings.saving') : saved ? t('settings.saved') : t('server_settings.save_config')}
+                                {dirty && !saving && !saved && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.8)]" title={t('server_settings.unsaved')} />
+                                )}
+                            </span>
                         </button>
                     </div>
                 </div>

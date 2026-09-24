@@ -18,11 +18,11 @@ const PlayerCard = ({ player, type, onAction, t }) => {
                 />
                 <div>
                     <h3 className="text-white font-medium">{player.name}</h3>
-                    {player.uuid && <p className="text-xs text-zinc-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity">{player.uuid}</p>}
+                    {player.uuid && <p className="text-xs text-zinc-500 font-mono opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">{player.uuid}</p>}
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                 {type === 'ops' && (
                     <button onClick={() => onAction('deop', player.name)} className="p-2 hover:bg-red-500/10 text-red-400 rounded-sm transition-colors" title={t('players.deop')}>
                         <ShieldOff size={18} />
@@ -77,6 +77,7 @@ export default function Players() {
     const hasLoadedRef = useRef(false);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newPlayerName, setNewPlayerName] = useState('');
+    const [nameError, setNameError] = useState(false);
 
     const fetchData = async ({ background = false } = {}) => {
         if (inFlightRef.current) return;
@@ -141,6 +142,22 @@ export default function Players() {
     };
 
     const currentList = getList();
+
+    // Shared submit for the add-player modal: trims the name, refuses empty
+    // input and never closes the modal when nothing was entered.
+    const submitAddPlayer = () => {
+        const clean = newPlayerName.trim();
+        if (!clean) {
+            setNameError(true);
+            return;
+        }
+        setNameError(false);
+        if (activeTab === 'ops') handleAction('op', clean);
+        if (activeTab === 'whitelist') api.whitelistAdd(clean).then(fetchData).catch(() => {});
+        if (activeTab === 'banned') handleAction('ban', clean);
+        setNewPlayerName('');
+        setShowAddModal(false);
+    };
 
     if (loading && !hasLoadedRef.current) {
         return <div className="p-8 text-center text-zinc-500 font-minecraft tracking-widest uppercase">{t('players.loading')}</div>;
@@ -234,20 +251,21 @@ export default function Players() {
                         <input
                             autoFocus
                             type="text"
-                            className="w-full bg-black/50 border border-white/10 rounded-sm px-4 py-3 text-white outline-none focus:border-emerald-500 transition-colors mb-4"
+                            className={`w-full bg-black/50 border rounded-sm px-4 py-3 text-white outline-none transition-colors mb-1 ${
+                                nameError ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-emerald-500'
+                            }`}
                             placeholder={t('players.player_name')}
                             value={newPlayerName}
-                            onChange={(e) => setNewPlayerName(e.target.value)}
+                            onChange={(e) => { setNewPlayerName(e.target.value); if (nameError) setNameError(false); }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                    if (activeTab === 'ops') handleAction('op', newPlayerName);
-                                    if (activeTab === 'whitelist') api.whitelistAdd(newPlayerName).then(fetchData);
-                                    if (activeTab === 'banned') handleAction('ban', newPlayerName);
-                                    setNewPlayerName('');
-                                    setShowAddModal(false);
+                                    submitAddPlayer();
                                 }
                             }}
                         />
+                        {nameError && (
+                            <p className="text-[10px] text-red-400 uppercase tracking-wider font-minecraft mb-3 animate-in fade-in duration-200">{t('players.empty_name')}</p>
+                        )}
                         <div className="flex justify-end gap-2">
                             <button
                                 onClick={() => setShowAddModal(false)}
@@ -256,13 +274,7 @@ export default function Players() {
                                 {t('common.cancel')}
                             </button>
                             <button
-                                onClick={() => {
-                                    if (activeTab === 'ops') handleAction('op', newPlayerName);
-                                    if (activeTab === 'whitelist') api.whitelistAdd(newPlayerName).then(fetchData);
-                                    if (activeTab === 'banned') handleAction('ban', newPlayerName);
-                                    setNewPlayerName('');
-                                    setShowAddModal(false);
-                                }}
+                                onClick={submitAddPlayer}
                                 className="px-4 py-2 rounded-sm bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 font-minecraft uppercase tracking-wider text-xs transition-colors"
                             >
                                 {t('common.add')}

@@ -27,6 +27,7 @@ export default function Worlds() {
 
     const [backupSettings, setBackupSettings] = useState({ enabled: false, interval_minutes: 60, keep: 5 });
     const [savingSettings, setSavingSettings] = useState(false);
+    const [settingsSaved, setSettingsSaved] = useState(false);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -145,6 +146,8 @@ export default function Worlds() {
         setSavingSettings(true);
         try {
             setBackupSettings(await api.updateBackupSettings(backupSettings));
+            setSettingsSaved(true);
+            setTimeout(() => setSettingsSaved(false), 2000);
         } catch (e) {
             dialog.alert(e?.message || t('common.error'), t('common.error'), 'destructive');
         } finally {
@@ -274,8 +277,10 @@ export default function Worlds() {
                                 className="w-20 bg-black/40 border border-white/10 rounded-sm px-3 py-1.5 text-white text-sm font-mono focus:border-emerald-500 outline-none" />
                         </div>
                         <button onClick={handleSaveSettings} disabled={savingSettings}
-                            className="px-4 py-2 rounded-sm bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs font-minecraft uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">
-                            <Save size={14} /> {savingSettings ? t('common.saving') : t('common.save')}
+                            className={`px-4 py-2 rounded-sm text-xs font-minecraft uppercase tracking-wider flex items-center gap-2 disabled:opacity-50 transition-all ${settingsSaved
+                                ? 'bg-emerald-500 text-black border-emerald-400'
+                                : 'bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300'}`}>
+                            <Save size={14} /> {savingSettings ? t('common.saving') : settingsSaved ? t('settings.saved') : t('common.save')}
                         </button>
                     </div>
                 </div>

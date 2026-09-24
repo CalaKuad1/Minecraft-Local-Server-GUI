@@ -136,6 +136,13 @@ ipcMain.handle('window:close', () => {
   }
 });
 
+// --- App info (version + user paths) ---
+ipcMain.handle('app:info', () => ({
+  version: app.getVersion(),
+  home: app.getPath('home'),
+  documents: app.getPath('documents')
+}));
+
 // --- Auto-update IPC ---
 ipcMain.handle('update:check', async () => {
   if (!autoUpdater || !app.isPackaged) return { state: 'disabled' };
@@ -151,6 +158,23 @@ ipcMain.handle('update:install', () => {
   if (autoUpdater) {
     isQuitting = true;
     autoUpdater.quitAndInstall();
+  }
+});
+
+// Renderer applies the new auto-update policy immediately after settings save.
+ipcMain.handle('update:setMode', (_e, mode) => {
+  if (configureUpdater) configureUpdater(mode);
+  return { ok: true };
+});
+
+// Used when the policy is 'ask': the user explicitly chose to download.
+ipcMain.handle('update:download', async () => {
+  if (!autoUpdater || !app.isPackaged || autoUpdateMode !== 'ask') return { state: 'disabled' };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { state: 'downloading' };
+  } catch (e) {
+    return { state: 'error', message: String(e?.message || e) };
   }
 });
 
@@ -401,7 +425,49 @@ const checkForRunningServers = () => {
   });
 };
 
-// --- Auto-update: check on start and every 3 hours ---
+// --- Auto-update: policy-controlled check / download / install ---
+// Policy is stored by the backend (app_settings.auto_update) in one of three modes:
+//   'auto' → check + download automatically, install on quit (previous behavior)
+//   'ask'  → check automatically, but only download when the user confirms
+//   'off'  → never check automatically
+let autoUpdateMode = 'ask';
+let autoUpdateTimer = null;
+let configureUpdater = null; // set once setupAutoUpdater runs; used by update:setMode
+const UPDATE_POLICY_DEFAULT = 'ask';
+const UPDATE_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
+// Read a single key from the backend's app settings (the source of truth).
+const fetchAppSetting = (key, fallback) => new Promise((resolve) => {
+  const req = http.get({
+    hostname: '127.0.0.1',
+    port: API_PORT,
+    path: '/app-settings',
+    headers: { 'X-MLSG-Token': API_TOKEN }
+  }, (res) => {
+    let data = '';
+    res.on('data', (chunk) => { data += chunk; });
+    res.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        resolve(parsed[key] !== undefined ? parsed[key] : fallback);
+      } catch {
+        resolve(fallback);
+      }
+    });
+  });
+  req.on('error', () => resolve(fallback));
+  req.setTimeout(3000, () => { req.destroy(); resolve(fallback); });
+  req.end();
+});
+
+const isBackendUp = async () => {
+  try {
+    return await checkBackend();
+  } catch {
+    return false;
+  }
+};
+
 function setupAutoUpdater() {
   if (!autoUpdater || !app.isPackaged) return;
 
@@ -415,7 +481,11 @@ function setupAutoUpdater() {
   };
 
   autoUpdater.on('checking-for-update', () => send({ state: 'checking' }));
-  autoUpdater.on('update-available', (info) => send({ state: 'available', version: info?.version }));
+  autoUpdater.on('update-available', (info) => {
+    // In 'ask' mode nothing is auto-downloaded; flag it so the renderer can
+    // offer a download button instead of pretending it already started.
+    send({ state: 'available', version: info?.version, manual: autoUpdateMode === 'ask' });
+  });
   autoUpdater.on('update-not-available', () => send({ state: 'up-to-date' }));
   autoUpdater.on('download-progress', (p) => send({ state: 'downloading', percent: Math.round(p?.percent || 0) }));
   autoUpdater.on('update-downloaded', (info) => send({ state: 'downloaded', version: info?.version }));
@@ -430,8 +500,29 @@ function setupAutoUpdater() {
     });
   };
 
-  check();
-  setInterval(check, 3 * 60 * 60 * 1000);
+  // Apply the persisted policy: controls automatic download/install and whether
+  // any background checks run at all.
+  configureUpdater = (mode) => {
+    if (mode !== 'auto' && mode !== 'ask' && mode !== 'off') mode = UPDATE_POLICY_DEFAULT;
+    autoUpdateMode = mode;
+    autoUpdater.autoDownload = mode === 'auto';
+    autoUpdater.autoInstallOnAppQuit = mode === 'auto';
+    if (autoUpdateTimer) {
+      clearInterval(autoUpdateTimer);
+      autoUpdateTimer = null;
+    }
+    if (mode === 'off') return;
+    autoUpdateTimer = setInterval(check, UPDATE_INTERVAL_MS);
+    check();
+  };
+
+  // Load the stored policy once the backend is reachable, then start.
+  (async () => {
+    for (let i = 0; i < 30 && !(await isBackendUp()); i++) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    configureUpdater(await fetchAppSetting('auto_update', UPDATE_POLICY_DEFAULT));
+  })();
 }
 
 app.whenReady().then(() => {

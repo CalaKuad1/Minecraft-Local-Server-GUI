@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Trash2, Package, Search, Upload, HardDrive, RefreshCw, Download } from './ui/PixelIcons';
+import { Trash2, Package, Search, Upload, HardDrive, RefreshCw, Download, Check } from './ui/PixelIcons';
 import { useDialog } from './ui/DialogContext';
 import { Select } from './ui/Select';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -16,6 +16,7 @@ export default function Plugins({ status }) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [installing, setInstalling] = useState({});
+    const [justInstalled, setJustInstalled] = useState({});
     const [error, setError] = useState(null);
 
     const [sortBy, setSortBy] = useState('downloads');
@@ -71,6 +72,8 @@ export default function Plugins({ status }) {
             setTimeout(() => {
                 loadPlugins();
                 setInstalling(prev => ({ ...prev, [plugin.slug]: false }));
+                setJustInstalled(prev => ({ ...prev, [plugin.slug]: true }));
+                setTimeout(() => setJustInstalled(prev => (plugin.slug in prev ? { ...prev, [plugin.slug]: false } : prev)), 2000);
             }, 1500);
         } catch (err) {
             console.error(err);
@@ -177,7 +180,11 @@ export default function Plugins({ status }) {
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg text-emerald-400 font-minecraft">{plugin.title}</h3>
                                         <button onClick={() => handleInstall(plugin)} disabled={installing[plugin.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('plugins.install_latest')}>
-                                            <Download className={`w-5 h-5 ${installing[plugin.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                            {justInstalled[plugin.slug] ? (
+                                                <Check className="w-5 h-5 text-emerald-400" />
+                                            ) : (
+                                                <Download className={`w-5 h-5 ${installing[plugin.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                            )}
                                         </button>
                                     </div>
                                     <p className="text-zinc-400 text-sm line-clamp-2 mt-1">{plugin.description}</p>
@@ -240,7 +247,7 @@ export default function Plugins({ status }) {
                                                 <div className="text-xs text-zinc-500">{plugin.size}</div>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleDelete(plugin.filename)} className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 transition-all" title={t('common.delete')}>
+                                        <button onClick={() => handleDelete(plugin.filename)} className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all" title={t('common.delete')}>
                                             <Trash2 size={18} />
                                         </button>
                                     </div>

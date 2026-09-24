@@ -103,6 +103,14 @@ export const DialogProvider = ({ children }) => {
                                             {dialog.cancelLabel || 'Cancel'}
                                         </button>
                                     )}
+                                    {dialog.type === 'confirm' && dialog.dangerLabel && (
+                                        <button
+                                            onClick={() => dialog.onClose('danger')}
+                                            className="px-6 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase text-red-500 border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 transition-all"
+                                        >
+                                            {dialog.dangerLabel}
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => dialog.onClose(true)}
                                         className={`px-8 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all shadow-lg hover:opacity-90 border

@@ -85,7 +85,12 @@
         "search_results": "Resultados de Búsqueda",
         "no_matches": "No hay coincidencias",
         "empty_infrastructure": "Infraestructura vacía",
-        "quick_filters": "Filtros Rápidos"
+        "quick_filters": "Filtros Rápidos",
+        "view_mode": "Modo de Vista",
+        "delete_title": "Eliminar Servidor",
+        "delete_profile": "Eliminar solo el Perfil",
+        "delete_files": "Eliminar Perfil y Archivos",
+        "load_error": "No se pudieron cargar los servidores."
     },
     "settings": {
         "title": "Ajustes de la App",
@@ -98,6 +103,18 @@
         "auto_start": {
             "title": "Auto-Inicio Último Servidor",
             "desc": "Arranca automáticamente el último servidor activo al iniciar."
+        },
+        "auto_update": {
+            "title": "Actualizaciones Automáticas",
+            "desc": "Elige cómo gestiona la app las nuevas versiones.",
+            "options": {
+                "auto": "Automáticas",
+                "auto_desc": "Descarga e instala las actualizaciones automáticamente.",
+                "ask": "Preguntarme primero",
+                "ask_desc": "Comprueba automáticamente, pero descarga solo si lo confirmo.",
+                "off": "Desactivadas",
+                "off_desc": "No comprobar actualizaciones automáticamente."
+            }
         },
         "notifications": {
             "title": "Notificaciones de Escritorio",
@@ -159,6 +176,7 @@
         "error_saving": "Error al guardar",
         "saving": "Escribiendo...",
         "save_config": "Guardar Configuración",
+        "unsaved": "Cambios sin guardar",
         "open_directory": "Abrir Directorio",
         "sections": {
             "general": "General y Mundo",
@@ -258,6 +276,7 @@
         },
         "add_to": "Añadir a {list}",
         "player_name": "Nombre del jugador",
+        "empty_name": "Introduce el nombre de un jugador",
         "empty": "No hay jugadores en esta lista.",
         "empty_online": "Asegúrate de que el servidor está encendido.",
         "op": "Op",

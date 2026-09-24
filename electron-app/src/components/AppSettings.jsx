@@ -17,6 +17,13 @@ const THEMES = [
     { id: 'emerald', label: 'Emerald' },
 ];
 
+// Auto-update policy: how the app should handle new versions.
+const UPDATE_POLICIES = [
+    { id: 'auto', labelKey: 'settings.auto_update.options.auto', descKey: 'settings.auto_update.options.auto_desc' },
+    { id: 'ask', labelKey: 'settings.auto_update.options.ask', descKey: 'settings.auto_update.options.ask_desc' },
+    { id: 'off', labelKey: 'settings.auto_update.options.off', descKey: 'settings.auto_update.options.off_desc' },
+];
+
 export default function AppSettings({ isOpen, onClose }) {
     const { t, changeLanguage } = useTranslation();
     const [settings, setSettings] = useState({
@@ -25,12 +32,22 @@ export default function AppSettings({ isOpen, onClose }) {
         notifications: true,
         autoStart: false,
         minimizeToTray: true,
-        checkUpdates: true,
+        auto_update: 'ask',
         dns_proxy_enabled: true,
     });
     const [activeSection, setActiveSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [appVersion, setAppVersion] = useState('');
+
+    // Real app version from the Electron main process (avoids drifting hardcode).
+    useEffect(() => {
+        let cancelled = false;
+        window.electron?.getAppInfo?.()
+            .then((info) => { if (!cancelled && info?.version) setAppVersion(info.version); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -54,6 +71,8 @@ export default function AppSettings({ isOpen, onClose }) {
         try {
             await api.updateAppSettings(settings);
             await changeLanguage(settings.language); // Update UI immediately
+            // Apply the update policy to the main process right away.
+            window.electron?.setAutoUpdateMode?.(settings.auto_update);
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         } catch (e) {
@@ -169,13 +188,32 @@ export default function AppSettings({ isOpen, onClose }) {
                                         onChange={(v) => updateSetting('minimizeToTray', v)}
                                     />
 
-                                    {/* Check for updates */}
-                                    <ToggleSetting
-                                        label="Check for Updates"
-                                        description="Automatically check for new app versions on launch."
-                                        value={settings.checkUpdates}
-                                        onChange={(v) => updateSetting('checkUpdates', v)}
-                                    />
+                                    {/* Automatic updates */}
+                                    <div className="py-3 border-b border-white/[0.03]">
+                                        <div className="text-xs font-minecraft tracking-wider uppercase text-zinc-300">{t('settings.auto_update.title')}</div>
+                                        <div className="text-[10px] text-zinc-600 mt-0.5 mb-3">{t('settings.auto_update.desc')}</div>
+                                        <div className="space-y-1.5">
+                                            {UPDATE_POLICIES.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => updateSetting('auto_update', p.id)}
+                                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-sm border transition-all ${
+                                                        settings.auto_update === p.id
+                                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
+                                                            : 'bg-transparent border-white/5 text-zinc-400 hover:bg-white/5 hover:border-white/10'
+                                                    }`}
+                                                >
+                                                    <div className="text-left">
+                                                        <div className="text-[11px] font-minecraft uppercase tracking-wider">{t(p.labelKey)}</div>
+                                                        <div className="text-[9px] text-zinc-600 mt-0.5">{t(p.descKey)}</div>
+                                                    </div>
+                                                    {settings.auto_update === p.id && (
+                                                        <div className="w-2 h-2 rounded-sm bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)] shrink-0"></div>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -280,7 +318,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                 <div className="space-y-4">
                                     <div className="bg-white/[0.02] border border-white/5 rounded-md p-5">
                                         <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">Minecraft Server GUI</div>
-                                        <div className="text-xs font-mono text-zinc-500 mb-4">v1.2.5</div>
+                                        <div className="text-xs font-mono text-zinc-500 mb-4">{appVersion ? `v${appVersion}` : ''}</div>
                                         <p className="text-xs text-zinc-500 leading-relaxed">
                                             A professional server management tool for Minecraft servers.
                                             Supports Vanilla, Paper, Spigot, Fabric, Forge, and NeoForge server types.

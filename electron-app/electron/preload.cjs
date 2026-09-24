@@ -6,6 +6,7 @@ const apiToken = tokenArg ? tokenArg.slice('--mlsg-token='.length) : '';
 
 contextBridge.exposeInMainWorld('electron', {
     apiToken,
+    getAppInfo: () => ipcRenderer.invoke('app:info'),
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
     openFile: () => ipcRenderer.invoke('dialog:openFile'),
     onCloseRequested: (callback) => {
@@ -17,6 +18,8 @@ contextBridge.exposeInMainWorld('electron', {
     // Auto-update
     checkForUpdates: () => ipcRenderer.invoke('update:check'),
     installUpdate: () => ipcRenderer.invoke('update:install'),
+    downloadUpdate: () => ipcRenderer.invoke('update:download'),
+    setAutoUpdateMode: (mode) => ipcRenderer.invoke('update:setMode', mode),
     onUpdateStatus: (callback) => {
         const listener = (_event, status) => callback(status);
         ipcRenderer.on('update-status', listener);

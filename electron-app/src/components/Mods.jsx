@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Search, Download, Trash2, Package, RefreshCw, ExternalLink, HardDrive, Plus } from './ui/PixelIcons';
+import { Search, Download, Trash2, Package, RefreshCw, ExternalLink, HardDrive, Plus, Check } from './ui/PixelIcons';
 import { useDialog } from './ui/DialogContext';
 import { Select } from './ui/Select';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -18,6 +18,8 @@ export default function Mods({ status, onOpenWizard }) {
     const [activeLoader, setActiveLoader] = useState('fabric');
     const [activeVersion, setActiveVersion] = useState('');
     const [installing, setInstalling] = useState({});
+    const [justInstalled, setJustInstalled] = useState({});
+    const lastInstalledSlug = useRef(null);
     const [error, setError] = useState(null);
 
     const [sortBy, setSortBy] = useState('downloads');
@@ -82,6 +84,7 @@ export default function Mods({ status, onOpenWizard }) {
                 if (!proceed) { setInstalling(prev => ({ ...prev, [mod.slug]: false })); return; }
             }
             await api.installMod(targetVersion.id);
+            lastInstalledSlug.current = mod.slug;
         } catch (err) {
             console.error(err);
             setError(err.message);
@@ -95,6 +98,11 @@ export default function Mods({ status, onOpenWizard }) {
             if (item.type === 'mod_install_complete') {
                 loadInstalledMods();
                 setInstalling({});
+                if (item.success !== false && lastInstalledSlug.current) {
+                    const slug = lastInstalledSlug.current;
+                    setJustInstalled(prev => ({ ...prev, [slug]: true }));
+                    setTimeout(() => setJustInstalled(prev => (slug in prev ? { ...prev, [slug]: false } : prev)), 2000);
+                }
             }
         });
     }, [subscribe]);
@@ -193,7 +201,11 @@ export default function Mods({ status, onOpenWizard }) {
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg text-emerald-400 font-minecraft">{mod.title}</h3>
                                         <button onClick={() => handleInstall(mod)} disabled={installing[mod.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('mods.install_latest')}>
-                                            <Download className={`w-5 h-5 ${installing[mod.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                            {justInstalled[mod.slug] ? (
+                                                <Check className="w-5 h-5 text-emerald-400" />
+                                            ) : (
+                                                <Download className={`w-5 h-5 ${installing[mod.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                            )}
                                         </button>
                                     </div>
                                     <p className="text-zinc-400 text-sm line-clamp-2 mt-1">{mod.description}</p>
@@ -231,7 +243,7 @@ export default function Mods({ status, onOpenWizard }) {
                                         <div className="text-xs text-zinc-500">{file.size}</div>
                                     </div>
                                 </div>
-                                <button onClick={() => handleDelete(file.filename)} className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 transition-all">
+                                <button onClick={() => handleDelete(file.filename)} className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all">
                                     <Trash2 size={18} />
                                 </button>
                             </div>

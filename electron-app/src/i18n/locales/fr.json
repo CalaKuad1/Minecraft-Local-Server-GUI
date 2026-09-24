@@ -79,7 +79,18 @@
         "search": "Rechercher...",
         "boot": "Démarrer",
         "manage": "Gérer",
-        "delete": "Supprimer"
+        "delete": "Supprimer",
+        "grid_view": "Vue Grille",
+        "detailed_view": "Détail",
+        "search_results": "Résultats de recherche",
+        "no_matches": "Aucun résultat",
+        "empty_infrastructure": "Infrastructure vide",
+        "quick_filters": "Filtres rapides",
+        "view_mode": "Mode d'affichage",
+        "delete_title": "Supprimer le serveur",
+        "delete_profile": "Supprimer uniquement le profil",
+        "delete_files": "Supprimer le profil et les fichiers",
+        "load_error": "Échec du chargement des serveurs."
     },
     "settings": {
         "title": "Paramètres",
@@ -92,6 +103,18 @@
         "auto_start": {
             "title": "Démarrage Automatique",
             "desc": "Démarrer automatiquement le dernier serveur au lancement."
+        },
+        "auto_update": {
+            "title": "Mises à jour Automatiques",
+            "desc": "Choisissez la gestion des nouvelles versions par l'application.",
+            "options": {
+                "auto": "Automatique",
+                "auto_desc": "Télécharger et installer les mises à jour automatiquement.",
+                "ask": "Me demander d'abord",
+                "ask_desc": "Vérifier automatiquement, mais télécharger seulement après confirmation.",
+                "off": "Désactivé",
+                "off_desc": "Ne jamais vérifier les mises à jour automatiquement."
+            }
         },
         "notifications": {
             "title": "Notifications Bureau",
@@ -153,6 +176,7 @@
         "error_saving": "Échec de l'enregistrement",
         "saving": "Écriture...",
         "save_config": "Enregistrer la config",
+        "unsaved": "Modifications non enregistrées",
         "open_directory": "Ouvrir le dossier",
         "sections": {
             "general": "Général & Monde",
@@ -252,6 +276,7 @@
         },
         "add_to": "Ajouter à {list}",
         "player_name": "Nom du joueur",
+        "empty_name": "Entrez le nom d'un joueur",
         "empty": "Aucun joueur dans cette liste.",
         "empty_online": "Assurez-vous que le serveur est démarré.",
         "op": "Op",

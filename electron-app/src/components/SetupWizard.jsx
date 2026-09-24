@@ -59,9 +59,28 @@ export default function SetupWizard({ onComplete, onCancel }) {
     const [allVersionData, setAllVersionData] = useState(null);
 
     // Configuration Data
-    const [parentPath, setParentPath] = useState('C:/MinecraftServers');
+    // `C:/MinecraftServers` was previously hardcoded: on Linux/macOS this silently
+    // created a folder literally named `C:` in the backend's working directory.
+    // In the real Electron shell we resolve the user's home directory via IPC and
+    // default to `~/MinecraftServers`, which works on every platform. The hardcoded
+    // value acts only as a fallback for plain-browser (Vite dev) previews.
+    const [parentPath, setParentPath] = useState(() =>
+        (typeof window !== 'undefined' && window.electron && window.electron.getAppInfo)
+            ? ''
+            : 'C:/MinecraftServers'
+    );
     const [folderName, setFolderName] = useState('my-server');
     const [existingPath, setExistingPath] = useState('');
+
+    useEffect(() => {
+        let cancelled = false;
+        window.electron?.getAppInfo?.()
+            .then((info) => {
+                if (!cancelled && info?.home) setParentPath(`${info.home}/MinecraftServers`);
+            })
+            .catch(() => { /* fall back to the browser default */ });
+        return () => { cancelled = true; };
+    }, []);
     
     // RAM config
     const [ramPreset, setRamPreset] = useState("4"); // Default 4GB
@@ -499,7 +518,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     <button onClick={() => setStep(2)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
                                     <button 
                                         onClick={handleDeploy} 
-                                        disabled={!eulaAccepted}
+                                        disabled={!eulaAccepted || !parentPath.trim()}
                                         className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30"
                                     >
                                         {javaStatus && !javaStatus.local_java_available && javaStatus.needs_download ? 'Download & Deploy' : 'Deploy'}

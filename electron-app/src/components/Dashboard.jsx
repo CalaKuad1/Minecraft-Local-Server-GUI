@@ -6,6 +6,7 @@ import { api } from '../api';
 import { Select } from './ui/Select';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useDialog } from './ui/DialogContext';
 
 const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true }) => {
     return (
@@ -229,6 +230,7 @@ const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
 export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
+    const dialog = useDialog();
 
     // Local state for immediate UI feedback
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
@@ -258,6 +260,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [onlineMode, setOnlineMode] = useState(true);
     const [togglingMode, setTogglingMode] = useState(false);
     const [serverError, setServerError] = useState(null);
+    const [addressCopied, setAddressCopied] = useState(false);
 
     const isStoppingRef = useRef(serverStatus?.status === 'stopping');
     const lastIdRef = useRef(serverStatus?.server_id);
@@ -592,7 +595,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const handleStop = async () => {
         // If already stopping, second click is a Force Kill
         if (isStopping) {
-            if (confirm(t('dashboard.force_stop_confirm', 'Server is not responding. Force close immediately? (Unsaved progress may be lost)'))) {
+            const ok = await dialog.confirm(
+                t('dashboard.force_stop_confirm', 'Server is not responding. Force close immediately? (Unsaved progress may be lost)'),
+                { title: 'Force Kill?', variant: 'destructive', confirmLabel: 'Force Kill', cancelLabel: 'Cancel' }
+            );
+            if (ok) {
                 setLoading(true);
                 try {
                     await api.stop(true); // force = true
@@ -625,7 +632,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             setShowShutdownModal(false);
             if (onRefresh) onRefresh();
         } catch (error) {
-            alert("Failed to schedule shutdown: " + error.message);
+            dialog.alert("Failed to schedule shutdown: " + error.message, { title: 'Error', variant: 'destructive' });
         }
     };
 
@@ -634,7 +641,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             await api.cancelStop();
             if (onRefresh) onRefresh();
         } catch (error) {
-            alert("Failed to cancel shutdown: " + error.message);
+            dialog.alert("Failed to cancel shutdown: " + error.message, { title: 'Error', variant: 'destructive' });
         }
     };
 
@@ -841,10 +848,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 }`} title="DNS verification status">
                                     {dnsStatus === 'ok' ? 'DNS ✓' : dnsStatus === 'error' ? 'DNS ✗' : 'DNS …'}
                                 </span>
-                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" title="Copy">
+                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Copy">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                 </button>
-                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" title="Edit subdomain">
+                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Edit subdomain">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
                             </div>
@@ -857,8 +864,24 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 <button onClick={() => navigator.clipboard.writeText(tunnelAddress)} className="underline hover:text-white">copy</button>
                             </div>
                         )}
-                        <div>
-                            {!dnsAddress ? <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span> : null}
+                        <div className="flex items-center gap-1.5 group">
+                            {!dnsAddress ? <>
+                                <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await navigator.clipboard.writeText(tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`);
+                                            setAddressCopied(true);
+                                            setTimeout(() => setAddressCopied(false), 1500);
+                                        } catch (e) { console.error('Copy failed', e); }
+                                    }}
+                                    className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                                    title="Copy address"
+                                >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                                {addressCopied && <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 animate-in fade-in duration-200">Copied</span>}
+                            </> : null}
                         </div>
                         {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-zinc-600 font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
                     </div>
@@ -878,7 +901,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             }
                         } catch (err) {
                             setTunnelConnecting(false);
-                            alert('Tunnel error: ' + (err.response?.data?.detail || err.message));
+                            dialog.alert('Tunnel error: ' + (err.response?.data?.detail || err.message), { title: 'Tunnel Error', variant: 'destructive' });
                         }
                     }} disabled={tunnelConnecting && !tunnelAddress}
                     className={`px-5 py-2.5 rounded-sm text-xs font-minecraft font-bold uppercase tracking-widest flex items-center gap-2 transition-all ${tunnelAddress ? 'bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10' : tunnelConnecting ? 'bg-transparent border border-yellow-500/30 text-yellow-400' : 'bg-white text-black hover:bg-zinc-200'}`}
@@ -891,7 +914,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                             {autoTunnel && <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></div>}
                         </button>
-                        <div className="absolute bottom-full right-0 mb-2 w-72 p-4 bg-black/95 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-50">
+                        <div className="absolute bottom-full right-0 mb-2 w-72 p-4 bg-black/95 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none transition-opacity shadow-2xl z-50">
                             <div className="text-xs text-white font-minecraft tracking-widest uppercase mb-1">Make Public</div>
                             <div className="text-[11px] text-zinc-400 leading-relaxed">
                                 Share your server worldwide. It gets a fixed address like <span className="text-emerald-400">survival.play.ariser.app</span> that never changes even when the tunnel IP rotates. DNS updates automatically.
@@ -926,14 +949,14 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 const r = await api.verifyDns();
                                 if (r.verified) {
                                     setDnsStatus('ok');
-                                    alert(`DNS OK: ${r.address}${r.note ? ` (${r.note})` : ''}`);
+                                    dialog.alert(`DNS OK: ${r.address}${r.note ? ` (${r.note})` : ''}`, { title: 'DNS Verified', variant: 'success' });
                                 } else {
                                     setDnsStatus('error');
-                                    alert('DNS verification failed: ' + (r.error || r.detail?.error || 'unknown'));
+                                    dialog.alert('DNS verification failed: ' + (r.error || r.detail?.error || 'unknown'), { title: 'DNS Error', variant: 'destructive' });
                                 }
                             } catch (e) {
                                 setDnsStatus('error');
-                                alert('DNS verification error: ' + (e.message || e));
+                                dialog.alert('DNS verification error: ' + (e.message || e), { title: 'DNS Error', variant: 'destructive' });
                             }
                         }}
                         className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
@@ -945,9 +968,9 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         onClick={async () => {
                             try {
                                 const r = await api.cleanupDns();
-                                alert(`DNS cleanup: removed ${r.deleted ?? 0} stale record(s).`);
+                                dialog.alert(`DNS cleanup: removed ${r.deleted ?? 0} stale record(s).`, { title: 'DNS Cleanup', variant: 'success' });
                             } catch (e) {
-                                alert('DNS cleanup failed: ' + (e.message || e));
+                                dialog.alert('DNS cleanup failed: ' + (e.message || e), { title: 'DNS Cleanup', variant: 'destructive' });
                             }
                         }}
                         className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"

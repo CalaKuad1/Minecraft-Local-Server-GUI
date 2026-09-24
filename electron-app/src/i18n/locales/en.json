@@ -85,7 +85,12 @@
         "search_results": "Search Results",
         "no_matches": "No matches found",
         "empty_infrastructure": "Infrastructure empty",
-        "quick_filters": "Quick Filters"
+        "quick_filters": "Quick Filters",
+        "view_mode": "View Mode",
+        "delete_title": "Delete Server",
+        "delete_profile": "Delete Profile Only",
+        "delete_files": "Delete Profile & Files",
+        "load_error": "Failed to load servers."
     },
     "settings": {
         "title": "App Settings",
@@ -98,6 +103,18 @@
         "auto_start": {
             "title": "Auto-Start Last Server",
             "desc": "Automatically boot the last active server on launch."
+        },
+        "auto_update": {
+            "title": "Automatic Updates",
+            "desc": "Choose how the app handles new versions.",
+            "options": {
+                "auto": "Automatic",
+                "auto_desc": "Download and install updates automatically.",
+                "ask": "Ask me first",
+                "ask_desc": "Check automatically, but download only when I confirm.",
+                "off": "Off",
+                "off_desc": "Never check for updates automatically."
+            }
         },
         "notifications": {
             "title": "Desktop Notifications",
@@ -159,6 +176,7 @@
         "error_saving": "Failed to save",
         "saving": "Writing...",
         "save_config": "Save Config",
+        "unsaved": "Unsaved changes",
         "open_directory": "Open Directory",
         "sections": {
             "general": "General & World",
@@ -258,6 +276,7 @@
         },
         "add_to": "Add to {list}",
         "player_name": "Player name",
+        "empty_name": "Enter a player name",
         "empty": "No players found in this list.",
         "empty_online": "Make sure the server is running.",
         "op": "Op",
