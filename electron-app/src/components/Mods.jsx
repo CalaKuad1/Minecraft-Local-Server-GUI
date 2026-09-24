@@ -6,6 +6,8 @@ import { useDialog } from './ui/DialogContext';
 import { Select } from './ui/Select';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import { isSlugInstalled } from '../utils/installedMatch';
+import { resolveInstalledSlugs } from '../utils/installedResolve';
 
 export default function Mods({ status, onOpenWizard }) {
     const { t } = useTranslation();
@@ -19,6 +21,8 @@ export default function Mods({ status, onOpenWizard }) {
     const [activeVersion, setActiveVersion] = useState('');
     const [installing, setInstalling] = useState({});
     const [justInstalled, setJustInstalled] = useState({});
+    const [downloadProgress, setDownloadProgress] = useState({});
+    const [resolvedInstalled, setResolvedInstalled] = useState(new Set());
     const lastInstalledSlug = useRef(null);
     const [error, setError] = useState(null);
 
@@ -83,8 +87,9 @@ export default function Mods({ status, onOpenWizard }) {
                 );
                 if (!proceed) { setInstalling(prev => ({ ...prev, [mod.slug]: false })); return; }
             }
-            await api.installMod(targetVersion.id);
+            // Set before installMod's background thread can emit progress events.
             lastInstalledSlug.current = mod.slug;
+            await api.installMod(targetVersion.id, mod.slug);
         } catch (err) {
             console.error(err);
             setError(err.message);
@@ -95,17 +100,47 @@ export default function Mods({ status, onOpenWizard }) {
     const { subscribe } = useWebSocket();
     useEffect(() => {
         return subscribe('mods', (item) => {
+            if (item.type === 'progress') {
+                // Only trust progress tagged with the project slug; unrelated
+                // server-setup progress events must not paint a mod card.
+                if (item.slug && typeof item.value === 'number') {
+                    setDownloadProgress(prev => ({ ...prev, [item.slug]: { value: item.value, message: item.message } }));
+                }
+                return;
+            }
             if (item.type === 'mod_install_complete') {
+                const slug = item.slug || lastInstalledSlug.current;
+                lastInstalledSlug.current = null;
+                if (slug) {
+                    setDownloadProgress(prev => { const next = { ...prev }; delete next[slug]; return next; });
+                    setInstalling(prev => ({ ...prev, [slug]: false }));
+                }
                 loadInstalledMods();
-                setInstalling({});
-                if (item.success !== false && lastInstalledSlug.current) {
-                    const slug = lastInstalledSlug.current;
+                if (item.success !== false && slug) {
                     setJustInstalled(prev => ({ ...prev, [slug]: true }));
                     setTimeout(() => setJustInstalled(prev => (slug in prev ? { ...prev, [slug]: false } : prev)), 2000);
+                } else if (item.success === false) {
+                    setError(t('mods.install_error'));
                 }
             }
         });
-    }, [subscribe]);
+    }, [subscribe, t]);
+
+    // Exact-match resolution for projects whose jar filenames differ from their
+    // slug (e.g. simple-voice-chat -> voicechat-fabric-*.jar). All published
+    // filenames are checked (unfiltered) so past installs are still matched.
+    useEffect(() => {
+        if ((activeTab !== 'browse' && activeTab !== 'modpacks') || searchResults.length === 0) {
+            setResolvedInstalled(new Set());
+            return;
+        }
+        let cancelled = false;
+        resolveInstalledSlugs({
+            slugs: searchResults.map(r => r.slug),
+            installed: installedMods,
+        }).then(matched => { if (!cancelled) setResolvedInstalled(matched); });
+        return () => { cancelled = true; };
+    }, [activeTab, searchResults, installedMods]);
 
     const handleDelete = async (filename) => {
         if (!await dialog.confirm(t('mods.delete_confirm').replace('{name}', filename), t('mods.delete_title'), "destructive")) return;
@@ -200,19 +235,36 @@ export default function Mods({ status, onOpenWizard }) {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg text-emerald-400 font-minecraft">{mod.title}</h3>
-                                        <button onClick={() => handleInstall(mod)} disabled={installing[mod.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('mods.install_latest')}>
-                                            {justInstalled[mod.slug] ? (
-                                                <Check className="w-5 h-5 text-emerald-400" />
-                                            ) : (
-                                                <Download className={`w-5 h-5 ${installing[mod.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
-                                            )}
-                                        </button>
+                                        {isSlugInstalled(mod.slug, installedMods) || resolvedInstalled.has(mod.slug) ? (
+                                            <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-minecraft tracking-widest uppercase">
+                                                <Check size={12} /> {t('common.installed')}
+                                            </span>
+                                        ) : (
+                                            <button onClick={() => handleInstall(mod)} disabled={installing[mod.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('mods.install_latest')}>
+                                                {justInstalled[mod.slug] ? (
+                                                    <Check className="w-5 h-5 text-emerald-400" />
+                                                ) : (
+                                                    <Download className={`w-5 h-5 ${installing[mod.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-zinc-400 text-sm line-clamp-2 mt-1">{mod.description}</p>
                                     <div className="flex gap-2 mt-2">
                                         <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500">{mod.author}</span>
                                         <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500 flex items-center gap-1"><Download size={10} /> {mod.downloads}</span>
                                     </div>
+                                    {installing[mod.slug] && (
+                                        <div className="mt-3">
+                                            <div className="h-1.5 rounded-sm bg-white/5 overflow-hidden">
+                                                <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${Math.min(100, downloadProgress[mod.slug]?.value ?? 0)}%` }} />
+                                            </div>
+                                            <div className="flex justify-between items-center mt-1">
+                                                <span className="text-[10px] font-minecraft tracking-widest uppercase text-zinc-500">{t('common.downloading')}</span>
+                                                <span className="text-[10px] font-minecraft tracking-widest text-emerald-400">{Math.round(downloadProgress[mod.slug]?.value ?? 0)}%</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}

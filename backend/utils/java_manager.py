@@ -413,10 +413,21 @@ class JavaManager:
                             progress = min((downloaded / total_size) * 90, 90)
                             progress_callback(progress)
 
+            # A truncated/empty body must not look like a successful download:
+            # don't leave a partial archive behind for a later install to trip on.
+            if downloaded == 0 or (total_size > 0 and downloaded != total_size):
+                logger.error(
+                    f"Incomplete download from {url}: got {downloaded} of "
+                    f"{total_size} bytes"
+                )
+                path.unlink(missing_ok=True)
+                return False
+
             return True
 
         except Exception as e:
             logger.error(f"Error downloading file (urllib): {e}")
+            path.unlink(missing_ok=True)
             return False
 
     def _extract_java_archive(self, archive_path: Path, extract_to: Path) -> bool:

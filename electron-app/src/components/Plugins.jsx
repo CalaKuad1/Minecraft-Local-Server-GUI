@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
 import { Trash2, Package, Search, Upload, HardDrive, RefreshCw, Download, Check } from './ui/PixelIcons';
 import { useDialog } from './ui/DialogContext';
 import { Select } from './ui/Select';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import { isSlugInstalled } from '../utils/installedMatch';
+import { resolveInstalledSlugs } from '../utils/installedResolve';
 
 export default function Plugins({ status }) {
     const { t } = useTranslation();
@@ -17,7 +20,10 @@ export default function Plugins({ status }) {
     const [uploading, setUploading] = useState(false);
     const [installing, setInstalling] = useState({});
     const [justInstalled, setJustInstalled] = useState({});
+    const [downloadProgress, setDownloadProgress] = useState({});
+    const [resolvedInstalled, setResolvedInstalled] = useState(new Set());
     const [error, setError] = useState(null);
+    const lastInstalledSlug = useRef(null);
 
     const [sortBy, setSortBy] = useState('downloads');
     const [category, setCategory] = useState('all');
@@ -30,6 +36,12 @@ export default function Plugins({ status }) {
         if (activeTab === 'installed') loadPlugins();
     }, [activeTab]);
 
+    // Keep the installed list warm so browse results can show which plugins
+    // are already on disk and avoid duplicate installs.
+    useEffect(() => {
+        if (activeTab === 'browse') loadPlugins(true);
+    }, [activeTab]);
+
     useEffect(() => {
         if (activeTab === 'browse') {
             const timer = setTimeout(() => performSearch(searchQuery), 500);
@@ -37,14 +49,14 @@ export default function Plugins({ status }) {
         }
     }, [searchQuery, activeTab, sortBy, category]);
 
-    const loadPlugins = async () => {
+    const loadPlugins = async (silent = false) => {
         setLoading(true);
-        setError(null);
+        if (!silent) setError(null);
         try {
             setPlugins(await api.getPlugins());
         } catch (e) {
             console.error(e);
-            setError(t('common.error'));
+            if (!silent) setError(t('common.error'));
         } finally {
             setLoading(false);
         }
@@ -66,21 +78,69 @@ export default function Plugins({ status }) {
     const handleInstall = async (plugin) => {
         try {
             setInstalling(prev => ({ ...prev, [plugin.slug]: true }));
+            setError(null);
             const versions = await api.getPluginVersions(plugin.slug, serverVersion);
             if (!versions || versions.length === 0) throw new Error(t('mods.no_versions'));
-            await api.installPlugin(versions[0].id);
-            setTimeout(() => {
-                loadPlugins();
-                setInstalling(prev => ({ ...prev, [plugin.slug]: false }));
-                setJustInstalled(prev => ({ ...prev, [plugin.slug]: true }));
-                setTimeout(() => setJustInstalled(prev => (plugin.slug in prev ? { ...prev, [plugin.slug]: false } : prev)), 2000);
-            }, 1500);
+            lastInstalledSlug.current = plugin.slug;
+            await api.installPlugin(versions[0].id, plugin.slug);
+            // Completion is confirmed via the plugin_install_complete event below
+            // (which reports success/failure), so a failed download is surfaced
+            // instead of being silently marked as installed.
         } catch (err) {
             console.error(err);
             setError(err.message);
             setInstalling(prev => ({ ...prev, [plugin.slug]: false }));
         }
     };
+
+    const { subscribe } = useWebSocket();
+    useEffect(() => {
+        return subscribe('plugins', (item) => {
+            if (item.type === 'progress') {
+                // Only trust progress events that belong to this install. The
+                // backend tags mod/plugin downloads with the project slug; the
+                // server-setup progress events are untagged and must not be able
+                // to paint a plugin card.
+                if (item.slug && typeof item.value === 'number') {
+                    setDownloadProgress(prev => ({ ...prev, [item.slug]: { value: item.value, message: item.message } }));
+                }
+                return;
+            }
+            if (item.type === 'plugin_install_complete') {
+                const slug = item.slug || lastInstalledSlug.current;
+                lastInstalledSlug.current = null;
+                if (slug) {
+                    setDownloadProgress(prev => { const next = { ...prev }; delete next[slug]; return next; });
+                    setInstalling(prev => ({ ...prev, [slug]: false }));
+                }
+                loadPlugins();
+                if (item.success !== false && slug) {
+                    setJustInstalled(prev => ({ ...prev, [slug]: true }));
+                    setTimeout(() => setJustInstalled(prev => (slug in prev ? { ...prev, [slug]: false } : prev)), 2000);
+                } else if (item.success === false) {
+                    setError(t('plugins.install_error'));
+                }
+            }
+        });
+    }, [subscribe, t]);
+
+    // Exact-match resolution: some projects ship jars named differently than
+    // their slug (e.g. simple-voice-chat -> voicechat-bukkit-*.jar), so compare
+    // search results against the project's real published filenames. We fetch
+    // ALL published versions (no loader/version filter) so historically
+    // installed artifacts are matched too.
+    useEffect(() => {
+        if (activeTab !== 'browse' || searchResults.length === 0) {
+            setResolvedInstalled(new Set());
+            return;
+        }
+        let cancelled = false;
+        resolveInstalledSlugs({
+            slugs: searchResults.map(r => r.slug),
+            installed: plugins,
+        }).then(matched => { if (!cancelled) setResolvedInstalled(matched); });
+        return () => { cancelled = true; };
+    }, [activeTab, searchResults, plugins]);
 
     const handleUpload = async (e) => {
         const file = e.target.files[0];
@@ -179,19 +239,36 @@ export default function Plugins({ status }) {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg text-emerald-400 font-minecraft">{plugin.title}</h3>
-                                        <button onClick={() => handleInstall(plugin)} disabled={installing[plugin.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('plugins.install_latest')}>
-                                            {justInstalled[plugin.slug] ? (
-                                                <Check className="w-5 h-5 text-emerald-400" />
-                                            ) : (
-                                                <Download className={`w-5 h-5 ${installing[plugin.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
-                                            )}
-                                        </button>
+                                        {isSlugInstalled(plugin.slug, plugins) || resolvedInstalled.has(plugin.slug) ? (
+                                            <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-minecraft tracking-widest uppercase">
+                                                <Check size={12} /> {t('common.installed')}
+                                            </span>
+                                        ) : (
+                                            <button onClick={() => handleInstall(plugin)} disabled={installing[plugin.slug]} className="p-2 border border-transparent hover:border-white/10 rounded-sm transition-colors group" title={t('plugins.install_latest')}>
+                                                {justInstalled[plugin.slug] ? (
+                                                    <Check className="w-5 h-5 text-emerald-400" />
+                                                ) : (
+                                                    <Download className={`w-5 h-5 ${installing[plugin.slug] ? 'text-yellow-500 animate-pulse' : 'text-zinc-400 group-hover:text-white'}`} />
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-zinc-400 text-sm line-clamp-2 mt-1">{plugin.description}</p>
                                     <div className="flex gap-2 mt-2">
                                         <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500">{plugin.author}</span>
                                         <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500 flex items-center gap-1"><Download size={10} /> {plugin.downloads}</span>
                                     </div>
+                                    {installing[plugin.slug] && (
+                                        <div className="mt-3">
+                                            <div className="h-1.5 rounded-sm bg-white/5 overflow-hidden">
+                                                <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${Math.min(100, downloadProgress[plugin.slug]?.value ?? 0)}%` }} />
+                                            </div>
+                                            <div className="flex justify-between items-center mt-1">
+                                                <span className="text-[10px] font-minecraft tracking-widest uppercase text-zinc-500">{t('common.downloading')}</span>
+                                                <span className="text-[10px] font-minecraft tracking-widest text-emerald-400">{Math.round(downloadProgress[plugin.slug]?.value ?? 0)}%</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}

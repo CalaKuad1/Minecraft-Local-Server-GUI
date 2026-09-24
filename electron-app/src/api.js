@@ -439,11 +439,14 @@ export const api = {
     getInstalledMods: async () => {
         return await fetchJson(`${API_URL}/mods/installed`);
     },
-    installMod: async (versionId) => {
+    getProjectFiles: async (slugs) => {
+        return await fetchJson(`${API_URL}/mods/project-files?slugs=${encodeURIComponent(slugs.join(','))}`, {}, 30000);
+    },
+    installMod: async (versionId, slug = null) => {
         return await fetchJson(`${API_URL}/mods/install`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ version_id: versionId })
+            body: JSON.stringify({ version_id: versionId, ...(slug ? { slug } : {}) })
         });
     },
     deleteMod: async (filename) => {
@@ -507,11 +510,11 @@ export const api = {
         if (version) url += `?version=${version}`;
         return await fetchJson(url);
     },
-    installPlugin: async (versionId) => {
+    installPlugin: async (versionId, slug = null) => {
         return await fetchJson(`${API_URL}/plugins/install`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ version_id: versionId })
+            body: JSON.stringify({ version_id: versionId, ...(slug ? { slug } : {}) })
         });
     }
 };

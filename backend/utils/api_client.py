@@ -21,9 +21,18 @@ def get_server_versions(server_type):
     """Fetches available server versions for a given type from mcutils.com API."""
     try:
         url = f"https://mcutils.com/api/server-jars/{server_type.lower()}"
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10, headers=_DOWNLOAD_HEADERS)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if not isinstance(data, list):
+            logging.warning(
+                f"Unexpected mcutils response for '{server_type}' (got "
+                f"{type(data).__name__}); treating as empty"
+            )
+            return []
+        # Keep the exact shape the version list endpoint consumes ({version, url})
+        # but drop malformed entries so a single bad record can't crash the UI.
+        return [v for v in data if isinstance(v, dict) and v.get("version")]
     except requests.RequestException as e:
         logging.error(f"API Error: Could not fetch server versions for '{server_type}'. Reason: {e}")
         return []
@@ -204,29 +213,88 @@ _DOWNLOAD_HEADERS = {
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 }
 
-def download_file_from_url(download_url, save_path, progress_callback, retries=3):
+def _remove_partial(save_path):
+    """Best-effort removal of a partial download so no corrupted file lingers."""
+    try:
+        if save_path and os.path.exists(save_path):
+            os.remove(save_path)
+    except OSError as e:
+        logging.warning(f"Could not remove partial file {save_path}: {e}")
+
+
+def _classify_http_error(status_code, url):
+    """Maps an HTTP status to a clear, user-facing failure reason."""
+    if status_code == 404:
+        return f"Resource not found (HTTP 404 from {url})"
+    if status_code in (401, 403):
+        return f"Server rejected the request (HTTP {status_code} from {url})"
+    if status_code >= 500:
+        return f"HTTP {status_code} from {url}"
+    return f"HTTP {status_code} from {url}"
+
+
+def download_file_from_url(download_url, save_path, progress_callback=None, retries=3):
     """Downloads a file from a specific URL with progress.
 
-    Retries on transient failures (Cloudflare 500/429, connection resets) and
-    returns False on failure. The last error is logged with the URL + status so
-    callers can surface a useful message instead of a generic one.
+    Retries on *transient* failures (server-side 5xx, 408/429, connection
+    resets, truncated bodies) with linear backoff. Permanent client errors
+    (404/403/...) fail immediately — a missing resource will not appear by
+    retrying — so callers get a useful reason instead of a long silent wait.
+
+    The downloaded size is verified against the server-declared Content-Length
+    so a truncated or empty body is treated as a failure rather than silently
+    appearing successful. On terminal failure the partial file is deleted so a
+    corrupted artifact is never left behind for later to mistake as a real file.
+
+    Returns True on success, False on failure. On failure the reason is logged
+    with the URL + status and stashed on ``download_file_from_url.last_error``
+    so callers can surface a useful message instead of a generic one.
     """
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    if progress_callback is None:
+        progress_callback = lambda p: None
+
+    try:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    except OSError as e:
+        last_error = f"Cannot create destination folder for {save_path}: {e}"
+        logging.error(last_error)
+        download_file_from_url.last_error = last_error
+        return False
+
     last_error = None
     for attempt in range(1, retries + 1):
+        # Progress is reported at most once per whole percent per attempt so a
+        # large streamed download cannot flood the WebSocket / UI thread.
+        last_reported_pct = -1
+
+        def report_progress(p):
+            nonlocal last_reported_pct
+            int_p = int(p)
+            if int_p > last_reported_pct:
+                last_reported_pct = int_p
+                progress_callback(p)
+
         try:
             with requests.get(
                 download_url, stream=True, timeout=30, headers=_DOWNLOAD_HEADERS
             ) as r:
-                if r.status_code >= 500:
-                    # Transient server/CDN error — retry with backoff
-                    last_error = f"HTTP {r.status_code} from {download_url}"
+                status = r.status_code
+                # 408/429 are transient by definition; other 4xx are permanent
+                # (invalid/expired URL, missing resource) so don't wait/backoff.
+                if status >= 500 or status in (408, 429):
+                    last_error = _classify_http_error(status, download_url)
                     logging.warning(
                         f"Download attempt {attempt}/{retries} failed: {last_error}"
                     )
                     if attempt < retries:
                         time.sleep(2 * attempt)
                     continue
+                if 400 <= status < 500:
+                    last_error = _classify_http_error(status, download_url)
+                    logging.error(f"Permanent download failure: {last_error}")
+                    _remove_partial(save_path)
+                    download_file_from_url.last_error = last_error
+                    return False
                 r.raise_for_status()
                 total_size_raw = r.headers.get('content-length')
                 total_size = int(total_size_raw) if total_size_raw else 0
@@ -243,18 +311,29 @@ def download_file_from_url(download_url, save_path, progress_callback, retries=3
                         bytes_downloaded += len(chunk)
 
                         if total_size > 0:
-                            progress = (bytes_downloaded / total_size) * 100
-                            progress_callback(progress)
+                            report_progress((bytes_downloaded / total_size) * 100)
                         else:
                             # Fallback: Report "activity" every 1MB
                             current_mb = bytes_downloaded // (1024 * 1024)
                             if current_mb > last_reported_mb:
                                 last_reported_mb = current_mb
-                                mock_progress = min(current_mb * 5, 95)
-                                progress_callback(mock_progress)
+                                report_progress(min(current_mb * 5, 95))
                                 logging.debug(f"Downloaded {current_mb}MB (unknown total size)")
 
-            progress_callback(100)
+            # Verify the body is complete before declaring success. An empty or
+            # short response (e.g. a CDN error page or a cut connection that
+            # didn't raise) must not be reported as a successful download.
+            if bytes_downloaded == 0:
+                raise requests.RequestException(
+                    f"empty response body from {download_url}"
+                )
+            if total_size > 0 and bytes_downloaded != total_size:
+                raise requests.RequestException(
+                    f"incomplete download: got {bytes_downloaded} of "
+                    f"{total_size} bytes from {download_url}"
+                )
+
+            report_progress(100)
             return True
         except requests.RequestException as e:
             last_error = f"{e} ({download_url})"
@@ -264,11 +343,20 @@ def download_file_from_url(download_url, save_path, progress_callback, retries=3
         except Exception as e:
             last_error = f"{e} ({download_url})"
             logging.error(f"Failed to download file: {last_error}")
+            _remove_partial(save_path)
+            download_file_from_url.last_error = last_error
             return False
+
+    # All retries exhausted — never leave a partial/corrupt file on disk.
+    _remove_partial(save_path)
     logging.error(f"Download failed after {retries} attempts: {last_error}")
     # Stash the last error on the function so callers can surface a useful message
     download_file_from_url.last_error = last_error
     return False
+
+# Always-available baseline so callers can read .last_error without a guard,
+# even before the first download attempt has run.
+download_file_from_url.last_error = None
 
 def download_and_extract_zip(url, extract_to_dir, progress_callback, contains_single_folder=True):
     """
@@ -318,10 +406,16 @@ def download_and_extract_zip(url, extract_to_dir, progress_callback, contains_si
         logging.info("Extraction complete.")
     except (zipfile.BadZipFile, IOError) as e:
         logging.error(f"Failed to extract: {e}")
+        import shutil
+        temp_extract_dir = os.path.join(extract_to_dir, "temp_extract")
+        shutil.rmtree(temp_extract_dir, ignore_errors=True)
         return False
     finally:
         if os.path.exists(zip_path):
-            os.remove(zip_path)
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
             
     return True
 

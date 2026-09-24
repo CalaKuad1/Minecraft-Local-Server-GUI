@@ -2,7 +2,10 @@ import requests
 import os
 import logging
 import json
+import time
 from typing import List, Dict, Optional
+
+from .api_client import download_file_from_url
 
 
 class ModsManager:
@@ -78,6 +81,12 @@ class ModsManager:
                 "game_versions": f'["{version}"]' if version else None,
             }
 
+            # 'any'/'all' are UI-sentinel values, not real Modrinth loaders —
+            # omit the filter so every published artifact (and its exact
+            # filename) is returned instead of an empty list.
+            if loader and loader.lower() in ("any", "all"):
+                del params["loaders"]
+
             # Remove None values
             params = {k: v for k, v in params.items() if v}
 
@@ -92,6 +101,46 @@ class ModsManager:
         except Exception as e:
             logging.error(f"Error fetching mod versions for {slug}: {e}")
             return []
+
+    # Small in-process cache so "is this project installed?" resolution (one
+    # request per search on the client) doesn't re-hit Modrinth on every query.
+    PROJECT_FILES_CACHE = {}
+    PROJECT_FILES_TTL = 6 * 3600  # seconds
+
+    def get_project_files(self, slug: str) -> List[str]:
+        """
+        Return every filename this project has published on Modrinth
+        (unfiltered by loader/game-version), lowercased and de-duplicated.
+
+        Used to resolve installed jars back to their Modrinth project: the
+        on-disk artifact is compared against these real published filenames.
+        """
+        slug = (slug or "").strip().lower()
+        if not slug:
+            return []
+        now = time.time()
+        hit = self.PROJECT_FILES_CACHE.get(slug)
+        if hit and hit[0] > now:
+            return hit[1]
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/project/{slug}/version",
+                headers=self.headers,
+                timeout=15,
+            )
+            response.raise_for_status()
+            names = sorted(
+                {
+                    f["filename"].lower()
+                    for v in response.json()
+                    for f in v.get("files", [])
+                }
+            )
+        except Exception as e:
+            logging.error(f"Error fetching project files for {slug}: {e}")
+            return []
+        self.PROJECT_FILES_CACHE[slug] = (now + self.PROJECT_FILES_TTL, names)
+        return names
 
     def install_mod(
         self, version_id: str, server_path: str, progress_callback=None
@@ -132,15 +181,25 @@ class ModsManager:
 
             file_path = os.path.join(mods_dir, filename)
 
-            # Download
+            # Download through the shared pipeline so mod installs get the same
+            # retry-on-transient-errors, size verification and partial-file
+            # cleanup as server JAR downloads.
             if progress_callback:
                 progress_callback(10, f"Downloading {filename}...")
             logging.info(f"Downloading mod: {url} -> {file_path}")
-            with requests.get(url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(file_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+
+            def dl_progress(p):
+                if progress_callback:
+                    progress_callback(10 + p * 0.8, f"Downloading {filename}...")
+
+            if not download_file_from_url(url, file_path, dl_progress):
+                reason = getattr(
+                    download_file_from_url, "last_error", None
+                ) or "Unknown error"
+                return {
+                    "success": False,
+                    "error": f"Failed to download {filename}: {reason}",
+                }
 
             if progress_callback:
                 progress_callback(100, "Installed!")
@@ -156,21 +215,44 @@ class ModsManager:
         import zipfile
         import shutil
 
+        temp_dir = os.path.join(server_path, "temp_modpack")
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        os.makedirs(temp_dir)
+
+        mrpack_path = os.path.join(temp_dir, filename)
+
+        # Files created by this install, so a failed install can roll them back
+        # instead of leaving a half-installed modpack behind. Files that already
+        # existed before the install are never deleted on rollback.
+        installed_files = []
+
+        def cleanup_partial():
+            for path, pre_existing in reversed(installed_files):
+                if pre_existing:
+                    continue
+                try:
+                    if path and os.path.isfile(path) and os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    pass
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
         try:
-            # 1. Download .mrpack
-            temp_dir = os.path.join(server_path, "temp_modpack")
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-            os.makedirs(temp_dir)
-
-            mrpack_path = os.path.join(temp_dir, filename)
-
+            # 1. Download .mrpack through the shared pipeline (retries,
+            #    size verification, partial cleanup).
             logging.info(f"Downloading modpack: {url}")
-            with requests.get(url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(mrpack_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+            if progress_callback:
+                progress_callback(10, "Downloading modpack...")
+            if not download_file_from_url(url, mrpack_path, None):
+                reason = getattr(
+                    download_file_from_url, "last_error", None
+                ) or "Unknown error"
+                cleanup_partial()
+                return {
+                    "success": False,
+                    "error": f"Failed to download modpack: {reason}",
+                }
 
             # 2. Extract
             if progress_callback:
@@ -181,6 +263,7 @@ class ModsManager:
             # 3. Read index
             index_path = os.path.join(temp_dir, "modrinth.index.json")
             if not os.path.exists(index_path):
+                cleanup_partial()
                 return {
                     "success": False,
                     "error": "Invalid modpack: modrinth.index.json missing",
@@ -194,12 +277,30 @@ class ModsManager:
             logging.info(f"Found {total_files} mods in modpack.")
 
             # 4. Download dependencies
-            mods_dir = os.path.join(server_path, "mods")  # Default base
+            mods_dir = os.path.join(server_path, "mods")
             # Note: files in modpack might go to other folders, but usually mods/
 
             # Ensure we start with a clean state?
             # Ideally yes for modpacks, but maybe user wants to keep some.
             # For now, let's just add/overwrite.
+
+            real_server = os.path.realpath(server_path)
+            failed_files = []
+
+            def _safe_target(rel_path):
+                """Resolves a modpack index path inside the server folder.
+
+                Guards against path traversal (e.g. "../../etc/...") from a
+                tampered or malicious index so a download can never escape the
+                server directory.
+                """
+                target = os.path.join(server_path, rel_path)
+                real_target = os.path.realpath(target)
+                if real_target != real_server and not real_target.startswith(
+                    real_server + os.sep
+                ):
+                    return None
+                return target
 
             for i, file_info in enumerate(files_to_download):
                 rel_path = file_info.get("path")
@@ -209,29 +310,38 @@ class ModsManager:
                     continue
 
                 # Report progress
-                pct = 20 + int((i / total_files) * 60)  # 20% to 80%
+                pct = 20 + int((i / total_files) * 60) if total_files else 20
                 if progress_callback:
                     name = rel_path.split("/")[-1]
                     progress_callback(pct, f"Installing: {name}")
 
-                target_path = os.path.join(server_path, rel_path)
+                target_path = _safe_target(rel_path)
+                if target_path is None:
+                    logging.error(f"Skipping unsafe modpack path: {rel_path}")
+                    failed_files.append(rel_path)
+                    continue
+
                 target_dir = os.path.dirname(target_path)
                 if not os.path.exists(target_dir):
                     os.makedirs(target_dir)
 
-                # Download first valid url
-                dl_url = download_urls[0]
-
-                try:
-                    with requests.get(dl_url, stream=True, timeout=30) as r:
-                        r.raise_for_status()
-                        with open(target_path, "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
-                except Exception as dl_err:
-                    logging.error(f"Failed to download dependency {rel_path}: {dl_err}")
-                    # Continue best effort? Or fail? Modpacks usually need all.
-                    # Let's log and continue to try getting most.
+                # Try every mirror Modrinth provides; a file only counts as
+                # failed once all of its download URLs have been exhausted.
+                downloaded = False
+                pre_existing = os.path.exists(target_path)
+                for dl_url in download_urls:
+                    if download_file_from_url(dl_url, target_path, None):
+                        installed_files.append((target_path, pre_existing))
+                        downloaded = True
+                        break
+                if not downloaded:
+                    reason = getattr(
+                        download_file_from_url, "last_error", None
+                    ) or "Unknown error"
+                    logging.error(
+                        f"Failed to download dependency {rel_path}: {reason}"
+                    )
+                    failed_files.append(rel_path)
 
             # 5. Handle Overrides
             if progress_callback:
@@ -249,12 +359,30 @@ class ModsManager:
                         src_file = os.path.join(root, f)
                         dst_file = os.path.join(target_root, f)
                         try:
+                            pre_existing = os.path.exists(dst_file)
                             shutil.copy2(src_file, dst_file)
+                            installed_files.append((dst_file, pre_existing))
                         except Exception as copy_err:
                             logging.error(f"Failed to copy override {f}: {copy_err}")
+                            failed_files.append(os.path.join(rel_root, f))
 
-            # Cleanup
-            shutil.rmtree(temp_dir)
+            # 6. A modpack with missing files is broken — roll back instead of
+            #    quietly reporting success (previously failures were swallowed).
+            if failed_files:
+                shown = ", ".join(failed_files[:5])
+                suffix = "..." if len(failed_files) > 5 else ""
+                cleanup_partial()
+                return {
+                    "success": False,
+                    "error": (
+                        f"Modpack installation failed: {len(failed_files)} file(s) "
+                        f"could not be downloaded ({shown}{suffix}). "
+                        f"The server was left unmodified."
+                    ),
+                }
+
+            # Success — remove the temp working directory only.
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
             if progress_callback:
                 progress_callback(100, "Modpack installed successfully!")
@@ -265,6 +393,7 @@ class ModsManager:
 
         except Exception as e:
             logging.error(f"Modpack installation failed: {e}")
+            cleanup_partial()
             return {"success": False, "error": str(e)}
 
     def get_installed_mods(self, server_path: str) -> List[Dict]:
@@ -291,8 +420,13 @@ class ModsManager:
 
     def delete_mod(self, filename: str, server_path: str) -> bool:
         try:
+            # Sanitize: reject anything that isn't a plain file name so a
+            # crafted request cannot escape the mods folder.
+            filename = os.path.basename(filename or "")
+            if not filename:
+                return False
             path = os.path.join(server_path, "mods", filename)
-            if os.path.exists(path):
+            if os.path.exists(path) and os.path.isfile(path):
                 os.remove(path)
                 return True
             return False

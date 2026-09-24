@@ -158,6 +158,7 @@
         "import": "Importer",
         "upload": "Téléverser",
         "uploading": "Téléversement...",
+        "downloading": "Téléchargement...",
         "folder": "Dossier",
         "install": "Installer",
         "installed": "Installés",

@@ -748,6 +748,7 @@ class SelectServerRequest(BaseModel):
 
 class ModInstallRequest(BaseModel):
     version_id: str
+    slug: Optional[str] = None
 
 
 class ModDeleteRequest(BaseModel):
@@ -3686,6 +3687,17 @@ def get_installed_mods():
     return state.mods_manager.get_installed_mods(state.server_handler.server_path)
 
 
+@app.get("/mods/project-files")
+def get_project_files(slugs: str = ""):
+    # Resolve "which projects are already installed" — returns the full list of
+    # filenames each project has published on Modrinth so the client can match
+    # against on-disk jars. Cached server-side (6h) to protect Modrinth.
+    if not state:
+        return {}
+    clean = [s.strip().lower() for s in slugs.split(",") if s.strip()][:50]
+    return {s: state.mods_manager.get_project_files(s) for s in clean}
+
+
 @app.post("/mods/install")
 def install_mod(req: ModInstallRequest):
     if not state or not state.server_handler:
@@ -3695,9 +3707,10 @@ def install_mod(req: ModInstallRequest):
         try:
 
             def progress(pct, msg):
-                state.broadcast_log_sync(
-                    {"type": "progress", "value": pct, "message": msg}
-                )
+                payload = {"type": "progress", "value": pct, "message": msg}
+                if req.slug:
+                    payload["slug"] = req.slug
+                state.broadcast_log_sync(payload)
 
             result = state.mods_manager.install_mod(
                 req.version_id,
@@ -3711,19 +3724,33 @@ def install_mod(req: ModInstallRequest):
                     "success",
                 )
                 state.broadcast_log_sync(
-                    {"type": "mod_install_complete", "success": True}
+                    {
+                        "type": "mod_install_complete",
+                        "success": True,
+                        **({"slug": req.slug} if req.slug else {}),
+                    }
                 )
             else:
                 state.broadcast_log_sync(
                     f"Installation failed: {result.get('error')}", "error"
                 )
                 state.broadcast_log_sync(
-                    {"type": "mod_install_complete", "success": False}
+                    {
+                        "type": "mod_install_complete",
+                        "success": False,
+                        **({"slug": req.slug} if req.slug else {}),
+                    }
                 )
 
         except Exception as e:
             state.broadcast_log_sync(f"Installation crashed: {e}", "error")
-            state.broadcast_log_sync({"type": "mod_install_complete", "success": False})
+            state.broadcast_log_sync(
+                {
+                    "type": "mod_install_complete",
+                    "success": False,
+                    **({"slug": req.slug} if req.slug else {}),
+                }
+            )
 
     # Start in background
     threading.Thread(target=run_mod_install, daemon=True).start()
@@ -3765,11 +3792,16 @@ async def import_mod(file: UploadFile = File(...)):
     mods_path = os.path.join(state.server_handler.server_path, "mods")
     if not os.path.exists(mods_path):
         os.makedirs(mods_path)
-    dest = os.path.join(mods_path, file.filename)
+    # Sanitize: a crafted upload name could otherwise contain path separators
+    # and escape the mods folder.
+    filename = os.path.basename(file.filename or "")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    dest = os.path.join(mods_path, filename)
     with open(dest, "wb") as f:
         f.write(await file.read())
-    state.broadcast_log_sync(f"📦 Mod imported: {file.filename}", "info")
-    return {"status": "imported", "filename": file.filename}
+    state.broadcast_log_sync(f"📦 Mod imported: {filename}", "info")
+    return {"status": "imported", "filename": filename}
 
 
 @app.post("/system/shutdown")
@@ -3987,13 +4019,18 @@ async def upload_plugin(file: UploadFile = File(...)):
     if not os.path.exists(plugins_dir):
         os.makedirs(plugins_dir)
 
-    file_path = os.path.join(plugins_dir, file.filename)
+    # Sanitize: a crafted upload name could otherwise contain path separators
+    # and escape the plugins folder.
+    filename = os.path.basename(file.filename or "")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    file_path = os.path.join(plugins_dir, filename)
 
     try:
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
-        return {"status": "success", "filename": file.filename}
+        return {"status": "success", "filename": filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -4004,6 +4041,7 @@ def delete_plugin(filename: str):
         raise HTTPException(status_code=400, detail="No server selected")
 
     plugins_dir = os.path.join(state.server_handler.server_path, "plugins")
+    filename = os.path.basename(filename)
     file_path = os.path.join(plugins_dir, filename)
 
     if os.path.exists(file_path):
@@ -4054,6 +4092,7 @@ def get_plugin_versions(slug: str, version: str = None):
 
 class PluginInstallRequest(BaseModel):
     version_id: str
+    slug: Optional[str] = None
 
 
 @app.post("/plugins/install")
@@ -4065,9 +4104,10 @@ def install_plugin(req: PluginInstallRequest):
         try:
 
             def progress(pct, msg):
-                state.broadcast_log_sync(
-                    {"type": "progress", "value": pct, "message": msg}
-                )
+                payload = {"type": "progress", "value": pct, "message": msg}
+                if req.slug:
+                    payload["slug"] = req.slug
+                state.broadcast_log_sync(payload)
 
             # Get version info
             response = requests.get(
@@ -4081,6 +4121,15 @@ def install_plugin(req: PluginInstallRequest):
             files = version_data.get("files", [])
             if not files:
                 state.broadcast_log_sync("No files found for plugin", "error")
+                # Always resolve an in-flight install so the UI never gets
+                # stuck showing an indefinite progress bar.
+                state.broadcast_log_sync(
+                    {
+                        "type": "plugin_install_complete",
+                        "success": False,
+                        **({"slug": req.slug} if req.slug else {}),
+                    }
+                )
                 return
 
             primary_file = next((f for f in files if f.get("primary")), files[0])
@@ -4095,11 +4144,28 @@ def install_plugin(req: PluginInstallRequest):
 
             progress(10, f"Downloading {filename}...")
 
-            with requests.get(url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(file_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+            # Use the shared download pipeline (retry on transient errors, size
+            # verification, partial-file cleanup) so a truncated plugin download
+            # can never be reported as installed.
+            def dl_progress(p):
+                progress(10 + p * 0.8, f"Downloading {filename}...")
+
+            if not download_file_from_url(url, file_path, dl_progress):
+                reason = getattr(
+                    download_file_from_url, "last_error", None
+                ) or "Unknown error"
+                state.broadcast_log_sync(
+                    f"Plugin install error: failed to download {filename}: {reason}",
+                    "error",
+                )
+                state.broadcast_log_sync(
+                    {
+                        "type": "plugin_install_complete",
+                        "success": False,
+                        **({"slug": req.slug} if req.slug else {}),
+                    }
+                )
+                return
 
             progress(100, "Installed!")
             state.broadcast_log_sync(f"Plugin installed: {filename}", "success")
@@ -4108,13 +4174,18 @@ def install_plugin(req: PluginInstallRequest):
                     "type": "plugin_install_complete",
                     "success": True,
                     "filename": filename,
+                    **({"slug": req.slug} if req.slug else {}),
                 }
             )
 
         except Exception as e:
             state.broadcast_log_sync(f"Plugin install error: {e}", "error")
             state.broadcast_log_sync(
-                {"type": "plugin_install_complete", "success": False}
+                {
+                    "type": "plugin_install_complete",
+                    "success": False,
+                    **({"slug": req.slug} if req.slug else {}),
+                }
             )
 
     threading.Thread(target=run_plugin_install, daemon=True).start()

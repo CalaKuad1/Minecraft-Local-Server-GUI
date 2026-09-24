@@ -90,11 +90,44 @@ export default function ServerSelector({ onSelect, onAdd }) {
     const dialog = useDialog();
 
     useEffect(() => {
-        loadServers();
-        const interval = setInterval(loadServers, 5000);
-        return () => clearInterval(interval);
+        let cancelled = false;
+        let timer;
+        let attempts = 0;
+
+        const load = async () => {
+            try {
+                const list = await api.getServers();
+                if (cancelled) return;
+                setServers(list);
+                setLoadError(null);
+                attempts = 0;
+                // Backend is up: relax to a slow keep-alive poll.
+                timer = setTimeout(load, 5000);
+            } catch (err) {
+                if (cancelled) return;
+                console.error("Failed to load servers", err);
+                attempts += 1;
+                // Don't slap the user with an error while the backend is still
+                // starting (Electron boots it alongside the UI) — keep retrying
+                // silently and fast until it settles, then back off.
+                timer = setTimeout(load, Math.min(1000 + attempts * 700, 5000));
+                if (attempts > 8) {
+                    setLoadError(err?.message || 'Failed to load servers');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        load();
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
     }, []);
 
+    // Explicit refresh used by actions (boot/delete/add) and the manual Retry
+    // button. The boot-time polling above runs independently.
     const loadServers = async () => {
         try {
             setServers(await api.getServers());
