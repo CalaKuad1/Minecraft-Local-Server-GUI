@@ -28,7 +28,15 @@
 
 ---
 
-## What's New in v1.3.1
+## What's New in v1.3.2
+
+### Linux
+- **AppImage fixed on older distros** — the bundled Python backend crashed on startup with `GLIBC_2.38 not found`. Linux builds now target Ubuntu 22.04 (glibc 2.35), so the AppImage runs on all supported Ubuntu LTS releases and equivalents.
+
+---
+
+<details>
+<summary><strong>What's New in v1.3.1 (previous)</strong></summary>
 
 ### Mods & Plugins
 - **Accurate "Installed" badges** — projects whose jar name differs from their slug (e.g. Simple Voice Chat → `voicechat-*.jar`) are now detected correctly on the Mods and Plugins pages.
@@ -46,6 +54,8 @@
 - **Setup Wizard** — defaults to `~/MinecraftServers` (fixes a literal `C:` folder being created on Linux/macOS).
 
 <sub>Thanks to [@awtawsif](https://github.com/awtawsif) for PRs #19 and #20.</sub>
+
+</details>
 
 ---
 
