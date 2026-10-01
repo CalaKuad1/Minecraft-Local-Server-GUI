@@ -41,9 +41,9 @@ export function Select({ value, onChange, options = [], placeholder = "Select op
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
-                className={`w-full h-full flex items-center justify-between bg-transparent border ${isOpen ? 'border-white/30' : 'border-white/10'} hover:border-white/20 rounded-inherit px-4 text-xs font-medium text-white transition-all outline-none disabled:opacity-50 shadow-sm`}
+                className={`w-full h-full flex items-center justify-between bg-transparent border ${isOpen ? 'border-white/30' : 'border-white/10'} hover:border-white/20 rounded-inherit px-3 text-sm font-medium text-white transition-all outline-none disabled:opacity-50 shadow-sm`}
             >
-                <span className="truncate tracking-widest uppercase">{selectedLabel}</span>
+                <span className="truncate">{selectedLabel}</span>
                 <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -63,7 +63,7 @@ export function Select({ value, onChange, options = [], placeholder = "Select op
                                     onChange(option.value);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full text-left px-3 py-2 rounded-sm flex items-center justify-between text-xs tracking-widest uppercase transition-all ${value === option.value ? 'bg-emerald-500/10 text-emerald-400 font-bold border-l-2 border-emerald-500' : 'text-ink-faint hover:bg-white/5 hover:text-zinc-300'}`}
+                                className={`w-full text-left px-3 py-2 rounded-sm flex items-center justify-between text-sm transition-all ${value === option.value ? 'bg-emerald-500/10 text-emerald-400 font-bold border-l-2 border-emerald-500' : 'text-ink-faint hover:bg-white/5 hover:text-zinc-300'}`}
                             >
                                 <span className="truncate">{option.label}</span>
                                 {value === option.value && <Check size={12} className="text-emerald-500" />}

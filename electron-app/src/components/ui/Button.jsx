@@ -2,7 +2,9 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 
 // Buttons carry the bevel (see tailwind.config.js): light edge on top, shade below,
-// and they sink 1px when pressed. Labels are sentence case and 14px or larger.
+// and they sink 1px when pressed. Labels are sentence case Inter semibold, 14px or
+// larger: the pixel font is too ambiguous below ~24px (see index.css) and is kept
+// for titles and navigation.
 const VARIANTS = {
     primary: 'bg-grass text-black shadow-bevel hover:brightness-110 active:shadow-bevel-press',
     secondary: 'bg-raised text-ink shadow-bevel-panel hover:bg-[#2a2a31] active:shadow-bevel-press',
@@ -28,7 +30,7 @@ export const Button = React.forwardRef(function Button(
             disabled={isDisabled}
             aria-busy={loading || undefined}
             className={cn(
-                'inline-flex items-center justify-center rounded-sm font-minecraft font-semibold tracking-wide select-none',
+                'inline-flex items-center justify-center rounded-sm font-sans font-semibold select-none',
                 'transition-[filter,background-color,transform] duration-100 active:translate-y-px',
                 'disabled:opacity-45 disabled:pointer-events-none',
                 VARIANTS[variant],

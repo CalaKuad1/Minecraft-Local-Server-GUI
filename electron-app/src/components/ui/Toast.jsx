@@ -65,7 +65,7 @@ export function ToastProvider({ children }) {
                                 <span className={cn('absolute inset-y-0 left-0 w-1', tone.edge)} aria-hidden="true" />
                                 <Icon size={18} className={cn('mt-0.5 shrink-0', tone.color)} aria-hidden="true" />
                                 <div className="min-w-0 flex-1 text-sm leading-snug">
-                                    {x.title && <div className="font-minecraft font-semibold text-ink">{x.title}</div>}
+                                    {x.title && <div className="font-semibold text-ink">{x.title}</div>}
                                     <div className="break-words text-ink-dim">{x.message}</div>
                                 </div>
                                 <IconButton label={t('common.close')} icon={X} size={14} onClick={() => dismiss(x.id)} />

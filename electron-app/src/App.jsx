@@ -54,7 +54,7 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
         {menuItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all duration-200 group border-l-2 ${isActive ? 'bg-white/10 border-emerald-400 shadow-sm' : 'border-transparent text-gray-400 hover:bg-white/5 hover:border-white/20'}`}>
+            <button key={item.id} onClick={() => setActiveTab(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all duration-200 group border-l-2 ${isActive ? 'bg-white/10 border-emerald-400 shadow-sm' : 'border-transparent text-gray-400 hover:bg-white/5 hover:border-white/20'}`}>
               <item.Icon size={18} className={`${isActive ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'text-ink-faint group-hover:text-white transition-colors duration-200'}`} />
               <span className={`font-minecraft text-lg tracking-wider mt-0.5 uppercase ${isActive ? 'text-white' : 'text-ink-faint group-hover:text-white transition-colors duration-200'}`}>{item.label}</span>
               {isActive && (
@@ -79,10 +79,11 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
             onClick={onOpenAppSettings} 
             className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white"
             title={t('settings.title')}
+            aria-label={t('settings.title')}
           >
             <SettingsIcon size={16} />
           </button>
-          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white" title="View on GitHub"><Github size={16} /></a>
+          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white" title="View on GitHub" aria-label="View on GitHub"><Github size={16} /></a>
         </div>
       </div>
     </div>

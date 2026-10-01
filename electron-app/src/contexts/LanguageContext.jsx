@@ -35,6 +35,11 @@ export const LanguageProvider = ({ children }) => {
         }).catch(err => console.error("[i18n] Failed to load initial settings", err));
     }, []);
 
+    // Screen readers pick pronunciation from <html lang>; keep it in step with the UI language.
+    useEffect(() => {
+        document.documentElement.lang = locale;
+    }, [locale]);
+
     const t = (key) => {
         if (!key) return '';
         const keys = key.split('.');

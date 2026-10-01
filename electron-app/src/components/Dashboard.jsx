@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe, Zap } from './ui/PixelIcons';
+import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe, Zap, Copy, Pencil, Check, Settings as SettingsIcon } from './ui/PixelIcons';
 import { AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { api } from '../api';
 import { Select } from './ui/Select';
 import { Modal } from './ui/Modal';
-import { Button } from './ui/Button';
+import { Button, IconButton } from './ui/Button';
+import { Badge } from './ui/Badge';
+import { useToast } from './ui/toastContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useDialog } from './ui/DialogContext';
@@ -124,6 +126,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
     const dialog = useDialog();
+    const toast = useToast();
 
     // Local state for immediate UI feedback
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
@@ -524,7 +527,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             setShowShutdownModal(false);
             if (onRefresh) onRefresh();
         } catch (error) {
-            dialog.alert("Failed to schedule shutdown: " + error.message, { title: 'Error', variant: 'destructive' });
+            toast.error(error.message, { title: t('dashboard.tunnel.shutdown_fail') });
         }
     };
 
@@ -533,7 +536,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             await api.cancelStop();
             if (onRefresh) onRefresh();
         } catch (error) {
-            dialog.alert("Failed to cancel shutdown: " + error.message, { title: 'Error', variant: 'destructive' });
+            toast.error(error.message, { title: t('dashboard.tunnel.shutdown_cancel_fail') });
         }
     };
 
@@ -543,10 +546,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 {/* Header & Controls */}
                 <div className="flex items-center justify-between px-6 py-5 bg-[#18181b]/60 border border-white/5 shadow-sm relative overflow-hidden backdrop-blur-2xl rounded-sm">
                     <div className="relative z-10 flex items-center gap-4">
-                        <div className={`w-2 h-2 rounded-sm ${isOnline ? 'bg-primary shadow-[0_0_10px_rgba(16,185,129,0.4)]' : (isStarting || isStopping) ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-600'}`}></div>
+                        <div className={`w-3 h-3 rounded-sm ${isOnline ? 'bg-grass' : (isStarting || isStopping) ? 'bg-gold animate-pulse' : 'bg-ink-faint'}`} aria-hidden="true"></div>
                         <div>
                             <div className="flex items-center gap-2 mb-0.5">
-                                <span className={`text-[10px] font-bold tracking-widest uppercase ${isOnline ? 'text-primary' : (isStarting || isStopping) ? 'text-yellow-500' : 'text-ink-faint'}`}>
+                                <span className={`text-sm font-semibold ${isOnline ? 'text-grass-lit' : (isStarting || isStopping) ? 'text-gold' : 'text-ink-dim'}`}>
                                     {isStopping ? t('status.stopping') : t(`status.${localStatus}`)}
                                 </span>
                                 <button
@@ -562,60 +565,55 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                         setTogglingMode(false);
                                     }}
                                     disabled={isOnline || togglingMode}
-                                    title={onlineMode ? 'Requires premium Minecraft account' : 'Allows cracked/non-premium accounts'}
-                                    className={`text-[9px] px-2 py-0.5 rounded-sm border uppercase tracking-wider transition-all font-medium ${
-                                        onlineMode ? 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/[0.07]' : 'bg-white/[0.03] border-white/5 text-ink-faint hover:bg-white/[0.06] hover:border-white/10'
-                                    } ${isOnline ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    title={onlineMode ? t('dashboard.premium_hint') : t('dashboard.no_premium_hint')}
+                                    className={`text-xs px-2 py-0.5 rounded-sm border font-semibold transition-colors ${
+                                        onlineMode ? 'bg-white/5 border-white/10 text-ink-dim hover:bg-white/10' : 'bg-gold/10 border-gold/30 text-gold hover:bg-gold/15'
+                                    } ${isOnline ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
-                                    {togglingMode ? '...' : onlineMode ? 'Premium' : 'No Premium'}
+                                    {togglingMode ? '…' : onlineMode ? t('dashboard.premium') : t('dashboard.no_premium')}
                                 </button>
                             </div>
                             <h2 className="text-2xl font-minecraft text-white tracking-wide">
                                 Minecraft Server
                             </h2>
-                            <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-bold tracking-widest">
-                                {status.server_type ? `${status.server_type} | ${status.version || status.minecraft_version || ''}` : t('status.not_configured')}
+                            <p className="mt-0.5 text-sm capitalize text-ink-dim">
+                                {status.server_type ? `${status.server_type} ${status.version || status.minecraft_version || ''}` : t('status.not_configured')}
                             </p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3 relative z-10">
                         {!isOnline && !isStarting && !isStopping && (
-                            <button
-                                onClick={handleStart}
-                                disabled={loading}
-                                className="px-5 py-2.5 bg-white text-black hover:bg-zinc-200 border border-transparent rounded-sm font-minecraft tracking-wider text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group uppercase font-bold"
-                            >
-                                <Play size={16} fill="currentColor" /> {t('dashboard.start')}
-                            </button>
+                            <Button variant="primary" size="lg" icon={Play} onClick={handleStart} loading={loading}>
+                                {t('dashboard.start')}
+                            </Button>
                         )}
 
                         {(isOnline || isStarting || isStopping) && (
-                            <button
+                            <Button
+                                variant={isStopping ? 'danger' : 'secondary'}
+                                size="lg"
+                                icon={Square}
                                 onClick={handleStop}
                                 disabled={loading || (!isOnline && !isStarting && !isStopping)}
-                                className={`px-5 py-2.5 rounded-sm font-minecraft tracking-wider text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 border uppercase
-                                    ${isStopping
-                                        ? 'bg-red-500/10 border-red-500/50 text-red-500 animate-pulse'
-                                        : 'bg-transparent border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white hover:border-white/30'
-                                    }`}
+                                className={isStopping ? 'animate-pulse' : undefined}
                             >
-                                <Square size={16} fill="currentColor" /> {isStopping ? 'Force Kill' : t('dashboard.stop')}
-                            </button>
+                                {isStopping ? t('dashboard.force_kill') : t('dashboard.stop')}
+                            </Button>
                         )}
                         
                         {/* Scheduled Shutdown Button/Badge */}
                         {isOnline && (
                             <div className="relative">
-                                <button
+                                <IconButton
+                                    label={t('dashboard.shutdown_timer.title')}
+                                    icon={Clock}
+                                    tone={shutdownInfo.scheduled ? 'active' : 'default'}
                                     onClick={() => setShowShutdownModal(true)}
-                                    className={`h-10 w-10 flex items-center justify-center rounded-sm bg-transparent border hover:bg-white/10 transition-colors ${shutdownInfo.scheduled ? 'border-orange-500/50 text-orange-400' : 'border-white/10 text-ink-faint hover:text-white'}`}
-                                    title="Schedule Shutdown"
-                                >
-                                    <Clock size={16} className={shutdownInfo.scheduled ? 'animate-pulse' : ''} />
-                                </button>
+                                    className={`h-10 w-10 border ${shutdownInfo.scheduled ? 'border-gold/50 text-gold' : 'border-white/10'}`}
+                                />
                                 {shutdownInfo.scheduled && (
-                                    <div className="absolute -top-2 -right-2 bg-orange-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-sm border border-black shadow-sm pointer-events-none">
+                                    <div className="absolute -top-2 -right-2 bg-gold text-black text-xs font-bold px-1.5 py-0.5 rounded-sm border border-black shadow-sm pointer-events-none">
                                         {Math.ceil(shutdownInfo.remaining_seconds / 60)}m
                                     </div>
                                 )}
@@ -633,15 +631,17 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     console.error("Failed to toggle auto-restart", err);
                                 }
                             }}
-                            className={`h-10 px-3 flex items-center gap-2 rounded-sm border text-[10px] font-bold uppercase tracking-widest transition-all ${
+                            role="switch"
+                            aria-checked={autoRestart}
+                            title={t('dashboard.auto_restart')}
+                            className={`h-10 px-3 flex items-center gap-2 rounded-sm border text-sm font-semibold transition-colors ${
                                 autoRestart
-                                    ? 'bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20'
-                                    : 'border-white/10 text-ink-faint hover:text-white hover:bg-white/5'
+                                    ? 'bg-grass/10 border-grass/40 text-grass-lit hover:bg-grass/20'
+                                    : 'border-white/10 text-ink-dim hover:text-white hover:bg-white/5'
                             }`}
-                            title={autoRestart ? 'Auto-restart on crash: ON' : 'Auto-restart on crash: OFF'}
                         >
-                            <div className={`w-2 h-2 rounded-full ${autoRestart ? 'bg-green-500 animate-pulse' : 'bg-zinc-600'}`} />
-                            Auto
+                            <div className={`h-2 w-2 rounded-sm ${autoRestart ? 'bg-grass' : 'bg-ink-faint'}`} aria-hidden="true" />
+                            {t('dashboard.auto')}
                         </button>
                     </div>
                 </div>
@@ -687,11 +687,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                            <div className="text-[10px] font-bold text-ink-faint uppercase tracking-widest">
-                                {tunnelAddress ? 'Public Server' : (dnsAddress ? 'Fixed Address' : 'Local Host')}
+                            <div className="text-sm text-ink-dim">
+                                {tunnelAddress ? t('dashboard.tunnel.public_server') : (dnsAddress ? t('dashboard.tunnel.fixed_address') : t('dashboard.tunnel.local_address'))}
                             </div>
-                            {tunnelAddress && dnsAddress && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">ONLINE</span>}
-                            {!tunnelAddress && dnsAddress && <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-ink-faint rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">OFFLINE</span>}
+                            {tunnelAddress && dnsAddress && <Badge tone="grass" dot>{t('status.online')}</Badge>}
+                            {!tunnelAddress && dnsAddress && <Badge>{t('status.offline')}</Badge>}
                         </div>
                         {dnsEditing ? (
                             <form onSubmit={async (e) => {
@@ -717,49 +717,48 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 }
                             }} className="mb-1">
                                 <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
-                                    <input name="sd" defaultValue={dnsSubdomain} placeholder="your-server-name" className="w-44 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-ink-faint outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
+                                    <input name="sd" aria-label={t('dashboard.tunnel.edit_subdomain')} defaultValue={dnsSubdomain} placeholder="your-server-name" className="w-44 bg-ground border border-grass/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-grass-lit placeholder-ink-faint outline-none focus:border-grass" autoFocus />
                                     <span className="text-xs font-mono text-ink-faint">.play.ariser.app</span>
-                                    <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors">✓</button>
-                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 transition-colors">✕</button>
+                                    <IconButton type="submit" label={t('common.save')} icon={Check} tone="active" />
+                                    <IconButton label={t('common.cancel')} icon={X} onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} />
                                 </div>
-                                {dnsAvailable && <div className="flex items-center gap-1.5 mt-1.5">
-                                    <span className="text-[10px] text-red-400">&quot;{dnsAvailable}&quot; taken — try:</span>
+                                {dnsAvailable && <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                    <span className="text-xs text-redstone">&quot;{dnsAvailable}&quot; {t('dashboard.tunnel.taken_try')}</span>
                                     {[dnsAvailable+'-mc', dnsAvailable+'-sv', 'my-'+dnsAvailable].map(s => (
-                                        <button key={s} type="button" onClick={() => { setDnsSubdomain(s); setDnsAvailable(null); }} className="text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors font-mono">{s}</button>
+                                        <button key={s} type="button" onClick={() => { setDnsSubdomain(s); setDnsAvailable(null); }} className="text-xs px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-ink-dim hover:text-white hover:border-white/20 transition-colors font-mono">{s}</button>
                                     ))}
                                 </div>}
                             </form>
                         ) : dnsAddress ? (
                             <div className="flex items-center gap-1.5 mb-1 group">
-                                <span className="text-sm font-mono font-bold text-emerald-400 select-all cursor-default">{dnsAddress}</span>
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded-sm border font-bold uppercase tracking-wider ${
-                                    dnsStatus === 'ok' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                        : dnsStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                                            : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                                }`} title="DNS verification status">
+                                <span className="text-sm font-mono font-bold text-grass-lit select-all cursor-default">{dnsAddress}</span>
+                                <Badge tone={dnsStatus === 'ok' ? 'grass' : dnsStatus === 'error' ? 'redstone' : 'gold'} title={t('dashboard.tunnel.dns_status')}>
                                     {dnsStatus === 'ok' ? 'DNS ✓' : dnsStatus === 'error' ? 'DNS ✗' : 'DNS …'}
-                                </span>
-                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Copy">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                </button>
-                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Edit subdomain">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                </button>
+                                </Badge>
+                                <IconButton
+                                    label={t('dashboard.tunnel.copy')}
+                                    icon={Copy}
+                                    size={14}
+                                    onClick={() => navigator.clipboard.writeText(dnsAddress).then(() => toast.success(t('dashboard.tunnel.copied'))).catch(() => {})}
+                                />
+                                <IconButton label={t('dashboard.tunnel.edit_subdomain')} icon={Pencil} size={14} onClick={() => setDnsEditing(true)} />
                             </div>
                         ) : null}
-                        {dnsAvailable && !dnsEditing && <div className="text-[10px] text-red-400 mb-1">&quot;{dnsAvailable}&quot; is already taken — pick another name</div>}
+                        {dnsAvailable && !dnsEditing && <div className="text-xs text-redstone mb-1">&quot;{dnsAvailable}&quot; {t('dashboard.tunnel.taken_pick')}</div>}
                         {dnsStatus === 'error' && tunnelAddress && (
-                            <div className="flex flex-wrap items-center gap-2 mb-1 text-[10px] text-orange-400">
-                                <span>DNS failed — connect directly:</span>
-                                <span className="font-mono select-all text-orange-300">{tunnelAddress}</span>
-                                <button onClick={() => navigator.clipboard.writeText(tunnelAddress)} className="underline hover:text-white">copy</button>
+                            <div className="flex flex-wrap items-center gap-2 mb-1 text-xs text-gold">
+                                <span>{t('dashboard.tunnel.dns_failed_direct')}</span>
+                                <span className="font-mono select-all text-gold">{tunnelAddress}</span>
+                                <button onClick={() => navigator.clipboard.writeText(tunnelAddress).then(() => toast.success(t('dashboard.tunnel.copied'))).catch(() => {})} className="underline hover:text-white">{t('dashboard.tunnel.copy')}</button>
                             </div>
                         )}
                         <div className="flex items-center gap-1.5 group">
                             {!dnsAddress ? <>
-                                <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-orange-400' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span>
-                                <button
+                                <span className={`text-sm font-mono font-bold leading-none select-all ${tunnelAddress ? 'text-gold' : 'text-white'}`}>{tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`}</span>
+                                <IconButton
+                                    label={t('dashboard.tunnel.copy_address')}
+                                    icon={Copy}
+                                    size={14}
                                     onClick={async () => {
                                         try {
                                             await navigator.clipboard.writeText(tunnelAddress || `${status.local_ip||'127.0.0.1'}:${status.port||'25565'}`);
@@ -767,109 +766,123 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                             setTimeout(() => setAddressCopied(false), 1500);
                                         } catch (e) { console.error('Copy failed', e); }
                                     }}
-                                    className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                                    title="Copy address"
-                                >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                </button>
-                                {addressCopied && <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 animate-in fade-in duration-200">Copied</span>}
+                                />
+                                <span role="status" className="text-xs font-semibold text-grass-lit">{addressCopied ? t('dashboard.tunnel.copied') : ''}</span>
                             </> : null}
                         </div>
-                        {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-ink-faint font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
+                        {(tunnelAddress||dnsAddress) && <div className="text-xs text-ink-faint font-mono mt-0.5">{t('dashboard.tunnel.local')} {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">{t('dashboard.tunnel.via')} {tunnelAddress}</span> : null}</div>}
                     </div>
 
-                    <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-ink-faint hover:text-white rounded-sm transition-colors" title="Open Server Directory"><FolderOpen size={16} /></button>
+                    <IconButton label={t('dashboard.open_folder')} icon={FolderOpen} size={18} onClick={handleOpenFolder} className="h-10 w-10" />
 
-                    <button onClick={async () => {
-                        try {
-                            if (tunnelAddress) {
-                                await api.stopTunnel();
-                                setTunnelAddress(null);
+                    <Button
+                        variant={tunnelAddress ? 'danger' : 'secondary'}
+                        icon={tunnelAddress ? Square : Globe}
+                        loading={tunnelConnecting && !tunnelAddress}
+                        onClick={async () => {
+                            try {
+                                if (tunnelAddress) {
+                                    await api.stopTunnel();
+                                    setTunnelAddress(null);
+                                    setTunnelConnecting(false);
+                                } else {
+                                    setTunnelConnecting(true);
+                                    if (tunnelProvider === 'pinggy') localStorage.setItem('preferredTunnelProvider', 'pinggy');
+                                    await api.startTunnel(tunnelRegion, tunnelProvider);
+                                }
+                            } catch (err) {
                                 setTunnelConnecting(false);
-                            } else {
-                                setTunnelConnecting(true);
-                                if (tunnelProvider === 'pinggy') localStorage.setItem('preferredTunnelProvider', 'pinggy');
-                                await api.startTunnel(tunnelRegion, tunnelProvider);
+                                toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.error_title') });
                             }
-                        } catch (err) {
-                            setTunnelConnecting(false);
-                            dialog.alert('Tunnel error: ' + (err.response?.data?.detail || err.message), { title: 'Tunnel Error', variant: 'destructive' });
-                        }
-                    }} disabled={tunnelConnecting && !tunnelAddress}
-                    className={`px-5 py-2.5 rounded-sm text-xs font-minecraft font-bold uppercase tracking-widest flex items-center gap-2 transition-all ${tunnelAddress ? 'bg-transparent border border-red-500/30 text-red-400 hover:bg-red-500/10' : tunnelConnecting ? 'bg-transparent border border-yellow-500/30 text-yellow-400' : 'bg-white text-black hover:bg-zinc-200'}`}
+                        }}
                     >
-                        {tunnelAddress ? <><Square size={14}/> Stop</> : tunnelConnecting ? <><div className="w-3.5 h-3.5 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin"/> Connecting</> : <><Globe size={14}/> Make Public</>}
-                    </button>
+                        {tunnelAddress ? t('dashboard.tunnel.stop') : tunnelConnecting ? t('dashboard.tunnel.connecting') : t('dashboard.tunnel.make_public')}
+                    </Button>
 
                     <div className="relative group">
-                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={`p-2 rounded-sm transition-all relative ${showAdvanced ? 'bg-white/10 text-white' : 'text-ink-faint hover:text-white hover:bg-white/5'}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                            {autoTunnel && <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></div>}
-                        </button>
-                        <div className="absolute bottom-full right-0 mb-2 w-72 p-4 bg-black/95 rounded-sm border border-white/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none transition-opacity shadow-2xl z-50">
-                            <div className="text-xs text-white font-minecraft tracking-widest uppercase mb-1">Make Public</div>
-                            <div className="text-[11px] text-zinc-400 leading-relaxed">
-                                Share your server worldwide. It gets a fixed address like <span className="text-emerald-400">survival.play.ariser.app</span> that never changes even when the tunnel IP rotates. DNS updates automatically.
-                            </div>
-                            <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-black/95 rotate-45 border-r border-b border-white/10"></div>
+                        <div className="relative">
+                            <IconButton
+                                label={t('dashboard.tunnel.options')}
+                                title={undefined}
+                                icon={SettingsIcon}
+                                size={18}
+                                tone={showAdvanced ? 'active' : 'default'}
+                                aria-expanded={showAdvanced}
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                className="h-10 w-10"
+                            />
+                            {autoTunnel && <div className="pointer-events-none absolute -top-0.5 -right-0.5 h-2 w-2 rounded-sm bg-grass" aria-hidden="true"></div>}
+                        </div>
+                        {/* Hover, or keyboard focus only: after a mouse click the button keeps focus and the tip would stay open over the header. */}
+                        <div role="tooltip" className="absolute bottom-full right-0 mb-2 w-72 p-4 bg-panel rounded-sm shadow-bevel-panel opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 pointer-events-none transition-opacity z-50">
+                            <div className="mb-1 text-base font-semibold text-ink">{t('dashboard.tunnel.make_public')}</div>
+                            <div className="text-sm leading-relaxed text-ink-dim">{t('dashboard.tunnel.about')}</div>
                         </div>
                     </div>
                 </div>
 
                 {showAdvanced && <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
-                    <span className="text-[10px] text-ink-faint uppercase tracking-wider font-bold">Provider</span>
-                        <div className="w-24 rounded-sm border border-white/10 bg-white/5">
+                    <span className="text-sm text-ink-dim">{t('dashboard.tunnel.provider')}</span>
+                        <div className="w-28 rounded-sm border border-white/10 bg-white/5">
                             <Select value={tunnelProvider} onChange={() => {}} options={[{ value: 'pinggy', label: 'Pinggy' }]} />
                         </div>
-                    {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-ink-faint uppercase tracking-wider font-bold">Region</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
+                    {tunnelProvider === 'pinggy' && <><span className="text-sm text-ink-dim">{t('dashboard.tunnel.region')}</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: t('dashboard.tunnel.region_asia') }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
-                    <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-ink-faint hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
-                    <span className="text-[10px] text-ink-faint font-bold" title="DNS records used / zone limit (Cloudflare Free = 200)">
+                    <button
+                        role="switch"
+                        aria-checked={autoTunnel}
+                        onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-sm font-semibold transition-colors ${autoTunnel ? 'bg-grass/10 border-grass/30 text-grass-lit' : 'border-white/10 text-ink-dim hover:text-white'}`}
+                    >
+                        <div className={`h-2 w-2 rounded-sm ${autoTunnel ? 'bg-grass' : 'bg-ink-faint'}`} aria-hidden="true" />
+                        {t('dashboard.tunnel.auto_tunnel')}
+                    </button>
+                    <span className="text-sm text-ink-faint" title={t('dashboard.tunnel.dns_hint')}>
                         DNS: {dnsUsage && dnsUsage.used != null ? (
                             <span className={
-                                dnsUsage.used / (dnsUsage.capacity || 1) > 0.9 ? 'text-red-400'
-                                    : dnsUsage.used / (dnsUsage.capacity || 1) > 0.7 ? 'text-yellow-400'
-                                        : 'text-emerald-400'
+                                dnsUsage.used / (dnsUsage.capacity || 1) > 0.9 ? 'text-redstone'
+                                    : dnsUsage.used / (dnsUsage.capacity || 1) > 0.7 ? 'text-gold'
+                                        : 'text-grass-lit'
                             }>{dnsUsage.used}/{dnsUsage.capacity}</span>
-                        ) : <span className="text-emerald-400">ON</span>}
+                        ) : <span className="text-grass-lit">ON</span>}
                     </span>
-                    {tunnelAddress && <span className="text-[10px] text-ink-faint italic w-full">Region changes apply the next time you start the tunnel.</span>}
-                    <button
+                    {tunnelAddress && <span className="w-full text-xs text-ink-faint">{t('dashboard.tunnel.region_note')}</span>}
+                    <Button
+                        size="sm"
+                        title={t('dashboard.tunnel.verify_hint')}
                         onClick={async () => {
                             setDnsStatus('checking');
                             try {
                                 const r = await api.verifyDns();
                                 if (r.verified) {
                                     setDnsStatus('ok');
-                                    dialog.alert(`DNS OK: ${r.address}${r.note ? ` (${r.note})` : ''}`, { title: 'DNS Verified', variant: 'success' });
+                                    toast.success(`${r.address}${r.note ? ` (${r.note})` : ''}`, { title: t('dashboard.tunnel.dns_ok_title') });
                                 } else {
                                     setDnsStatus('error');
-                                    dialog.alert('DNS verification failed: ' + (r.error || r.detail?.error || 'unknown'), { title: 'DNS Error', variant: 'destructive' });
+                                    toast.error(r.error || r.detail?.error || 'unknown', { title: t('dashboard.tunnel.dns_failed') });
                                 }
                             } catch (e) {
                                 setDnsStatus('error');
-                                dialog.alert('DNS verification error: ' + (e.message || e), { title: 'DNS Error', variant: 'destructive' });
+                                toast.error(e.message || String(e), { title: t('dashboard.tunnel.dns_error_title') });
                             }
                         }}
-                        className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
-                        title="Check that the custom address actually resolves"
                     >
-                        Verify DNS
-                    </button>
-                    <button
+                        {t('dashboard.tunnel.verify_dns')}
+                    </Button>
+                    <Button
+                        size="sm"
+                        title={t('dashboard.tunnel.clean_hint')}
                         onClick={async () => {
                             try {
                                 const r = await api.cleanupDns();
-                                dialog.alert(`DNS cleanup: removed ${r.deleted ?? 0} stale record(s).`, { title: 'DNS Cleanup', variant: 'success' });
+                                toast.success(`${t('dashboard.tunnel.dns_cleanup_done')} ${r.deleted ?? 0}`, { title: t('dashboard.tunnel.dns_cleanup_title') });
                             } catch (e) {
-                                dialog.alert('DNS cleanup failed: ' + (e.message || e), { title: 'DNS Cleanup', variant: 'destructive' });
+                                toast.error(e.message || String(e), { title: t('dashboard.tunnel.dns_cleanup_failed') });
                             }
                         }}
-                        className="px-2 py-1 rounded-sm border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
-                        title="Remove SRV records this app created but no longer uses"
                     >
-                        Clean DNS
-                    </button>
+                        {t('dashboard.tunnel.clean_dns')}
+                    </Button>
                 </div>}
             </div>
 

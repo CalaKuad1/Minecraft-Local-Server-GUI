@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Settings, Globe, Palette, Save, FolderOpen, Info } from './ui/PixelIcons';
 import { api } from '../api';
 import { useTranslation } from '../contexts/LanguageContext';
+import { Toggle } from './ui/Toggle';
+import { getPerfMode, setPerfMode } from '../utils/perfMode';
 
 const LANGUAGES = [
     { code: 'en', label: 'English', native: 'English' },
@@ -39,6 +41,7 @@ export default function AppSettings({ isOpen, onClose }) {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [appVersion, setAppVersion] = useState('');
+    const [liteMode, setLiteMode] = useState(() => getPerfMode() === 'lite');
 
     // Real app version from the Electron main process (avoids drifting hardcode).
     useEffect(() => {
@@ -269,6 +272,18 @@ export default function AppSettings({ isOpen, onClose }) {
                                             )}
                                         </button>
                                     ))}
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-between gap-6 rounded-sm border border-white/5 px-4 py-3">
+                                    <div>
+                                        <div className="text-sm font-semibold text-ink">{t('settings.appearance_settings.reduce_effects')}</div>
+                                        <div className="mt-0.5 text-sm text-ink-dim">{t('settings.appearance_settings.reduce_effects_desc')}</div>
+                                    </div>
+                                    <Toggle
+                                        label={t('settings.appearance_settings.reduce_effects')}
+                                        checked={liteMode}
+                                        onChange={(on) => { setLiteMode(on); setPerfMode(on ? 'lite' : 'full'); }}
+                                    />
                                 </div>
                             </div>
                         )}

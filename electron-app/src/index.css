@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Pixelify Sans draws "5" like an "S" at every size (reads "Sm" for "5m") and its
+   small "c" reads as "o". Numbers carry information, so wherever the pixel font
+   is used, digits and number punctuation come from Inter instead. The family is
+   listed first in `font-minecraft` (tailwind.config.js); the browser only falls
+   through to Pixelify Sans for characters outside this unicode-range. */
+@font-face {
+  font-family: 'Pixel Digits';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0025, U+002C-002F, U+0030-0039, U+003A;
+}
+
 :root {
   font-family: 'Inter Variable', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   background-color: rgb(var(--ground));

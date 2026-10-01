@@ -42,7 +42,8 @@ export default {
             },
             fontFamily: {
                 sans: ['"Inter Variable"', 'Inter', 'system-ui', 'sans-serif'],
-                minecraft: ['"Pixelify Sans Variable"', '"Pixelify Sans"', 'system-ui', 'sans-serif'],
+                // "Pixel Digits" is Inter limited to digits (see index.css): the pixel font's 5 looks like an S.
+                minecraft: ['"Pixel Digits"', '"Pixelify Sans Variable"', '"Pixelify Sans"', 'system-ui', 'sans-serif'],
             },
             // Pixel bevel: light edge on top, shade on the bottom, 1px dark outline.
             // The one recurring gesture of the UI, borrowed from the game's own widgets.
