@@ -28,7 +28,7 @@
 
 ---
 
-## What's New in v1.3.2
+## What's New in v1.3.3
 
 ### Linux
 - **AppImage fixed on older distros** — the bundled Python backend crashed on startup with `GLIBC_2.38 not found`. Linux builds now target Ubuntu 22.04 (glibc 2.35), so the AppImage runs on all supported Ubuntu LTS releases and equivalents.

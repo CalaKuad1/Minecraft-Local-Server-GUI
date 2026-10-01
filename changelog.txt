@@ -1,6 +1,6 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.3.2 - 2026-10-01 LINUX APPIMAGE COMPATIBILITY
+## Version 1.3.3 - 2026-10-01 LINUX APPIMAGE COMPATIBILITY
 
 ### FIXED
 - Linux AppImage: the bundled Python backend crashed on startup on older
