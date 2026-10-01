@@ -43,7 +43,7 @@ function StatusPill({ status }) {
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border text-[9px] font-minecraft uppercase tracking-wider
             ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                 : isBusy ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                    : 'bg-white/5 border-white/10 text-zinc-500'}`}>
+                    : 'bg-white/5 border-white/10 text-ink-faint'}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400' : isBusy ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-600'}`} />
             {t(`status.${status || 'offline'}`)}
         </span>
@@ -248,7 +248,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                         <div className="grid grid-cols-2 gap-2 mb-8">
                             <div className="bg-black/30 border border-white/5 rounded-sm p-3">
                                 <div className="text-2xl font-minecraft text-white">{totalCount}</div>
-                                <div className="text-[9px] uppercase tracking-widest text-zinc-500 mt-0.5">{t('library.stats.total')}</div>
+                                <div className="text-[9px] uppercase tracking-widest text-ink-faint mt-0.5">{t('library.stats.total')}</div>
                             </div>
                             <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-sm p-3">
                                 <div className="text-2xl font-minecraft text-emerald-400">{onlineCount}</div>
@@ -256,7 +256,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             </div>
                         </div>
 
-                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-3">{t('library.quick_filters')}</h3>
+                        <h3 className="text-[10px] font-bold text-ink-faint uppercase tracking-[0.2em] mb-3">{t('library.quick_filters')}</h3>
                         <div className="space-y-1">
                             {[
                                 { id: 'all', label: t('library.all_servers'), icon: <Server size={14} /> },
@@ -268,20 +268,20 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     onClick={() => setStatusFilter(f.id)}
                                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm text-xs tracking-wide transition-colors ${statusFilter === f.id ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
                                 >
-                                    <span className={statusFilter === f.id ? 'text-emerald-400' : 'text-zinc-500'}>{f.icon}</span>
+                                    <span className={statusFilter === f.id ? 'text-emerald-400' : 'text-ink-faint'}>{f.icon}</span>
                                     {f.label}
                                 </button>
                             ))}
                         </div>
 
-                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-8 mb-3">{t('library.view_mode')}</h3>
+                        <h3 className="text-[10px] font-bold text-ink-faint uppercase tracking-[0.2em] mt-8 mb-3">{t('library.view_mode')}</h3>
                         <div className="space-y-1">
                             <button onClick={() => setViewMode('grid')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm text-xs tracking-wide transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
-                                <span className={viewMode === 'grid' ? 'text-emerald-400' : 'text-zinc-500'}><LayoutDashboard size={14} /></span>
+                                <span className={viewMode === 'grid' ? 'text-emerald-400' : 'text-ink-faint'}><LayoutDashboard size={14} /></span>
                                 {t('library.grid_view')}
                             </button>
                             <button onClick={() => setViewMode('detailed')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm text-xs tracking-wide transition-colors ${viewMode === 'detailed' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
-                                <span className={viewMode === 'detailed' ? 'text-emerald-400' : 'text-zinc-500'}><Server size={14} /></span>
+                                <span className={viewMode === 'detailed' ? 'text-emerald-400' : 'text-ink-faint'}><Server size={14} /></span>
                                 {t('library.detailed_view')}
                             </button>
                         </div>
@@ -303,10 +303,10 @@ export default function ServerSelector({ onSelect, onAdd }) {
                     <div className="px-8 pt-8 pb-6 border-b border-white/5 flex items-center gap-4">
                         <div className="flex-1">
                             <h2 className="text-3xl font-minecraft tracking-tight text-white">{t('library.title')}</h2>
-                            <p className="text-zinc-500 text-sm mt-0.5">{totalCount} {t('library.stats.total').toLowerCase()}</p>
+                            <p className="text-ink-faint text-sm mt-0.5">{totalCount} {t('library.stats.total').toLowerCase()}</p>
                         </div>
                         <div className="relative group w-72 max-w-full">
-                            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-faint group-focus-within:text-emerald-400 transition-colors" />
                             <input
                                 type="text"
                                 placeholder={t('library.search')}
@@ -318,7 +318,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             {searchQuery && (
                                 <button
                                     onClick={() => { setSearchQuery(''); }}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-ink-faint hover:text-white hover:bg-white/10 transition-colors"
                                     title="Clear search"
                                 >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -352,7 +352,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                         {loading && totalCount === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center py-24">
                                 <div className="w-8 h-8 border-2 border-white/10 border-t-emerald-400 rounded-full animate-spin mb-4" />
-                                <p className="text-zinc-500 text-sm font-minecraft uppercase tracking-widest">{t('common.loading')}</p>
+                                <p className="text-ink-faint text-sm font-minecraft uppercase tracking-widest">{t('common.loading')}</p>
                             </div>
                         ) : totalCount === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center py-24">
@@ -360,7 +360,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     <Server size={48} className="text-emerald-400/60" />
                                 </div>
                                 <h3 className="text-2xl font-minecraft text-white tracking-wide mb-2">{t('library.empty_infrastructure')}</h3>
-                                <p className="text-zinc-500 text-sm mb-6 max-w-sm">Create your first Minecraft server to get started.</p>
+                                <p className="text-ink-faint text-sm mb-6 max-w-sm">Create your first Minecraft server to get started.</p>
                                 <button
                                     onClick={onAdd}
                                     className="px-6 py-3 bg-white text-black rounded-sm font-minecraft uppercase tracking-wider text-sm hover:bg-zinc-200 transition-colors flex items-center gap-2"
@@ -390,7 +390,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                                         <StatusPill status={server.status} />
                                                     </div>
                                                     <div className="text-sm font-minecraft tracking-wider text-zinc-200 truncate uppercase">{server.name}</div>
-                                                    <div className="text-[10px] text-zinc-500 font-mono mt-1">{server.version || 'Latest'} • {formatRelative(server.last_opened)}</div>
+                                                    <div className="text-[10px] text-ink-faint font-mono mt-1">{server.version || 'Latest'} • {formatRelative(server.last_opened)}</div>
                                                 </button>
                                             ))}
                                         </div>
@@ -402,11 +402,11 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-minecraft">
                                         {searchQuery ? t('library.search_results') : t('library.all_servers')}
                                     </h3>
-                                    <span className="text-xs text-zinc-600 ml-1">{filteredServers.length}</span>
+                                    <span className="text-xs text-ink-faint ml-1">{filteredServers.length}</span>
                                 </div>
 
                                 {filteredServers.length === 0 ? (
-                                    <div className="py-20 flex flex-col items-center justify-center text-zinc-500">
+                                    <div className="py-20 flex flex-col items-center justify-center text-ink-faint">
                                         <Search size={40} className="mb-4 opacity-20" />
                                         <p className="font-minecraft tracking-widest uppercase text-sm opacity-60">{t('library.no_matches')}</p>
                                     </div>
@@ -466,7 +466,7 @@ function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
                 </div>
                 <button
                     onClick={onDelete}
-                    className="p-1.5 text-zinc-600 hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 shrink-0"
+                    className="p-1.5 text-ink-faint hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 shrink-0"
                     title={t('library.delete')}
                 >
                     <Trash2 size={14} />
@@ -476,8 +476,8 @@ function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
             <div className="flex items-center gap-3 text-[10px] font-minecraft uppercase tracking-wider mb-4">
                 <span className={info.color}>{engineType}</span>
                 <span className="text-zinc-700">•</span>
-                <span className="text-zinc-500">{server.version || 'Latest'}</span>
-                {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-zinc-600">{formatRelative(server.last_opened)}</span></>}
+                <span className="text-ink-faint">{server.version || 'Latest'}</span>
+                {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-ink-faint">{formatRelative(server.last_opened)}</span></>}
             </div>
 
             <div className="mt-auto">
@@ -522,8 +522,8 @@ function ServerRow({ server, onClick, onBoot, onDelete, booting, t }) {
                 <div className="flex items-center gap-3 text-[10px] font-minecraft uppercase tracking-wider mt-1">
                     <span className={info.color}>{engineType}</span>
                     <span className="text-zinc-700">•</span>
-                    <span className="text-zinc-500">{server.version || 'Latest'}</span>
-                    {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-zinc-600">{formatRelative(server.last_opened)}</span></>}
+                    <span className="text-ink-faint">{server.version || 'Latest'}</span>
+                    {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-ink-faint">{formatRelative(server.last_opened)}</span></>}
                 </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -533,7 +533,7 @@ function ServerRow({ server, onClick, onBoot, onDelete, booting, t }) {
                         {t('library.boot')}
                     </button>
                 )}
-                <button onClick={onDelete} className="p-2 text-zinc-600 hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors" title={t('library.delete')}>
+                <button onClick={onDelete} className="p-2 text-ink-faint hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors" title={t('library.delete')}>
                     <Trash2 size={15} />
                 </button>
             </div>

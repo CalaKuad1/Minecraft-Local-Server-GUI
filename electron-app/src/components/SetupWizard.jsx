@@ -36,11 +36,11 @@ function StepItem({ icon, label, active, completed }) {
             <div className={`w-8 h-8 rounded-sm border flex items-center justify-center transition-all ${
                 active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 
                 completed ? 'bg-white/5 border-white/10 text-white' : 
-                'bg-black/20 border-white/5 text-gray-500'
+                'bg-black/20 border-white/5 text-ink-faint'
             }`}>
                 {completed ? <Check size={14} /> : icon}
             </div>
-            <span className={`text-[10px] uppercase tracking-widest font-minecraft ${active ? 'text-white' : 'text-gray-600'}`}>{label}</span>
+            <span className={`text-[10px] uppercase tracking-widest font-minecraft ${active ? 'text-white' : 'text-ink-faint'}`}>{label}</span>
         </div>
     );
 }
@@ -281,7 +281,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                     <div className="mt-auto p-8 border-t border-white/5 opacity-40">
                         <div className="flex items-center gap-3">
                             <Monitor size={14} className="text-gray-400" />
-                            <div className="text-[9px] uppercase tracking-widest font-minecraft text-gray-500">Provisioning</div>
+                            <div className="text-[9px] uppercase tracking-widest font-minecraft text-ink-faint">Provisioning</div>
                         </div>
                     </div>
                 </div>
@@ -298,7 +298,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 className="flex-1 flex flex-col p-10 justify-center max-w-3xl"
                             >
                                 <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Deploy Server</h2>
-                                <p className="text-gray-500 text-xs mb-8 tracking-wide">Choose deployment architecture.</p>
+                                <p className="text-ink-faint text-xs mb-8 tracking-wide">Choose deployment architecture.</p>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
@@ -307,7 +307,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     >
                                         <Download size={24} className="text-emerald-500/60 mb-4" />
                                         <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">New Profile</h3>
-                                        <p className="text-[10px] text-gray-500 leading-relaxed">Install a fresh Minecraft server engine.</p>
+                                        <p className="text-[10px] text-ink-faint leading-relaxed">Install a fresh Minecraft server engine.</p>
                                     </button>
 
                                     <button
@@ -316,12 +316,12 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     >
                                         <Folder size={24} className="text-emerald-500/60 mb-4" />
                                         <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">Import local</h3>
-                                        <p className="text-[10px] text-gray-500 leading-relaxed">Link an existing server folder.</p>
+                                        <p className="text-[10px] text-ink-faint leading-relaxed">Link an existing server folder.</p>
                                     </button>
                                 </div>
                                 
                                 <div className="mt-12 flex justify-start">
-                                    <button onClick={onCancel} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors flex items-center gap-2">
+                                    <button onClick={onCancel} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors flex items-center gap-2">
                                         <ArrowLeft size={12} /> Exit setup
                                     </button>
                                 </div>
@@ -336,11 +336,11 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 className="flex-1 flex flex-col p-10 max-w-4xl"
                             >
                                 <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Configure Engine</h2>
-                                <p className="text-gray-500 text-xs mb-10 tracking-wide">Select framework and target version.</p>
+                                <p className="text-ink-faint text-xs mb-10 tracking-wide">Select framework and target version.</p>
 
                                 <div className="space-y-8">
                                     <div>
-                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Framework</label>
+                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Framework</label>
                                         <div className="grid grid-cols-5 gap-3">
                                             {['vanilla', 'paper', 'forge', 'neoforge', 'fabric'].map((type) => (
                                                 <button
@@ -349,7 +349,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                     className={`py-4 px-2 flex flex-col items-center justify-center rounded-sm border transition-all gap-3 ${
                                                         serverType === type 
                                                             ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' 
-                                                            : 'bg-black/30 border-white/5 text-gray-500 hover:border-white/10'
+                                                            : 'bg-black/30 border-white/5 text-ink-faint hover:border-white/10'
                                                     }`}
                                                 >
                                                     <EngineIcon 
@@ -357,14 +357,14 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                         size={24} 
                                                         className={`transition-opacity ${serverType === type ? "opacity-100" : "opacity-30"}`} 
                                                     />
-                                                    <span className={`capitalize text-[10px] font-minecraft tracking-widest ${serverType === type ? "text-emerald-400" : "text-gray-600"}`}>{type}</span>
+                                                    <span className={`capitalize text-[10px] font-minecraft tracking-widest ${serverType === type ? "text-emerald-400" : "text-ink-faint"}`}>{type}</span>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Minecraft Version</label>
+                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Minecraft Version</label>
                                         <div className="max-w-xs">
                                             <Select
                                                 value={version}
@@ -379,7 +379,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
 
                                     {(serverType === 'forge' || serverType === 'neoforge') && version && (
                                         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">
+                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">
                                                 {serverType === 'forge' ? 'Forge' : 'NeoForge'} Version
                                             </label>
                                             <div className="max-w-xs">
@@ -396,7 +396,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 </div>
 
                                 <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
-                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
                                     <button 
                                         onClick={() => setStep(3)} 
                                         disabled={!version || loadingVersions}
@@ -416,12 +416,12 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 className="flex-1 flex flex-col p-10 max-w-4xl"
                             >
                                 <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Parameters</h2>
-                                <p className="text-gray-500 text-xs mb-10 tracking-wide">Environment details.</p>
+                                <p className="text-ink-faint text-xs mb-10 tracking-wide">Environment details.</p>
 
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Name</label>
+                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Name</label>
                                             <input
                                                 type="text"
                                                 value={folderName}
@@ -430,7 +430,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Directory</label>
+                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Directory</label>
                                             <div className="flex gap-2">
                                                 <input
                                                     type="text"
@@ -442,14 +442,14 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                     const path = await api.openDirectoryPicker();
                                                     if (path) setParentPath(path);
                                                 }} className="px-3 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm transition-colors">
-                                                    <Folder size={14} className="text-gray-500" />
+                                                    <Folder size={14} className="text-ink-faint" />
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">RAM Allocation</label>
+                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">RAM Allocation</label>
                                         <div className="grid grid-cols-3 gap-3">
                                             {[
                                                 { val: "2", label: "2 GB" },
@@ -462,7 +462,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                     className={`p-3 text-center border rounded-sm transition-all ${
                                                         ramPreset === opt.val 
                                                             ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400' 
-                                                            : 'border-white/5 bg-black/20 text-gray-600 hover:border-white/10'
+                                                            : 'border-white/5 bg-black/20 text-ink-faint hover:border-white/10'
                                                     }`}
                                                 >
                                                     <div className="text-[10px] font-minecraft uppercase tracking-widest">{opt.label}</div>
@@ -472,9 +472,9 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     </div>
 
                                     <div className="pt-4 border-t border-white/5">
-                                        <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-3 block">Java Runtime</label>
+                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Java Runtime</label>
                                         {javaLoading ? (
-                                            <div className="text-[10px] text-gray-600 font-minecraft uppercase tracking-widest flex items-center gap-2">
+                                            <div className="text-[10px] text-ink-faint font-minecraft uppercase tracking-widest flex items-center gap-2">
                                                 <Loader2 size={12} className="animate-spin" /> Checking...
                                             </div>
                                         ) : javaStatus ? (
@@ -490,7 +490,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                 }`}>
                                                     {javaStatus.status_color === 'green' ? 'Ready' : javaStatus.status_color === 'orange' ? 'Update Needed' : 'Missing'}
                                                 </div>
-                                                <div className="text-[10px] text-gray-500 mt-1">
+                                                <div className="text-[10px] text-ink-faint mt-1">
                                                     Requires Java {javaStatus.required_version} — {
                                                         javaStatus.local_java_available ? 'Already installed' :
                         javaStatus.system_java ? `System has Java ${javaStatus.system_java[0]}` :
@@ -499,7 +499,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="text-[10px] text-gray-600 font-minecraft">Java {version ? 'check unavailable' : 'not selected'}</div>
+                                            <div className="text-[10px] text-ink-faint font-minecraft">Java {version ? 'check unavailable' : 'not selected'}</div>
                                         )}
                                     </div>
 
@@ -509,13 +509,13 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                                 {eulaAccepted && <Check size={12} className="text-black" />}
                                             </div>
                                             <input type="checkbox" className="hidden" checked={eulaAccepted} onChange={(e) => setEulaAccepted(e.target.checked)} />
-                                            <span className="text-[10px] text-gray-500 group-hover:text-gray-400 select-none uppercase tracking-widest font-minecraft transition-colors">Accept Minecraft EULA</span>
+                                            <span className="text-[10px] text-ink-faint group-hover:text-gray-400 select-none uppercase tracking-widest font-minecraft transition-colors">Accept Minecraft EULA</span>
                                         </label>
                                     </div>
                                 </div>
 
                                 <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
-                                    <button onClick={() => setStep(2)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button onClick={() => setStep(2)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
                                     <button 
                                         onClick={handleDeploy} 
                                         disabled={!eulaAccepted || !parentPath.trim()}
@@ -535,10 +535,10 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 className="flex-1 flex flex-col p-10 max-w-4xl justify-center"
                             >
                                 <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Mount Repository</h2>
-                                <p className="text-gray-500 text-xs mb-8 tracking-wide">Import existing server files.</p>
+                                <p className="text-ink-faint text-xs mb-8 tracking-wide">Import existing server files.</p>
 
                                 <div className="space-y-4">
-                                    <label className="text-[9px] font-minecraft text-gray-600 uppercase tracking-widest mb-2 block">Source Path</label>
+                                    <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Source Path</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -563,7 +563,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                 )}
 
                                 <div className="mt-12 flex gap-4">
-                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-gray-600 hover:text-white transition-colors">Back</button>
+                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
                                     <button
                                         onClick={handleImport}
                                         disabled={!existingPath || importing}
@@ -587,7 +587,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     <Terminal size={20} className="text-emerald-400 relative z-10" />
                                 </div>
                                 <h3 className="text-sm font-minecraft tracking-widest text-white mb-2 uppercase">Deploying...</h3>
-                                <p className="text-gray-500 text-[10px] h-4 font-mono truncate max-w-xs mb-8">{statusMessage}</p>
+                                <p className="text-ink-faint text-[10px] h-4 font-mono truncate max-w-xs mb-8">{statusMessage}</p>
 
                                 <div className="w-64 max-w-full bg-black/40 rounded-sm h-1 overflow-hidden border border-white/5">
                                     <motion.div 

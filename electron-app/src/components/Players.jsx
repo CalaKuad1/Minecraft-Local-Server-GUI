@@ -18,7 +18,7 @@ const PlayerCard = ({ player, type, onAction, t }) => {
                 />
                 <div>
                     <h3 className="text-white font-medium">{player.name}</h3>
-                    {player.uuid && <p className="text-xs text-zinc-500 font-mono opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">{player.uuid}</p>}
+                    {player.uuid && <p className="text-xs text-ink-faint font-mono opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">{player.uuid}</p>}
                 </div>
             </div>
 
@@ -58,7 +58,7 @@ const PlayerCard = ({ player, type, onAction, t }) => {
 
 const StatCard = ({ icon: Icon, label, value }) => (
     <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 rounded-sm p-5 flex flex-col justify-between hover:border-white/10 transition-colors">
-        <div className="flex items-center gap-2 mb-2 text-zinc-500">
+        <div className="flex items-center gap-2 mb-2 text-ink-faint">
             <Icon size={14} className="opacity-70" />
             <h3 className="text-xs font-bold uppercase tracking-widest">{label}</h3>
         </div>
@@ -160,14 +160,14 @@ export default function Players() {
     };
 
     if (loading && !hasLoadedRef.current) {
-        return <div className="p-8 text-center text-zinc-500 font-minecraft tracking-widest uppercase">{t('players.loading')}</div>;
+        return <div className="p-8 text-center text-ink-faint font-minecraft tracking-widest uppercase">{t('players.loading')}</div>;
     }
 
     if (error && !hasLoadedRef.current) {
         return (
             <div className="p-8 text-center">
                 <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('players.error')}</div>
-                <div className="text-zinc-500 text-sm mb-4">{error}</div>
+                <div className="text-ink-faint text-sm mb-4">{error}</div>
                 <button onClick={fetchData} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-sm transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
             </div>
         );
@@ -179,7 +179,7 @@ export default function Players() {
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('players.title')}</h2>
-                        <p className="text-zinc-500 text-sm">{t('players.subtitle')}</p>
+                        <p className="text-ink-faint text-sm">{t('players.subtitle')}</p>
                     </div>
                 </div>
 
@@ -201,7 +201,7 @@ export default function Players() {
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider transition-colors relative flex items-center justify-center gap-2 z-10 text-sm uppercase ${activeTab === tab ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                            className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider transition-colors relative flex items-center justify-center gap-2 z-10 text-sm uppercase ${activeTab === tab ? 'text-white' : 'text-ink-faint hover:text-white'}`}
                         >
                             {activeTab === tab && (
                                 <motion.div layoutId="playersTab" className="absolute inset-0 bg-white/10 rounded-sm -z-10 shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
@@ -235,9 +235,9 @@ export default function Players() {
                     ))
                 ) : (
                     <div className="col-span-2 text-center py-20 bg-[#18181b]/40 rounded-sm border border-white/5 border-dashed">
-                        <User size={48} className="mx-auto text-zinc-600 mb-4 opacity-50" />
-                        <p className="text-zinc-500">{t('players.empty')}</p>
-                        {activeTab === 'online' && <p className="text-zinc-600 text-sm mt-1">{t('players.empty_online')}</p>}
+                        <User size={48} className="mx-auto text-ink-faint mb-4 opacity-50" />
+                        <p className="text-ink-faint">{t('players.empty')}</p>
+                        {activeTab === 'online' && <p className="text-ink-faint text-sm mt-1">{t('players.empty_online')}</p>}
                     </div>
                 )}
             </div>

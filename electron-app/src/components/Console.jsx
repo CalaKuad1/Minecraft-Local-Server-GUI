@@ -266,7 +266,7 @@ export default function Console({ serverId }) {
                     <button
                         onClick={handleDownload}
                         disabled={logs.length === 0}
-                        className="flex items-center gap-1.5 text-zinc-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-[10px] font-bold uppercase tracking-widest"
+                        className="flex items-center gap-1.5 text-ink-faint hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-[10px] font-bold uppercase tracking-widest"
                         title="Download logs"
                     >
                         <Download size={12} />
@@ -286,7 +286,7 @@ export default function Console({ serverId }) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search logs..."
-                    className="flex-1 bg-[#050505] border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-zinc-700 font-mono outline-none focus:border-white/20 transition-colors"
+                    className="flex-1 bg-[#050505] border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-ink-faint font-mono outline-none focus:border-white/20 transition-colors"
                 />
                 <div className="flex gap-1">
                     {['all', 'normal', 'input', 'warning', 'error'].map(lvl => (
@@ -296,7 +296,7 @@ export default function Console({ serverId }) {
                             className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
                                 levelFilter === lvl
                                     ? 'bg-white/10 text-white'
-                                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/5'
+                                    : 'text-ink-faint hover:text-zinc-400 hover:bg-white/5'
                             }`}
                         >
                             {lvl === 'all' ? 'All' : lvl.slice(0, 3)}
@@ -327,7 +327,7 @@ export default function Console({ serverId }) {
                     </div>
                 ))}
                 {filteredLogs.length === 0 && (
-                    <div className="text-zinc-600 italic flex items-center gap-2 h-full justify-center opacity-50 font-sans text-center px-8">
+                    <div className="text-ink-faint italic flex items-center gap-2 h-full justify-center opacity-50 font-sans text-center px-8">
                         {logs.length === 0 ? t('dashboard.waiting_logs') : 'No logs match your filter'}
                     </div>
                 )}
@@ -342,7 +342,7 @@ export default function Console({ serverId }) {
                                 {s}
                             </button>
                         ))}
-                        <span className="px-1.5 py-0.5 text-[10px] font-mono text-zinc-600">Tab</span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono text-ink-faint">Tab</span>
                     </div>
                 )}
                 <form onSubmit={sendCommand} className="p-2 bg-[#050505] border-t border-white/5 flex gap-2">
@@ -352,7 +352,7 @@ export default function Console({ serverId }) {
                             value={inputObj}
                             onChange={(e) => setInputObj(e.target.value)}
                             onKeyDown={handleInputKeyDown}
-                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-zinc-700 font-mono text-xs pl-2"
+                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-ink-faint font-mono text-xs pl-2"
                             placeholder={t('nav.console') + "..."}
                             autoFocus
                         />

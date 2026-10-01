@@ -22,7 +22,7 @@ export default class ErrorBoundary extends React.Component {
                         <div className="text-red-400 text-sm font-minecraft uppercase tracking-widest mb-4">
                             Something went wrong
                         </div>
-                        <p className="text-zinc-500 text-xs mb-4 max-w-md break-words">
+                        <p className="text-ink-faint text-xs mb-4 max-w-md break-words">
                             {this.state.error?.message || 'Unknown error'}
                         </p>
                         <button

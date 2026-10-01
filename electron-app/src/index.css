@@ -1,16 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-
-  /* Premium Dynamic Background - Corporate Dark */
-  background-color: #09090b;
+  font-family: 'Inter Variable', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: rgb(var(--ground));
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
+  color: rgb(var(--ink) / 0.92);
+
+  /* Design tokens, as "R G B" channels (see tailwind.config.js). */
+  --ground: 9 9 11;
+  --panel: 18 18 21;
+  --raised: 30 30 35;
+  --ink: 244 244 245;
+  --ink-dim: 190 190 198;    /* secondary text, ~10:1 on ground */
+  --ink-faint: 138 138 147;  /* hints and captions, ~5.8:1 on ground */
+  --grass: 16 185 129;
+  --grass-lit: 52 211 153;
+  --gold: 234 179 8;
+  --redstone: 239 68 68;
+  --diamond: 56 189 248;
 }
 
 body {
@@ -45,6 +54,41 @@ body::before {
 
 .rounded-full:not(.thumb-logo) {
   border-radius: 2px !important;
+}
+
+/* Keyboard focus. Inputs show focus through their own border, so only
+   interactive non-text elements get the ring. !important is deliberate: many
+   components carry `outline-none`, which would otherwise hide it. */
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid rgb(var(--diamond)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Respect the OS "reduce motion" setting. Framer Motion is covered by
+   <MotionConfig reducedMotion="user"> in main.jsx. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Performance mode (App Settings -> Appearance). Drops the effects that cost
+   GPU time on weaker machines: backdrop blur and film grain. */
+html[data-perf="lite"] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-perf="lite"] .fx-noise {
+  display: none !important;
 }
 
 /* Custom Range Input (RAM Sliders) */

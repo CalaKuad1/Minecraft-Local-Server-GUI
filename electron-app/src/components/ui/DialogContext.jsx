@@ -1,12 +1,23 @@
 import React, { createContext, useContext, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, CheckCircle, Info } from './PixelIcons';
+import { AnimatePresence } from 'framer-motion';
+import { AlertTriangle, CheckCircle, Info } from './PixelIcons';
+import { Modal } from './Modal';
+import { Button } from './Button';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 const DialogContext = createContext();
 
 export const useDialog = () => useContext(DialogContext);
 
+const VARIANT_ICON = {
+    warning: { icon: AlertTriangle, color: 'text-gold' },
+    destructive: { icon: AlertTriangle, color: 'text-redstone' },
+    success: { icon: CheckCircle, color: 'text-grass-lit' },
+    info: { icon: Info, color: 'text-diamond' },
+};
+
 export const DialogProvider = ({ children }) => {
+    const { t } = useTranslation();
     const [dialogs, setDialogs] = useState([]);
 
     // Helper to add a dialog and return a promise that resolves when it closes
@@ -25,14 +36,16 @@ export const DialogProvider = ({ children }) => {
         });
     };
 
-    const alert = (message, titleOrOptions = "Alert", variant = "info") => {
+    // Blocking dialogs are for decisions. For plain feedback ("saved", "failed")
+    // prefer the non-blocking toast from useToast().
+    const alert = (message, titleOrOptions = undefined, variant = "info") => {
         const options = typeof titleOrOptions === 'object'
             ? { message, ...titleOrOptions }
             : { message, title: titleOrOptions, variant };
         return addDialog('alert', options);
     };
 
-    const confirm = (message, titleOrOptions = "Confirm", variantOrOptions = "warning") => {
+    const confirm = (message, titleOrOptions = undefined, variantOrOptions = "warning") => {
         let options = { message };
 
         if (typeof titleOrOptions === 'object') {
@@ -52,80 +65,50 @@ export const DialogProvider = ({ children }) => {
     return (
         <DialogContext.Provider value={{ alert, confirm }}>
             {children}
-            <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center">
-                <AnimatePresence>
-                    {dialogs.map((dialog) => (
-                        <div key={dialog.id} className="absolute inset-0 flex items-center justify-center pointer-events-auto">
-                            {/* Backdrop */}
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                                onClick={() => dialog.type === 'alert' && dialog.onClose(true)}
-                            />
-
-                            {/* Modal */}
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                                transition={{ duration: 0.2 }}
-                                className="bg-[#18181b]/80 border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4 backdrop-blur-2xl"
-                            >
-                                {/* Header */}
-                                <div className="p-8 pb-2">
-                                    <div className="flex items-start gap-4">
-                                        <div className={`mt-0.5
-                                            ${dialog.variant === 'warning' || dialog.variant === 'destructive' ? 'text-red-500' :
-                                                dialog.variant === 'success' ? 'text-emerald-500' :
-                                                    'text-white'}`}>
-                                            {dialog.variant === 'warning' || dialog.variant === 'destructive' ? <AlertTriangle size={24} /> :
-                                                dialog.variant === 'success' ? <CheckCircle size={24} /> :
-                                                    <Info size={24} />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="text-xl font-minecraft tracking-widest text-white uppercase">{dialog.title}</h3>
-                                            <div className="mt-3 text-zinc-400 text-xs font-medium leading-relaxed whitespace-pre-wrap uppercase tracking-wider">
-                                                {dialog.message}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Footer */}
-                                <div className="p-6 bg-transparent flex justify-end gap-3 mt-4 border-t border-white/5">
-                                    {(dialog.type === 'confirm') && (
-                                        <button
-                                            onClick={() => dialog.onClose(false)}
-                                            className="px-6 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase text-zinc-500 border border-white/5 hover:border-white/10 hover:text-white hover:bg-white/5 transition-all"
-                                        >
-                                            {dialog.cancelLabel || 'Cancel'}
-                                        </button>
+            <AnimatePresence>
+                {dialogs.map((dialog) => {
+                    const isConfirm = dialog.type === 'confirm';
+                    const isDestructive = dialog.variant === 'destructive';
+                    const { icon, color } = VARIANT_ICON[dialog.variant] || VARIANT_ICON.info;
+                    // Escape / backdrop = the safe answer: dismiss an alert, cancel a confirm.
+                    const dismiss = () => dialog.onClose(isConfirm ? false : true);
+                    // Destructive or three-way decisions start on Cancel, so Enter is never the dangerous key.
+                    const cancelFirst = isConfirm && (isDestructive || dialog.dangerLabel);
+                    return (
+                        <Modal
+                            key={dialog.id}
+                            size="md"
+                            zIndex={9999}
+                            icon={icon}
+                            iconClassName={color}
+                            title={dialog.title || (isConfirm ? t('common.confirm') : (isDestructive ? t('common.error') : undefined))}
+                            description={dialog.message}
+                            onClose={dismiss}
+                            footer={
+                                <>
+                                    {isConfirm && (
+                                        <Button variant="ghost" onClick={() => dialog.onClose(false)} data-autofocus={cancelFirst ? '' : undefined}>
+                                            {dialog.cancelLabel || t('common.cancel')}
+                                        </Button>
                                     )}
-                                    {dialog.type === 'confirm' && dialog.dangerLabel && (
-                                        <button
-                                            onClick={() => dialog.onClose('danger')}
-                                            className="px-6 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase text-red-500 border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 transition-all"
-                                        >
+                                    {isConfirm && dialog.dangerLabel && (
+                                        <Button variant="danger" onClick={() => dialog.onClose('danger')}>
                                             {dialog.dangerLabel}
-                                        </button>
+                                        </Button>
                                     )}
-                                    <button
+                                    <Button
+                                        variant={isDestructive ? 'danger' : 'primary'}
                                         onClick={() => dialog.onClose(true)}
-                                        className={`px-8 py-2 rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all shadow-lg hover:opacity-90 border
-                                            ${dialog.variant === 'destructive' ? 'bg-transparent border-red-500/50 text-red-500 hover:bg-red-500/10' :
-                                                dialog.variant === 'warning' ? 'bg-transparent border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10' :
-                                                    'bg-white border-white text-black'}`}
+                                        data-autofocus={cancelFirst ? undefined : ''}
                                     >
-                                        {dialog.type === 'confirm' ? (dialog.confirmLabel || 'Confirm') : (dialog.confirmLabel || 'Okay')}
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </div>
-                    ))}
-                </AnimatePresence>
-            </div>
+                                        {dialog.confirmLabel || (isConfirm ? t('common.confirm') : t('common.ok'))}
+                                    </Button>
+                                </>
+                            }
+                        />
+                    );
+                })}
+            </AnimatePresence>
         </DialogContext.Provider>
     );
 };

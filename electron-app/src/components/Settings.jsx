@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { api, API_TOKEN } from '../api';
 import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
 import { Select } from './ui/Select';
@@ -112,13 +113,13 @@ export default function Settings() {
         }, 0);
     };
 
-    if (loading) return <div className="p-8 text-center text-zinc-500 font-minecraft tracking-widest uppercase">{t('server_settings.loading')}</div>;
+    if (loading) return <div className="p-8 text-center text-ink-faint font-minecraft tracking-widest uppercase">{t('server_settings.loading')}</div>;
 
     if (error) {
         return (
             <div className="p-8 text-center">
                 <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('server_settings.error_title')}</div>
-                <div className="text-gray-500 text-sm mb-4">{error}</div>
+                <div className="text-ink-faint text-sm mb-4">{error}</div>
                 <button onClick={loadSettings} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-md transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
             </div>
         );
@@ -132,7 +133,7 @@ export default function Settings() {
                 <div className="w-full md:w-64 shrink-0 flex flex-col gap-2 sticky top-0">
                     <div className="mb-6">
                         <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('server_settings.title')}</h2>
-                        <p className="text-zinc-500 text-sm font-medium">{t('server_settings.subtitle')}</p>
+                        <p className="text-ink-faint text-sm font-medium">{t('server_settings.subtitle')}</p>
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -150,7 +151,7 @@ export default function Settings() {
                                 className={`w-full text-left px-4 py-3 rounded-md font-minecraft tracking-wider uppercase text-sm transition-all duration-200 border-l-2 ${
                                     activeTab === tab.id
                                         ? 'bg-white/10 text-emerald-400 border-emerald-400 shadow-sm'
-                                        : 'border-transparent text-zinc-500 hover:text-white hover:bg-white/5'
+                                        : 'border-transparent text-ink-faint hover:text-white hover:bg-white/5'
                                 }`}
                             >
                                 {tab.label}
@@ -199,7 +200,7 @@ export default function Settings() {
                                     <div className="grid grid-cols-2 gap-6">
                                         <SettingInput label={t('server_settings.props.server_port')} value={serverProps['server-port'] || '25565'} onChange={(v) => handlePropChange('server-port', v)} type="number" />
                                         <div className="flex flex-col">
-                                            <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.level_type')}</label>
+                                            <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.level_type')}</label>
                                             <Select
                                                 value={serverProps['level-type'] || 'default'}
                                                 onChange={(val) => handlePropChange('level-type', val)}
@@ -223,7 +224,7 @@ export default function Settings() {
                                 
                                 <div className="grid grid-cols-2 gap-6 mb-6">
                                     <div className="flex flex-col">
-                                        <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.difficulty')}</label>
+                                        <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.difficulty')}</label>
                                         <Select
                                             value={serverProps['difficulty'] || 'easy'}
                                             onChange={(val) => handlePropChange('difficulty', val)}
@@ -236,7 +237,7 @@ export default function Settings() {
                                         />
                                     </div>
                                     <div className="flex flex-col">
-                                        <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.props.gamemode')}</label>
+                                        <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.gamemode')}</label>
                                         <Select
                                             value={serverProps['gamemode'] || 'survival'}
                                             onChange={(val) => handlePropChange('gamemode', val)}
@@ -287,7 +288,7 @@ export default function Settings() {
                                     <div className="p-6 border border-white/5 bg-black/20 rounded-md">
                                         <div className="mb-4">
                                             <h4 className="text-white font-minecraft uppercase tracking-wider mb-1">{t('server_settings.raw_config.title')}</h4>
-                                            <p className="text-xs text-zinc-500">{t('server_settings.raw_config.desc')}</p>
+                                            <p className="text-xs text-ink-faint">{t('server_settings.raw_config.desc')}</p>
                                         </div>
                                         <button
                                             onClick={() => setShowAdvanced(true)}
@@ -332,7 +333,7 @@ export default function Settings() {
                                     </div>
 
                                     <div className="space-y-4">
-                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.appearance.motd_label')}</label>
+                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.appearance.motd_label')}</label>
                                         
                         <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-sm border border-white/5">
                             {[
@@ -383,7 +384,7 @@ export default function Settings() {
                                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                                     <h3 className="text-xl font-minecraft text-white uppercase tracking-wider">{t('server_settings.sections.system')}</h3>
                                     {systemInfo && (
-                                        <span className="text-xs font-minecraft text-zinc-500 uppercase tracking-widest">
+                                        <span className="text-xs font-minecraft text-ink-faint uppercase tracking-widest">
                                             {t('server_settings.system.host_ram').replace('{ram}', systemInfo.total_ram_gb)}
                                         </span>
                                     )}
@@ -391,7 +392,7 @@ export default function Settings() {
 
                                 <div>
                                     <div className="flex justify-between items-end mb-4">
-                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.max_ram')}</label>
+                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.system.max_ram')}</label>
                                         <span className="text-3xl font-minecraft text-emerald-400 tracking-wider shadow-emerald-500 drop-shadow-md">{appSettings.ram_max} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
                                     </div>
                                     <input
@@ -423,7 +424,7 @@ export default function Settings() {
 
                                 <div>
                                     <div className="flex justify-between items-end mb-4">
-                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{t('server_settings.system.min_ram')}</label>
+                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.system.min_ram')}</label>
                                         <span className="text-xl font-minecraft text-zinc-300 tracking-wider">{appSettings.ram_min} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
                                     </div>
                                     <input
@@ -435,7 +436,7 @@ export default function Settings() {
                                 </div>
 
                                 <div className="pt-6 border-t border-white/5">
-                                    <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{t('server_settings.system.java_path')}</label>
+                                    <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.system.java_path')}</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -454,7 +455,7 @@ export default function Settings() {
                                             {t('server_settings.system.browse')}
                                         </button>
                                     </div>
-                                    <p className="text-[10px] text-zinc-600 uppercase tracking-widest mt-2">{t('server_settings.system.java_path_desc')}</p>
+                                    <p className="text-[10px] text-ink-faint uppercase tracking-widest mt-2">{t('server_settings.system.java_path_desc')}</p>
                                 </div>
                             </div>
                         )}
@@ -464,13 +465,15 @@ export default function Settings() {
 
             </div>
 
-            {showAdvanced && (
-                <AdvancedSettingsModal
-                    onClose={() => setShowAdvanced(false)}
-                    properties={serverProps}
-                    onSave={(newProps) => setServerProps(newProps)}
-                />
-            )}
+            <AnimatePresence>
+                {showAdvanced && (
+                    <AdvancedSettingsModal
+                        onClose={() => setShowAdvanced(false)}
+                        properties={serverProps}
+                        onSave={(newProps) => setServerProps(newProps)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
@@ -479,7 +482,7 @@ export default function Settings() {
 function SettingInput({ label, value, onChange, type = "text", placeholder, min, max }) {
     return (
         <div className="flex flex-col">
-            <label className="text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">{label}</label>
+            <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{label}</label>
             <input
                 type={type}
                 min={min} max={max}
@@ -497,7 +500,7 @@ function LabelToggle({ label, desc, checked, onChange, color = "text-zinc-200" }
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/20 rounded-md border border-white/5 hover:border-white/10 transition-colors gap-4">
             <div className="flex flex-col">
                 <span className={`font-minecraft uppercase tracking-wider text-sm ${color}`}>{label}</span>
-                {desc && <span className="text-xs text-zinc-500 font-medium">{desc}</span>}
+                {desc && <span className="text-xs text-ink-faint font-medium">{desc}</span>}
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />

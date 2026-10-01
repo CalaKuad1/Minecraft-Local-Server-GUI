@@ -164,9 +164,18 @@
         "installed": "Installés",
         "browse": "Parcourir",
         "close": "Fermer",
+        "ok": "OK",
         "add": "Ajouter",
         "error": "Erreur",
         "no_results": "Aucun résultat"
+    },
+    "advanced_props": {
+        "title": "Propriétés avancées du serveur",
+        "subtitle": "Modifiez directement les valeurs de server.properties",
+        "search": "Rechercher une propriété",
+        "none_found": "Aucune propriété trouvée pour",
+        "warning": "Usage avancé uniquement. De mauvaises valeurs peuvent empêcher le serveur de démarrer.",
+        "save": "Enregistrer les modifications"
     },
     "server_settings": {
         "title": "Config Serveur",

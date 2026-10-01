@@ -164,9 +164,18 @@
         "installed": "Installed",
         "browse": "Browse",
         "close": "Close",
+        "ok": "OK",
         "add": "Add",
         "error": "Error",
         "no_results": "No results"
+    },
+    "advanced_props": {
+        "title": "Advanced server properties",
+        "subtitle": "Edit the raw values in server.properties",
+        "search": "Search property",
+        "none_found": "No properties found for",
+        "warning": "For advanced use. Wrong values can stop the server from starting.",
+        "save": "Save changes"
     },
     "server_settings": {
         "title": "Server Config",

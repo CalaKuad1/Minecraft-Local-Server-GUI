@@ -63,7 +63,7 @@ export function Select({ value, onChange, options = [], placeholder = "Select op
                                     onChange(option.value);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full text-left px-3 py-2 rounded-sm flex items-center justify-between text-xs tracking-widest uppercase transition-all ${value === option.value ? 'bg-emerald-500/10 text-emerald-400 font-bold border-l-2 border-emerald-500' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+                                className={`w-full text-left px-3 py-2 rounded-sm flex items-center justify-between text-xs tracking-widest uppercase transition-all ${value === option.value ? 'bg-emerald-500/10 text-emerald-400 font-bold border-l-2 border-emerald-500' : 'text-ink-faint hover:bg-white/5 hover:text-zinc-300'}`}
                             >
                                 <span className="truncate">{option.label}</span>
                                 {value === option.value && <Check size={12} className="text-emerald-500" />}

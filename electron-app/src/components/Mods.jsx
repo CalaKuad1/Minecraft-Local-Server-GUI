@@ -189,7 +189,7 @@ export default function Mods({ status, onOpenWizard }) {
                         <button
                             key={tabItem.id}
                             onClick={() => { setActiveTab(tabItem.id); if (tabItem.id === 'installed') loadInstalledMods(); }}
-                            className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider text-sm transition-colors relative flex items-center justify-center gap-2 z-10 uppercase ${activeTab === tabItem.id ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                            className={`px-6 py-2.5 rounded-sm font-minecraft tracking-wider text-sm transition-colors relative flex items-center justify-center gap-2 z-10 uppercase ${activeTab === tabItem.id ? 'text-white' : 'text-ink-faint hover:text-white'}`}
                         >
                             {activeTab === tabItem.id && (
                                 <motion.div layoutId="modsTab" className="absolute inset-0 bg-white/10 rounded-sm -z-10 shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
@@ -201,11 +201,11 @@ export default function Mods({ status, onOpenWizard }) {
                 <div className="flex items-center gap-1">
                     <button
                         onClick={() => api.openModsFolder()}
-                        className="px-4 py-2 border border-transparent hover:border-white/10 rounded-sm font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
+                        className="px-4 py-2 border border-transparent hover:border-white/10 rounded-sm font-minecraft tracking-wider text-xs uppercase bg-transparent text-ink-faint hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
                     >
                         <HardDrive size={18} /> {t('common.folder')}
                     </button>
-                    <label className="px-4 py-2 border border-transparent hover:border-white/10 rounded-sm font-minecraft tracking-wider text-xs uppercase bg-transparent text-zinc-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 cursor-pointer">
+                    <label className="px-4 py-2 border border-transparent hover:border-white/10 rounded-sm font-minecraft tracking-wider text-xs uppercase bg-transparent text-ink-faint hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 cursor-pointer">
                         <Plus size={18} /> {t('common.import')}
                         <input type="file" accept=".jar" className="hidden" onChange={async (e) => {
                             const file = e.target.files[0];
@@ -251,8 +251,8 @@ export default function Mods({ status, onOpenWizard }) {
                                     </div>
                                     <p className="text-zinc-400 text-sm line-clamp-2 mt-1">{mod.description}</p>
                                     <div className="flex gap-2 mt-2">
-                                        <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500">{mod.author}</span>
-                                        <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-zinc-500 flex items-center gap-1"><Download size={10} /> {mod.downloads}</span>
+                                        <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-ink-faint">{mod.author}</span>
+                                        <span className="text-xs px-2 py-0.5 rounded-sm bg-white/5 text-ink-faint flex items-center gap-1"><Download size={10} /> {mod.downloads}</span>
                                     </div>
                                     {installing[mod.slug] && (
                                         <div className="mt-3">
@@ -260,7 +260,7 @@ export default function Mods({ status, onOpenWizard }) {
                                                 <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${Math.min(100, downloadProgress[mod.slug]?.value ?? 0)}%` }} />
                                             </div>
                                             <div className="flex justify-between items-center mt-1">
-                                                <span className="text-[10px] font-minecraft tracking-widest uppercase text-zinc-500">{t('common.downloading')}</span>
+                                                <span className="text-[10px] font-minecraft tracking-widest uppercase text-ink-faint">{t('common.downloading')}</span>
                                                 <span className="text-[10px] font-minecraft tracking-widest text-emerald-400">{Math.round(downloadProgress[mod.slug]?.value ?? 0)}%</span>
                                             </div>
                                         </div>
@@ -269,7 +269,7 @@ export default function Mods({ status, onOpenWizard }) {
                             </div>
                         ))}
                         {searchResults.length === 0 && !loading && (
-                            <div className="text-center text-zinc-500 mt-10">
+                            <div className="text-center text-ink-faint mt-10">
                                 <Package size={48} className="mx-auto mb-4 opacity-20" />
                                 <p>{t('mods.search_hint')}</p>
                             </div>
@@ -281,7 +281,7 @@ export default function Mods({ status, onOpenWizard }) {
             {activeTab === 'installed' && (
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {installedMods.length === 0 ? (
-                        <div className="text-center text-zinc-500 mt-10">
+                        <div className="text-center text-ink-faint mt-10">
                             <HardDrive size={48} className="mx-auto mb-4 opacity-20" />
                             <p>{t('mods.installed_empty')}</p>
                         </div>
@@ -292,10 +292,10 @@ export default function Mods({ status, onOpenWizard }) {
                                     <Package size={20} className="text-emerald-500" />
                                     <div>
                                         <div className="text-white font-mono text-sm">{file.filename}</div>
-                                        <div className="text-xs text-zinc-500">{file.size}</div>
+                                        <div className="text-xs text-ink-faint">{file.size}</div>
                                     </div>
                                 </div>
-                                <button onClick={() => handleDelete(file.filename)} className="p-2 text-zinc-500 border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all">
+                                <button onClick={() => handleDelete(file.filename)} className="p-2 text-ink-faint border border-transparent hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10 rounded-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all">
                                     <Trash2 size={18} />
                                 </button>
                             </div>

@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { X, Search, Save, Settings as SettingsIcon, AlertCircle } from './ui/PixelIcons';
+import { Search, Save, Settings as SettingsIcon, AlertCircle } from './ui/PixelIcons';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
+import { Toggle } from './ui/Toggle';
+import { useTranslation } from '../contexts/LanguageContext';
 
 export default function AdvancedSettingsModal({ onClose, properties, onSave }) {
+    const { t } = useTranslation();
     const [localProps, setLocalProps] = useState({ ...properties });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -32,115 +36,68 @@ export default function AdvancedSettingsModal({ onClose, properties, onSave }) {
     const isBoolean = (key) => booleanKeys.includes(key) || localProps[key] === 'true' || localProps[key] === 'false';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-[#18181b]/60 backdrop-blur-3xl border border-white/10 rounded-2xl w-full max-w-4xl max-h-[85vh] shadow-2xl overflow-hidden relative z-10 flex flex-col mx-4"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-2 border border-white/10 bg-white/5 rounded-xl text-zinc-300">
-                            <SettingsIcon size={24} />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight">Advanced Server Properties</h2>
-                            <p className="text-sm text-zinc-400">Edit raw server.properties values</p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
-                        <X size={20} />
-                    </button>
-                </div>
+        <Modal
+            size="xl"
+            icon={SettingsIcon}
+            title={t('advanced_props.title')}
+            description={t('advanced_props.subtitle')}
+            onClose={onClose}
+            footer={
+                <>
+                    <p className="mr-auto flex items-center gap-2 text-sm text-gold">
+                        <AlertCircle size={16} className="shrink-0" aria-hidden="true" />
+                        {t('advanced_props.warning')}
+                    </p>
+                    <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button variant="primary" icon={Save} onClick={handleSave}>{t('advanced_props.save')}</Button>
+                </>
+            }
+        >
+            <div className="relative mb-4">
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
+                <input
+                    data-autofocus
+                    type="search"
+                    aria-label={t('advanced_props.search')}
+                    placeholder={t('advanced_props.search')}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-10 w-full rounded-sm border border-white/10 bg-ground pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-diamond"
+                />
+            </div>
 
-                {/* Toolbar */}
-                <div className="p-4 border-b border-white/5 bg-black/20 flex items-center gap-4">
-                    <div className="relative flex-1">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                        <input
-                            type="text"
-                            placeholder="Search property..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-black/30 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:border-white/20 outline-none transition-colors"
-                        />
-                    </div>
+            {filteredKeys.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-ink-faint">
+                    <Search size={40} className="mb-4 opacity-30" aria-hidden="true" />
+                    <p className="text-sm">{t('advanced_props.none_found')} &quot;{searchTerm}&quot;</p>
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-white/10">
-                    {filteredKeys.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                            <Search size={48} className="mb-4 opacity-20" />
-                            <p>No properties found matching &quot;{searchTerm}&quot;</p>
+            ) : (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    {filteredKeys.map(key => (
+                        <div key={key} className="flex flex-col rounded-sm border border-white/5 bg-ground/60 p-3 transition-colors hover:border-white/15">
+                            <div className="flex items-center justify-between gap-3">
+                                <label htmlFor={`prop-${key}`} className="truncate font-mono text-xs text-ink-dim" title={key}>{key}</label>
+                                {isBoolean(key) && (
+                                    <Toggle
+                                        label={key}
+                                        checked={localProps[key] === 'true'}
+                                        onChange={(on) => handleChange(key, on ? 'true' : 'false')}
+                                    />
+                                )}
+                            </div>
+                            {!isBoolean(key) && (
+                                <input
+                                    id={`prop-${key}`}
+                                    type="text"
+                                    value={localProps[key]}
+                                    onChange={(e) => handleChange(key, e.target.value)}
+                                    className="mt-2 h-9 w-full rounded-sm border border-white/10 bg-ground px-3 font-mono text-sm text-ink outline-none transition-colors focus:border-diamond"
+                                />
+                            )}
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
-                            {filteredKeys.map(key => (
-                                <div key={key} className="flex flex-col p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="text-xs font-mono text-zinc-300 truncate" title={key}>{key}</label>
-                                        {isBoolean(key) && (
-                                            <button
-                                                onClick={() => handleChange(key, localProps[key] === 'true' ? 'false' : 'true')}
-                                                className={`relative w-10 h-5 rounded-full flex items-center p-0.5 outline-none transition-colors duration-300 ${localProps[key] === 'true' ? 'bg-white' : 'bg-zinc-800 border border-zinc-700'}`}
-                                            >
-                                                <motion.div
-                                                    layout
-                                                    className={`w-4 h-4 rounded-full shadow-sm ${localProps[key] === 'true' ? 'bg-black' : 'bg-zinc-400'}`}
-                                                    animate={{ x: localProps[key] === 'true' ? 20 : 0 }}
-                                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                                />
-                                            </button>
-                                        )}
-                                    </div>
-                                    {!isBoolean(key) && (
-                                        <input
-                                            type="text"
-                                            value={localProps[key]}
-                                            onChange={(e) => handleChange(key, e.target.value)}
-                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:border-white/30 outline-none font-mono transition-colors"
-                                        />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    ))}
                 </div>
-
-                {/* Footer */}
-                <div className="p-6 border-t border-white/5 bg-surface/50 flex justify-between items-center">
-                    <div className="flex items-center gap-2 text-yellow-500/80 text-xs">
-                        <AlertCircle size={14} />
-                        <span>Advanced use only. Incorrect values may prevent server startup.</span>
-                    </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={onClose}
-                            className="px-6 py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            className="px-8 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover shadow-lg hover:shadow-primary/25 transition-all flex items-center gap-2"
-                        >
-                            <Save size={16} />
-                            Save Configuration
-                        </button>
-                    </div>
-                </div>
-            </motion.div>
-        </div>
+            )}
+        </Modal>
     );
 }

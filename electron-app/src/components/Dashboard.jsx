@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Play, Square, Activity, Cpu, HardDrive, X, ExternalLink, FolderOpen, Users, Terminal, Clock, Globe, Zap } from './ui/PixelIcons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { api } from '../api';
 import { Select } from './ui/Select';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useDialog } from './ui/DialogContext';
@@ -12,11 +14,11 @@ const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true
     return (
         <div className="bg-[#050505]/40 border border-white/5 rounded-sm p-5 flex flex-col transition-all group cursor-default hover:border-white/10 hover:bg-[#070707]/60 relative overflow-hidden h-[120px] min-w-0">
             <div className="flex items-center gap-2 mb-3 relative z-10">
-                <Icon size={14} className="text-gray-500 group-hover:text-gray-300 transition-colors" />
-                <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest">{label}</h3>
+                <Icon size={14} className="text-ink-faint group-hover:text-gray-300 transition-colors" />
+                <h3 className="text-ink-faint text-xs font-bold uppercase tracking-widest">{label}</h3>
             </div>
             <div className="text-3xl font-minecraft text-white tracking-tight leading-none mb-1 mt-auto relative z-10">{value}</div>
-            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest relative z-10">{sublabel}</div>
+            <div className="text-[10px] text-ink-faint font-bold uppercase tracking-widest relative z-10">{sublabel}</div>
 
             {data.length > 0 && active && (
                 <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity flex items-end">
@@ -44,85 +46,7 @@ const LogBadge = ({ level }) => {
     return <span className="px-1.5 py-0.5 bg-white/5 text-white/40 border border-white/10 rounded mr-2 text-[10px] font-bold">INF</span>;
 };
 
-// Custom Modal Component (Public Server)
-const PublicServerModal = ({ onClose, t }) => {
-    const services = [
-        {
-            name: 'pinggy.io',
-            description: 'Experimental. Quick tunnel with no installation or configuration. Uses SSH.',
-            color: 'bg-primary/20 text-primary border-primary/30',
-            url: 'https://pinggy.io',
-            recommended: true,
-            badge: 'BETA'
-        }
-    ];
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                onClick={onClose}
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className="bg-[#0f0f0f] border border-white/10 rounded-sm w-full max-w-lg shadow-2xl overflow-hidden relative z-10 mx-4"
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="bg-[#121212] p-6 border-b border-white/5 relative overflow-hidden">
-                    <div className="relative flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-primary/10 rounded-sm border border-primary/20 text-primary">
-                                <Globe size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-minecraft tracking-widest text-white uppercase">{t('dashboard.public_server.title')}</h2>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{t('dashboard.public_server.desc')}</p>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-sm transition-colors text-gray-500 hover:text-white">
-                            <X size={20} />
-                        </button>
-                    </div>
-                </div>
-                <div className="p-8 space-y-6">
-                    <p className="text-gray-400 text-xs leading-relaxed font-medium uppercase tracking-wider opacity-80">
-                        {t('dashboard.public_server.info_desc')}
-                        {t('dashboard.public_server.experimental_warn')}
-                    </p>
-                    {services.map((service, i) => (
-                        <a key={i} href={service.url} target="_blank" rel="noreferrer" className="block p-5 bg-black/40 hover:bg-white/[0.02] border border-white/5 hover:border-white/20 rounded-sm transition-all group">
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-12 h-12 rounded-sm ${service.color} border flex items-center justify-center text-xl font-bold font-minecraft`}>
-                                        {service.name[0].toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="font-minecraft text-white tracking-widest uppercase">{service.name}</span>
-                                            {service.recommended && <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] rounded-sm border border-emerald-500/20 font-bold uppercase tracking-widest">{service.badge || 'BETA'}</span>}
-                                        </div>
-                                        <p className="text-[11px] text-gray-500 mt-1 font-medium tracking-wide leading-tight">{service.description}</p>
-                                    </div>
-                                </div>
-                                <ExternalLink size={14} className="text-gray-600 group-hover:text-emerald-400 transition-colors" />
-                            </div>
-                        </a>
-                    ))}
-                </div>
-                <div className="p-6 bg-[#121212] border-t border-white/5 flex justify-end">
-                    <button onClick={onClose} className="px-8 py-2.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-sm text-[10px] font-minecraft tracking-widest uppercase transition-all border border-white/5">{t('common.cancel')}</button>
-                </div>
-            </motion.div>
-        </div>
-    );
-};
-
-// Schedule-shutdown modal. Previously referenced but never defined, which threw
-// "ShutdownTimerModal is not defined" and crashed the Dashboard.
+// Schedule-shutdown modal.
 const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) => {
     const [minutes, setMinutes] = useState(15);
     const isActive = activeTimer?.scheduled;
@@ -130,98 +54,67 @@ const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) =
     const presets = [5, 15, 30, 60];
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                onClick={onClose}
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className="bg-[#0f0f0f] border border-white/10 rounded-sm w-full max-w-md shadow-2xl overflow-hidden relative z-10 mx-4"
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="bg-[#121212] p-6 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-orange-500/10 rounded-sm border border-orange-500/20 text-orange-400">
-                            <Clock size={20} />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-minecraft tracking-widest text-white uppercase">{t('dashboard.shutdown_timer.title')}</h2>
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{t('dashboard.shutdown_timer.desc')}</p>
+        <Modal
+            size="md"
+            icon={Clock}
+            iconClassName="text-gold"
+            title={t('dashboard.shutdown_timer.title')}
+            description={t('dashboard.shutdown_timer.desc')}
+            onClose={onClose}
+            footer={isActive ? (
+                <Button variant="danger" data-autofocus onClick={() => { onCancel(); onClose(); }}>
+                    {t('dashboard.shutdown_timer.cancel')}
+                </Button>
+            ) : (
+                <>
+                    <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button variant="primary" onClick={() => { onSchedule(minutes); onClose(); }}>
+                        {t('dashboard.shutdown_timer.start')}
+                    </Button>
+                </>
+            )}
+        >
+            {isActive ? (
+                <div className="py-4 text-center" role="timer">
+                    <div className="mb-1 text-sm text-gold">{t('dashboard.shutdown_timer.timer_active')}</div>
+                    <div className="font-minecraft text-4xl text-ink">
+                        {remaining} <span className="text-lg text-ink-faint">{t('dashboard.shutdown_timer.minutes')}</span>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-5">
+                    <div role="group" aria-labelledby="shutdown-presets">
+                        <div id="shutdown-presets" className="mb-2 text-sm text-ink-dim">{t('dashboard.shutdown_timer.presets')}</div>
+                        <div className="grid grid-cols-4 gap-2">
+                            {presets.map(p => (
+                                <Button
+                                    key={p}
+                                    size="sm"
+                                    variant={minutes === p ? 'primary' : 'secondary'}
+                                    aria-pressed={minutes === p}
+                                    onClick={() => setMinutes(p)}
+                                >
+                                    {p}m
+                                </Button>
+                            ))}
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-sm text-zinc-500 hover:text-white transition-colors">
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <div className="p-6 space-y-5">
-                    {isActive ? (
-                        <div className="text-center py-4">
-                            <div className="text-[10px] uppercase tracking-widest text-orange-400 mb-1">{t('dashboard.shutdown_timer.timer_active')}</div>
-                            <div className="text-4xl font-minecraft text-white">
-                                {remaining} <span className="text-lg text-zinc-500">{t('dashboard.shutdown_timer.minutes')}</span>
-                            </div>
+                    <div>
+                        <label htmlFor="shutdown-minutes" className="mb-2 block text-sm text-ink-dim">{t('dashboard.shutdown_timer.set_duration')}</label>
+                        <div className="flex items-center gap-3">
+                            <input
+                                id="shutdown-minutes"
+                                data-autofocus
+                                type="number" min="1" value={minutes}
+                                onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
+                                className="h-10 flex-1 rounded-sm border border-white/10 bg-ground px-4 font-mono text-ink outline-none transition-colors focus:border-diamond"
+                            />
+                            <span className="text-sm text-ink-faint">{t('dashboard.shutdown_timer.minutes')}</span>
                         </div>
-                    ) : (
-                        <>
-                            <div>
-                                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{t('dashboard.shutdown_timer.presets')}</div>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {presets.map(p => (
-                                        <button
-                                            key={p}
-                                            onClick={() => setMinutes(p)}
-                                            className={`py-2 rounded-sm border text-sm font-mono transition-colors ${minutes === p ? 'bg-orange-500/15 border-orange-500/40 text-orange-400' : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white'}`}
-                                        >
-                                            {p}m
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{t('dashboard.shutdown_timer.set_duration')}</div>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number" min="1" value={minutes}
-                                        onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
-                                        className="flex-1 bg-black/40 border border-white/10 rounded-sm px-4 py-2 text-white font-mono focus:border-orange-500 outline-none"
-                                    />
-                                    <span className="text-zinc-500 text-sm">{t('dashboard.shutdown_timer.minutes')}</span>
-                                </div>
-                            </div>
-                        </>
-                    )}
+                    </div>
                 </div>
-
-                <div className="p-6 border-t border-white/5 flex justify-end gap-3">
-                    {isActive ? (
-                        <button
-                            onClick={() => { onCancel(); onClose(); }}
-                            className="px-6 py-2.5 rounded-sm border border-red-500/40 text-red-400 hover:bg-red-500/10 text-[10px] font-minecraft tracking-widest uppercase transition-all"
-                        >
-                            {t('dashboard.shutdown_timer.cancel')}
-                        </button>
-                    ) : (
-                        <>
-                            <button onClick={onClose} className="px-6 py-2.5 rounded-sm border border-white/5 text-zinc-500 hover:text-white hover:bg-white/5 text-[10px] font-minecraft tracking-widest uppercase transition-all">
-                                {t('common.cancel')}
-                            </button>
-                            <button
-                                onClick={() => { onSchedule(minutes); onClose(); }}
-                                className="px-6 py-2.5 rounded-sm bg-orange-500 text-black hover:bg-orange-400 text-[10px] font-minecraft tracking-widest uppercase transition-all"
-                            >
-                                {t('dashboard.shutdown_timer.start')}
-                            </button>
-                        </>
-                    )}
-                </div>
-            </motion.div>
-        </div>
+            )}
+        </Modal>
     );
 };
 
@@ -236,7 +129,6 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [localStatus, setLocalStatus] = useState(serverStatus?.status || 'offline');
     const [localLogs, setLocalLogs] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [showPublicModal, setShowPublicModal] = useState(false);
     const [showShutdownModal, setShowShutdownModal] = useState(false);
     const [shutdownInfo, setShutdownInfo] = useState({ scheduled: false });
     const [tunnelAddress, setTunnelAddress] = useState(null);
@@ -654,7 +546,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         <div className={`w-2 h-2 rounded-sm ${isOnline ? 'bg-primary shadow-[0_0_10px_rgba(16,185,129,0.4)]' : (isStarting || isStopping) ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-600'}`}></div>
                         <div>
                             <div className="flex items-center gap-2 mb-0.5">
-                                <span className={`text-[10px] font-bold tracking-widest uppercase ${isOnline ? 'text-primary' : (isStarting || isStopping) ? 'text-yellow-500' : 'text-zinc-500'}`}>
+                                <span className={`text-[10px] font-bold tracking-widest uppercase ${isOnline ? 'text-primary' : (isStarting || isStopping) ? 'text-yellow-500' : 'text-ink-faint'}`}>
                                     {isStopping ? t('status.stopping') : t(`status.${localStatus}`)}
                                 </span>
                                 <button
@@ -672,7 +564,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     disabled={isOnline || togglingMode}
                                     title={onlineMode ? 'Requires premium Minecraft account' : 'Allows cracked/non-premium accounts'}
                                     className={`text-[9px] px-2 py-0.5 rounded-sm border uppercase tracking-wider transition-all font-medium ${
-                                        onlineMode ? 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/[0.07]' : 'bg-white/[0.03] border-white/5 text-zinc-500 hover:bg-white/[0.06] hover:border-white/10'
+                                        onlineMode ? 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/[0.07]' : 'bg-white/[0.03] border-white/5 text-ink-faint hover:bg-white/[0.06] hover:border-white/10'
                                     } ${isOnline ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
                                     {togglingMode ? '...' : onlineMode ? 'Premium' : 'No Premium'}
@@ -717,7 +609,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             <div className="relative">
                                 <button
                                     onClick={() => setShowShutdownModal(true)}
-                                    className={`h-10 w-10 flex items-center justify-center rounded-sm bg-transparent border hover:bg-white/10 transition-colors ${shutdownInfo.scheduled ? 'border-orange-500/50 text-orange-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}
+                                    className={`h-10 w-10 flex items-center justify-center rounded-sm bg-transparent border hover:bg-white/10 transition-colors ${shutdownInfo.scheduled ? 'border-orange-500/50 text-orange-400' : 'border-white/10 text-ink-faint hover:text-white'}`}
                                     title="Schedule Shutdown"
                                 >
                                     <Clock size={16} className={shutdownInfo.scheduled ? 'animate-pulse' : ''} />
@@ -744,7 +636,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             className={`h-10 px-3 flex items-center gap-2 rounded-sm border text-[10px] font-bold uppercase tracking-widest transition-all ${
                                 autoRestart
                                     ? 'bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20'
-                                    : 'border-white/10 text-zinc-600 hover:text-white hover:bg-white/5'
+                                    : 'border-white/10 text-ink-faint hover:text-white hover:bg-white/5'
                             }`}
                             title={autoRestart ? 'Auto-restart on crash: ON' : 'Auto-restart on crash: OFF'}
                         >
@@ -774,11 +666,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             </div>
                             <div className="text-[11px] text-zinc-400 leading-relaxed">
                                 {serverError.fix || 'Unknown error. Check the console for details.'}
-                                {serverError.mod && <span className="text-zinc-500 ml-1">— {serverError.mod}</span>}
+                                {serverError.mod && <span className="text-ink-faint ml-1">— {serverError.mod}</span>}
                             </div>
-                            <div className="text-[9px] text-zinc-600 font-mono mt-1 truncate">{serverError.detail}</div>
+                            <div className="text-[9px] text-ink-faint font-mono mt-1 truncate">{serverError.detail}</div>
                         </div>
-                        <button onClick={() => setServerError(null)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors shrink-0">
+                        <button onClick={() => setServerError(null)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 transition-colors shrink-0">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
@@ -795,11 +687,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                            <div className="text-[10px] font-bold text-ink-faint uppercase tracking-widest">
                                 {tunnelAddress ? 'Public Server' : (dnsAddress ? 'Fixed Address' : 'Local Host')}
                             </div>
                             {tunnelAddress && dnsAddress && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">ONLINE</span>}
-                            {!tunnelAddress && dnsAddress && <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-zinc-500 rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">OFFLINE</span>}
+                            {!tunnelAddress && dnsAddress && <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-ink-faint rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">OFFLINE</span>}
                         </div>
                         {dnsEditing ? (
                             <form onSubmit={async (e) => {
@@ -826,10 +718,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             }} className="mb-1">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-sm font-mono text-emerald-400 font-bold select-none">🟢</span>
-                                    <input name="sd" defaultValue={dnsSubdomain} placeholder="your-server-name" className="w-44 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-zinc-700 outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
-                                    <span className="text-xs font-mono text-zinc-600">.play.ariser.app</span>
+                                    <input name="sd" defaultValue={dnsSubdomain} placeholder="your-server-name" className="w-44 bg-[#050505] border border-emerald-500/40 rounded-sm px-2.5 py-1.5 text-sm font-mono font-bold text-emerald-400 placeholder-ink-faint outline-none focus:border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.15)]" autoFocus />
+                                    <span className="text-xs font-mono text-ink-faint">.play.ariser.app</span>
                                     <button type="submit" className="p-1.5 rounded-sm bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors">✓</button>
-                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 transition-colors">✕</button>
+                                    <button type="button" onClick={() => { setDnsEditing(false); setDnsAvailable(null); }} className="p-1.5 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 transition-colors">✕</button>
                                 </div>
                                 {dnsAvailable && <div className="flex items-center gap-1.5 mt-1.5">
                                     <span className="text-[10px] text-red-400">&quot;{dnsAvailable}&quot; taken — try:</span>
@@ -848,10 +740,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 }`} title="DNS verification status">
                                     {dnsStatus === 'ok' ? 'DNS ✓' : dnsStatus === 'error' ? 'DNS ✗' : 'DNS …'}
                                 </span>
-                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-zinc-500 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Copy">
+                                <button onClick={() => navigator.clipboard.writeText(dnsAddress)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Copy">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                 </button>
-                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Edit subdomain">
+                                <button onClick={() => setDnsEditing(true)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" title="Edit subdomain">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
                             </div>
@@ -875,7 +767,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                             setTimeout(() => setAddressCopied(false), 1500);
                                         } catch (e) { console.error('Copy failed', e); }
                                     }}
-                                    className="p-1 rounded-sm text-zinc-600 hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                                    className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                                     title="Copy address"
                                 >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -883,10 +775,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 {addressCopied && <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 animate-in fade-in duration-200">Copied</span>}
                             </> : null}
                         </div>
-                        {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-zinc-600 font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
+                        {(tunnelAddress||dnsAddress) && <div className="text-[9px] text-ink-faint font-mono mt-0.5">Local {status.local_ip||'127.0.0.1'}:{status.port||'25565'}{tunnelAddress ? <span className="ml-2">via {tunnelAddress}</span> : null}</div>}
                     </div>
 
-                    <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-zinc-500 hover:text-white rounded-sm transition-colors" title="Open Server Directory"><FolderOpen size={16} /></button>
+                    <button onClick={handleOpenFolder} className="p-2 border border-transparent bg-transparent hover:bg-white/5 text-ink-faint hover:text-white rounded-sm transition-colors" title="Open Server Directory"><FolderOpen size={16} /></button>
 
                     <button onClick={async () => {
                         try {
@@ -910,7 +802,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </button>
 
                     <div className="relative group">
-                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={`p-2 rounded-sm transition-all relative ${showAdvanced ? 'bg-white/10 text-white' : 'text-zinc-600 hover:text-white hover:bg-white/5'}`}>
+                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={`p-2 rounded-sm transition-all relative ${showAdvanced ? 'bg-white/10 text-white' : 'text-ink-faint hover:text-white hover:bg-white/5'}`}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                             {autoTunnel && <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></div>}
                         </button>
@@ -925,14 +817,14 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 </div>
 
                 {showAdvanced && <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
-                    <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Provider</span>
+                    <span className="text-[10px] text-ink-faint uppercase tracking-wider font-bold">Provider</span>
                         <div className="w-24 rounded-sm border border-white/10 bg-white/5">
                             <Select value={tunnelProvider} onChange={() => {}} options={[{ value: 'pinggy', label: 'Pinggy' }]} />
                         </div>
-                    {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Region</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
+                    {tunnelProvider === 'pinggy' && <><span className="text-[10px] text-ink-faint uppercase tracking-wider font-bold">Region</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: 'Asia' }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
-                    <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-zinc-600 hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
-                    <span className="text-[10px] text-zinc-600 font-bold" title="DNS records used / zone limit (Cloudflare Free = 200)">
+                    <button onClick={() => { const v = !autoTunnel; setAutoTunnel(v); localStorage.setItem('autoTunnel', v.toString()); }} className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-wider transition-all ${autoTunnel ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'border-white/10 text-ink-faint hover:text-white'}`}><div className={`w-1.5 h-1.5 rounded-full ${autoTunnel ? 'bg-emerald-400' : 'bg-zinc-600'}`}/> Auto-Tunnel</button>
+                    <span className="text-[10px] text-ink-faint font-bold" title="DNS records used / zone limit (Cloudflare Free = 200)">
                         DNS: {dnsUsage && dnsUsage.used != null ? (
                             <span className={
                                 dnsUsage.used / (dnsUsage.capacity || 1) > 0.9 ? 'text-red-400'
@@ -941,7 +833,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             }>{dnsUsage.used}/{dnsUsage.capacity}</span>
                         ) : <span className="text-emerald-400">ON</span>}
                     </span>
-                    {tunnelAddress && <span className="text-[10px] text-zinc-500 italic w-full">Region changes apply the next time you start the tunnel.</span>}
+                    {tunnelAddress && <span className="text-[10px] text-ink-faint italic w-full">Region changes apply the next time you start the tunnel.</span>}
                     <button
                         onClick={async () => {
                             setDnsStatus('checking');
@@ -1007,7 +899,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                             ONLINE (UDP)
                                         </span>
                                     ) : (
-                                        <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-zinc-500 rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">
+                                        <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-ink-faint rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">
                                             OFFLINE
                                         </span>
                                     )}
@@ -1017,33 +909,33 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     <div className="space-y-1 mt-1">
                                         <div className="flex flex-wrap items-center gap-3">
                                             <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
-                                                <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Address:</span>
+                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">Address:</span>
                                                 <span className="text-xs font-mono font-bold text-cyan-300 select-all">
                                                     {bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress}
                                                 </span>
                                                 <button
                                                     onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress)}
-                                                    className="p-1 hover:text-white text-zinc-500 transition-colors"
+                                                    className="p-1 hover:text-white text-ink-faint transition-colors"
                                                     title="Copy Server Address"
                                                 >
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
-                                                <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Port:</span>
+                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">Port:</span>
                                                 <span className="text-xs font-mono font-bold text-emerald-400 select-all">
                                                     {bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132'}
                                                 </span>
                                                 <button
                                                     onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132')}
-                                                    className="p-1 hover:text-white text-zinc-500 transition-colors"
+                                                    className="p-1 hover:text-white text-ink-faint transition-colors"
                                                     title="Copy Port"
                                                 >
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="text-[10px] text-zinc-500">
+                                        <div className="text-[10px] text-ink-faint">
                                             Bedrock players enter Address &amp; Port into <span className="text-zinc-400">Play &gt; Servers &gt; Add Server</span>
                                         </div>
                                         <div className="text-[10px] text-amber-500/80">
@@ -1107,7 +999,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             <div className="text-xs font-bold text-zinc-300 font-minecraft">
                                 Bedrock &amp; Console Crossplay
                             </div>
-                            <div className="text-[10px] text-zinc-500">
+                            <div className="text-[10px] text-ink-faint">
                                 Want iOS, Android, PlayStation, Xbox, Switch &amp; Windows Bedrock players to join? Install GeyserMC in Plugins.
                             </div>
                         </div>
@@ -1136,7 +1028,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             {/* Mini Console (Real-time via WS) */}
             <div className="mt-8 h-80 flex-none bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
                 <div className="bg-black/40 px-4 py-2 border-b border-white/5 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 font-minecraft">
+                    <span className="text-[10px] font-bold text-ink-faint uppercase tracking-widest flex items-center gap-2 font-minecraft">
                         {t('dashboard.sys_event_log')}
                     </span>
                 </div>
@@ -1201,7 +1093,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     }}
                     className="border-t border-white/5 bg-black/30 p-2 flex"
                 >
-                    <span className="text-zinc-500 px-2 font-mono font-bold pt-1">$</span>
+                    <span className="text-ink-faint px-2 font-mono font-bold pt-1">$</span>
                     <input
                         name="cmd"
                         type="text"
@@ -1212,14 +1104,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 </form>
             </div>
 
-            {/* Public Server Modal */}
             <AnimatePresence>
-                {showPublicModal && (
-                    <PublicServerModal
-                        onClose={() => setShowPublicModal(false)}
-                        t={t}
-                    />
-                )}
                 {showShutdownModal && (
                     <ShutdownTimerModal
                         onClose={() => setShowShutdownModal(false)}

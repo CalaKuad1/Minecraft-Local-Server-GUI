@@ -46,7 +46,7 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
         <img src={logo} alt="Server Manager" className="w-full max-h-16 object-contain opacity-90 drop-shadow-[0_0_15px_rgba(16,185,129,0.15)]" />
       </div>
       <div className="px-4 mb-2 mt-2">
-        <button onClick={onBack} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-xs font-minecraft tracking-wider uppercase text-zinc-500 hover:text-white hover:bg-white/5 transition-colors border border-transparent">
+        <button onClick={onBack} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-xs font-minecraft tracking-wider uppercase text-ink-faint hover:text-white hover:bg-white/5 transition-colors border border-transparent">
           <span>&lt; {t('nav.back_to_library')}</span>
         </button>
       </div>
@@ -55,8 +55,8 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
           const isActive = activeTab === item.id;
           return (
             <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all duration-200 group border-l-2 ${isActive ? 'bg-white/10 border-emerald-400 shadow-sm' : 'border-transparent text-gray-400 hover:bg-white/5 hover:border-white/20'}`}>
-              <item.Icon size={18} className={`${isActive ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'text-zinc-500 group-hover:text-white transition-colors duration-200'}`} />
-              <span className={`font-minecraft text-lg tracking-wider mt-0.5 uppercase ${isActive ? 'text-white' : 'text-zinc-500 group-hover:text-white transition-colors duration-200'}`}>{item.label}</span>
+              <item.Icon size={18} className={`${isActive ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'text-ink-faint group-hover:text-white transition-colors duration-200'}`} />
+              <span className={`font-minecraft text-lg tracking-wider mt-0.5 uppercase ${isActive ? 'text-white' : 'text-ink-faint group-hover:text-white transition-colors duration-200'}`}>{item.label}</span>
               {isActive && (
                  <div className="ml-auto w-1.5 h-1.5 rounded-sm bg-emerald-400 shadow-[0_0_8px_currentColor]" />
               )}
@@ -71,18 +71,18 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
         </div>
       </div>
       <div className="px-6 pb-6 pt-2 flex items-center justify-between">
-        <div className="text-xs text-zinc-500 font-minecraft uppercase tracking-wider">
+        <div className="text-xs text-ink-faint font-minecraft uppercase tracking-wider">
           <span>{t('common.made_by')} <span className="text-white">CalaKuad1</span></span>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={onOpenAppSettings} 
-            className="p-2 hover:bg-white/10 rounded-sm transition-colors text-zinc-500 hover:text-white"
+            className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white"
             title={t('settings.title')}
           >
             <SettingsIcon size={16} />
           </button>
-          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-zinc-500 hover:text-white" title="View on GitHub"><Github size={16} /></a>
+          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white" title="View on GitHub"><Github size={16} /></a>
         </div>
       </div>
     </div>

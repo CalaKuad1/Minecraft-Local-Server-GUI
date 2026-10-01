@@ -127,7 +127,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs transition-all ${
                                         activeSection === id
                                             ? 'bg-white/10 text-white'
-                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                                            : 'text-ink-faint hover:text-zinc-300 hover:bg-white/5'
                                     }`}
                                 >
                                     <Icon size={14} className={activeSection === id ? 'text-emerald-400' : ''} />
@@ -155,7 +155,7 @@ export default function AppSettings({ isOpen, onClose }) {
                     {/* Content Area */}
                     <div className="flex-1 py-6 px-8 overflow-y-auto">
                         {/* Close button */}
-                        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 text-zinc-600 hover:text-white hover:bg-white/10 rounded-sm transition-colors">
+                        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 text-ink-faint hover:text-white hover:bg-white/10 rounded-sm transition-colors">
                             <X size={14} />
                         </button>
 
@@ -191,7 +191,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                     {/* Automatic updates */}
                                     <div className="py-3 border-b border-white/[0.03]">
                                         <div className="text-xs font-minecraft tracking-wider uppercase text-zinc-300">{t('settings.auto_update.title')}</div>
-                                        <div className="text-[10px] text-zinc-600 mt-0.5 mb-3">{t('settings.auto_update.desc')}</div>
+                                        <div className="text-[10px] text-ink-faint mt-0.5 mb-3">{t('settings.auto_update.desc')}</div>
                                         <div className="space-y-1.5">
                                             {UPDATE_POLICIES.map((p) => (
                                                 <button
@@ -205,7 +205,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                                 >
                                                     <div className="text-left">
                                                         <div className="text-[11px] font-minecraft uppercase tracking-wider">{t(p.labelKey)}</div>
-                                                        <div className="text-[9px] text-zinc-600 mt-0.5">{t(p.descKey)}</div>
+                                                        <div className="text-[9px] text-ink-faint mt-0.5">{t(p.descKey)}</div>
                                                     </div>
                                                     {settings.auto_update === p.id && (
                                                         <div className="w-2 h-2 rounded-sm bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)] shrink-0"></div>
@@ -221,7 +221,7 @@ export default function AppSettings({ isOpen, onClose }) {
                         {activeSection === 'language' && (
                             <div>
                                 <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">{t('settings.language_settings.title')}</h2>
-                                <p className="text-xs text-zinc-600 mb-6">{t('settings.language_settings.desc')}</p>
+                                <p className="text-xs text-ink-faint mb-6">{t('settings.language_settings.desc')}</p>
 
                                 <div className="space-y-2">
                                     {LANGUAGES.map(lang => (
@@ -236,7 +236,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                         >
                                             <div className="flex items-center gap-3">
                                                 <span className="font-minecraft text-xs tracking-wider uppercase">{lang.label}</span>
-                                                <span className="text-[10px] text-zinc-600 font-mono">{lang.native}</span>
+                                                <span className="text-[10px] text-ink-faint font-mono">{lang.native}</span>
                                             </div>
                                             {settings.language === lang.code && (
                                                 <div className="w-2 h-2 rounded-sm bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
@@ -250,7 +250,7 @@ export default function AppSettings({ isOpen, onClose }) {
                         {activeSection === 'appearance' && (
                             <div>
                                 <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">{t('settings.appearance_settings.title')}</h2>
-                                <p className="text-xs text-zinc-600 mb-6">{t('settings.appearance_settings.desc')}</p>
+                                <p className="text-xs text-ink-faint mb-6">{t('settings.appearance_settings.desc')}</p>
 
                                 <div className="space-y-2">
                                     {THEMES.map(theme => (
@@ -276,7 +276,7 @@ export default function AppSettings({ isOpen, onClose }) {
                         {activeSection === 'dns' && (
                             <div>
                                 <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">Fixed Address</h2>
-                                <p className="text-xs text-zinc-600 mb-6">Give your server a permanent domain that never changes, even when the tunnel IP does.</p>
+                                <p className="text-xs text-ink-faint mb-6">Give your server a permanent domain that never changes, even when the tunnel IP does.</p>
 
                                 <div className="space-y-5">
                                     <ToggleSetting
@@ -287,21 +287,21 @@ export default function AppSettings({ isOpen, onClose }) {
                                     />
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-zinc-500">DNS Proxy URL</label>
+                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-ink-faint">DNS Proxy URL</label>
                                         <input
                                             type="text"
                                             value={settings.dns_proxy_url || ''}
                                             onChange={(e) => updateSetting('dns_proxy_url', e.target.value)}
                                             placeholder="Default: community proxy (leave empty)"
-                                            className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-zinc-700 font-mono outline-none focus:border-white/30 transition-colors"
+                                            className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-ink-faint font-mono outline-none focus:border-white/30 transition-colors"
                                         />
-                                        <p className="text-[9px] text-zinc-600 mt-1">
+                                        <p className="text-[9px] text-ink-faint mt-1">
                                             Leave empty to use the community proxy. Advanced users can host their own.
                                         </p>
                                     </div>
 
                                     <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm">
-                                        <p className="text-[10px] text-zinc-500 leading-relaxed font-mono">
+                                        <p className="text-[10px] text-ink-faint leading-relaxed font-mono">
                                             When the tunnel starts, your server automatically gets a fixed address at{' '}
                                             <span className="text-emerald-400">[servername].play.ariser.com</span>.
                                             Max 1 update per minute per server. Free for everyone.
@@ -318,23 +318,23 @@ export default function AppSettings({ isOpen, onClose }) {
                                 <div className="space-y-4">
                                     <div className="bg-white/[0.02] border border-white/5 rounded-md p-5">
                                         <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">Minecraft Server GUI</div>
-                                        <div className="text-xs font-mono text-zinc-500 mb-4">{appVersion ? `v${appVersion}` : ''}</div>
-                                        <p className="text-xs text-zinc-500 leading-relaxed">
+                                        <div className="text-xs font-mono text-ink-faint mb-4">{appVersion ? `v${appVersion}` : ''}</div>
+                                        <p className="text-xs text-ink-faint leading-relaxed">
                                             A professional server management tool for Minecraft servers.
                                             Supports Vanilla, Paper, Spigot, Fabric, Forge, and NeoForge server types.
                                         </p>
                                     </div>
 
                                     <div className="flex items-center justify-between py-3 border-b border-white/[0.03]">
-                                        <span className="text-xs font-minecraft tracking-wider uppercase text-zinc-500">{t('settings.developer')}</span>
+                                        <span className="text-xs font-minecraft tracking-wider uppercase text-ink-faint">{t('settings.developer')}</span>
                                         <span className="text-xs font-mono text-zinc-400">CalaKuad1</span>
                                     </div>
                                     <div className="flex items-center justify-between py-3 border-b border-white/[0.03]">
-                                        <span className="text-xs font-minecraft tracking-wider uppercase text-zinc-500">{t('settings.framework')}</span>
+                                        <span className="text-xs font-minecraft tracking-wider uppercase text-ink-faint">{t('settings.framework')}</span>
                                         <span className="text-xs font-mono text-zinc-400">Electron + React + FastAPI</span>
                                     </div>
                                     <div className="flex items-center justify-between py-3 border-b border-white/[0.03]">
-                                        <span className="text-xs font-minecraft tracking-wider uppercase text-zinc-500">{t('settings.license')}</span>
+                                        <span className="text-xs font-minecraft tracking-wider uppercase text-ink-faint">{t('settings.license')}</span>
                                         <span className="text-xs font-mono text-zinc-400">MIT</span>
                                     </div>
 
@@ -342,7 +342,7 @@ export default function AppSettings({ isOpen, onClose }) {
                                         href="https://github.com/CalaKuad1"
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-2 text-xs font-minecraft tracking-wider uppercase text-zinc-500 hover:text-emerald-400 transition-colors mt-2"
+                                        className="inline-flex items-center gap-2 text-xs font-minecraft tracking-wider uppercase text-ink-faint hover:text-emerald-400 transition-colors mt-2"
                                     >
                                         <FolderOpen size={12} />
                                         {t('settings.view_github')}
@@ -363,7 +363,7 @@ function ToggleSetting({ label, description, value, onChange }) {
         <div className="flex items-center justify-between py-3 border-b border-white/[0.03]">
             <div className="min-w-0 mr-4">
                 <div className="text-xs font-minecraft tracking-wider uppercase text-zinc-300">{label}</div>
-                <div className="text-[10px] text-zinc-600 mt-0.5">{description}</div>
+                <div className="text-[10px] text-ink-faint mt-0.5">{description}</div>
             </div>
             <button
                 onClick={() => onChange(!value)}

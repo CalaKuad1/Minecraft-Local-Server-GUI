@@ -176,14 +176,14 @@ export default function Worlds() {
     const formatDate = (timestamp) => new Date(timestamp * 1000).toLocaleString();
 
     if (loading) {
-        return <div className="p-8 text-center text-zinc-500 font-minecraft tracking-widest uppercase">{t('worlds.loading')}</div>;
+        return <div className="p-8 text-center text-ink-faint font-minecraft tracking-widest uppercase">{t('worlds.loading')}</div>;
     }
 
     if (error) {
         return (
             <div className="p-8 text-center">
                 <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('worlds.error')}</div>
-                <div className="text-zinc-500 text-sm mb-4">{error}</div>
+                <div className="text-ink-faint text-sm mb-4">{error}</div>
                 <button onClick={loadData} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-sm transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
             </div>
         );
@@ -193,7 +193,7 @@ export default function Worlds() {
         <div className="animate-in fade-in zoom-in duration-500 max-w-5xl mx-auto w-full">
             <div className="mb-8">
                 <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('worlds.title')}</h2>
-                <p className="text-zinc-500 text-sm">{t('worlds.subtitle')}</p>
+                <p className="text-ink-faint text-sm">{t('worlds.subtitle')}</p>
             </div>
 
             <div className="mb-8 bg-[#18181b]/60 backdrop-blur-xl border border-white/5 rounded-sm p-6">
@@ -202,7 +202,7 @@ export default function Worlds() {
                         <Archive size={18} className="text-emerald-400" />
                         <div>
                             <div className="text-lg font-minecraft text-white tracking-wider uppercase">{t('worlds.backups')}</div>
-                            <div className="text-xs text-zinc-500">{backups.length}</div>
+                            <div className="text-xs text-ink-faint">{backups.length}</div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -223,16 +223,16 @@ export default function Worlds() {
                 </div>
 
                 {backupsLoading ? (
-                    <div className="text-sm text-zinc-500">{t('common.loading')}</div>
+                    <div className="text-sm text-ink-faint">{t('common.loading')}</div>
                 ) : backups.length === 0 ? (
-                    <div className="text-sm text-zinc-500">{t('worlds.no_backups')}</div>
+                    <div className="text-sm text-ink-faint">{t('worlds.no_backups')}</div>
                 ) : (
                     <div className="space-y-2 max-h-72 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-1">
                         {backups.map((b) => (
                             <div key={b.name} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-sm bg-black/20 border border-white/5">
                                 <div className="min-w-0">
                                     <div className="text-sm text-white font-mono truncate">{b.name}</div>
-                                    <div className="text-xs text-zinc-500">
+                                    <div className="text-xs text-ink-faint">
                                         <span className="text-emerald-400/80">{parseWorldFromBackup(b.name)}</span> • {b.size} • {formatDate(b.created)}
                                     </div>
                                 </div>
@@ -246,7 +246,7 @@ export default function Worlds() {
                                         <Download size={15} />
                                     </button>
                                     <button onClick={() => handleDelete(b.name)} disabled={busyBackup === b.name}
-                                        title={t('common.delete')} className="p-2 rounded-sm text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+                                        title={t('common.delete')} className="p-2 rounded-sm text-ink-faint hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40">
                                         <Trash2 size={15} />
                                     </button>
                                 </div>
@@ -265,13 +265,13 @@ export default function Worlds() {
                             <span className="text-xs font-minecraft uppercase tracking-wider text-zinc-300">{t('worlds.auto_backup')}</span>
                         </label>
                         <div className="flex flex-col">
-                            <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">{t('worlds.every_minutes')}</label>
+                            <label className="text-[10px] text-ink-faint uppercase tracking-wider mb-1">{t('worlds.every_minutes')}</label>
                             <input type="number" min="5" value={backupSettings.interval_minutes}
                                 onChange={(e) => setBackupSettings(s => ({ ...s, interval_minutes: e.target.value }))}
                                 className="w-28 bg-black/40 border border-white/10 rounded-sm px-3 py-1.5 text-white text-sm font-mono focus:border-emerald-500 outline-none" />
                         </div>
                         <div className="flex flex-col">
-                            <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">{t('worlds.keep')}</label>
+                            <label className="text-[10px] text-ink-faint uppercase tracking-wider mb-1">{t('worlds.keep')}</label>
                             <input type="number" min="1" value={backupSettings.keep}
                                 onChange={(e) => setBackupSettings(s => ({ ...s, keep: e.target.value }))}
                                 className="w-20 bg-black/40 border border-white/10 rounded-sm px-3 py-1.5 text-white text-sm font-mono focus:border-emerald-500 outline-none" />
@@ -302,11 +302,11 @@ export default function Worlds() {
                         </div>
                         <h3 className="text-lg font-minecraft text-white tracking-wider mb-3">{world.name}</h3>
                         <div className="space-y-1.5 mb-4">
-                            <div className="flex items-center text-xs text-zinc-500 gap-2"><HardDrive size={13} /> {world.size}</div>
-                            <div className="flex items-center text-xs text-zinc-500 gap-2"><Clock size={13} /> {formatDate(world.last_modified)}</div>
+                            <div className="flex items-center text-xs text-ink-faint gap-2"><HardDrive size={13} /> {world.size}</div>
+                            <div className="flex items-center text-xs text-ink-faint gap-2"><Clock size={13} /> {formatDate(world.last_modified)}</div>
                         </div>
                         <button onClick={() => handleSwitchWorld(world.name)} disabled={switching || activeWorld === world.name}
-                            className={`w-full py-2 rounded-sm text-xs font-minecraft uppercase tracking-wider transition-colors ${activeWorld === world.name ? 'bg-transparent text-zinc-600 cursor-default' : 'bg-white/5 hover:bg-white/10 text-white'}`}>
+                            className={`w-full py-2 rounded-sm text-xs font-minecraft uppercase tracking-wider transition-colors ${activeWorld === world.name ? 'bg-transparent text-ink-faint cursor-default' : 'bg-white/5 hover:bg-white/10 text-white'}`}>
                             {activeWorld === world.name ? t('worlds.selected') : t('worlds.load_world')}
                         </button>
                     </div>
