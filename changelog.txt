@@ -1,8 +1,21 @@
 # Minecraft Server GUI - Changelog
 
-## Version 1.3.3 - 2026-10-01 LINUX APPIMAGE COMPATIBILITY
+## Version 1.3.3 - 2026-10-01 LINUX APPIMAGE COMPATIBILITY & UI REFRESH
+
+### NEW
+- Refreshed Dashboard: start/stop, schedule shutdown, auto-restart and the
+  public-server / fixed-address card use new pixel-bevel buttons and badges,
+  and are fully translated (EN/ES/FR/RU).
+- Non-blocking notifications replace blocking popups for tunnel, DNS and
+  shutdown-timer results.
+- App Settings > Appearance: "Reduce visual effects" turns off blur and film
+  grain for older computers.
+- Fonts are bundled with the app, so it looks right offline.
 
 ### FIXED
+- Numbers are always legible: the pixel font drew "5" like an "S".
+- Secondary text now meets WCAG AA contrast; keyboard focus is visible; dialogs
+  close with Escape and keep focus inside; reduced-motion is respected.
 - Linux AppImage: the bundled Python backend crashed on startup on older
   distributions with "Failed to load Python shared library ... GLIBC_2.38 not
   found". The Linux build now runs on Ubuntu 22.04 (glibc 2.35) instead of
