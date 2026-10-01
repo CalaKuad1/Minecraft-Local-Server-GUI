@@ -14,7 +14,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # Linux is pinned to the oldest still-supported Ubuntu LTS on purpose.
+        # PyInstaller bundles the runner's libpython, which links against the
+        # runner's glibc, so building on ubuntu-latest (24.04, glibc 2.39)
+        # produces an AppImage that crashes on older distros with
+        # "GLIBC_2.38 not found". Do not bump this to ubuntu-latest.
+        os: [windows-latest, ubuntu-22.04]
 
     steps:
       - name: Check out Git repository
@@ -99,7 +104,8 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # See verify-build: Linux must stay on the oldest supported Ubuntu LTS.
+        os: [windows-latest, ubuntu-22.04]
 
     steps:
       - name: Check out Git repository
