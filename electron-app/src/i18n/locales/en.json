@@ -458,5 +458,83 @@
             "management": "Management",
             "social": "Social"
         }
+    },
+    "wizard": {
+        "title": "New server",
+        "steps": {
+            "mode": "Start",
+            "type": "Game type",
+            "details": "Details",
+            "install": "Installing"
+        },
+        "footer": "Runs on your own PC. Free, no limits.",
+        "back": "Back",
+        "next": "Next",
+        "exit": "Back to library",
+        "mode": {
+            "title": "What do you want to do?",
+            "subtitle": "You can have as many servers as you like.",
+            "new_title": "Create a new server",
+            "new_desc": "We download and set up everything for you. Takes about a minute.",
+            "import_title": "I already have a server",
+            "import_desc": "Add a server folder you already have on this PC."
+        },
+        "type": {
+            "title": "How do you want to play?",
+            "subtitle": "Not sure? Pick the recommended one: it works with any normal Minecraft.",
+            "recommended": "Recommended",
+            "vanilla": "Plain Minecraft, exactly as Mojang made it.",
+            "paper": "Like vanilla but faster, and supports plugins (minigames, protections, crossplay).",
+            "fabric": "For light mods: performance, small tweaks.",
+            "forge": "For big mods and classic modpacks.",
+            "neoforge": "For modern modpacks.",
+            "mods_note": "With mods, each friend needs the same mods installed in their game.",
+            "version": "Minecraft version",
+            "version_hint": "Must match the version your friends play on.",
+            "loader_version": "{loader} version",
+            "loader_hint": "Leave it as is if you're not sure.",
+            "loading": "Loading...",
+            "select": "Choose a version",
+            "versions_error": "Couldn't load the versions. Check your internet connection."
+        },
+        "details": {
+            "title": "Final details",
+            "subtitle": "You can change all of this later.",
+            "name": "Server name",
+            "folder": "Saved in",
+            "ram": "Memory",
+            "ram_hint": "More memory = more players and mods. Don't use more than half of your PC's RAM.",
+            "ram_2": "Few friends",
+            "ram_4": "Recommended",
+            "ram_8": "Many mods",
+            "java": "Java",
+            "java_checking": "Checking Java...",
+            "java_ready": "Ready: Java {v} is already installed.",
+            "java_download": "Java {v} will be downloaded automatically.",
+            "java_system": "Java {v} needed. Your PC has Java {sys}; we'll get the right one.",
+            "java_unknown": "Couldn't check Java. We'll try to set it up during the install.",
+            "eula": "I accept the Minecraft EULA",
+            "eula_hint": "Mojang's rules for running a server (aka.ms/MinecraftEULA).",
+            "create": "Create server",
+            "create_download": "Download and create"
+        },
+        "import": {
+            "title": "Add an existing server",
+            "subtitle": "Choose the folder that contains the server's .jar file.",
+            "folder": "Server folder",
+            "placeholder": "Choose a folder...",
+            "button": "Add server",
+            "adding": "Adding...",
+            "invalid": "That folder doesn't look like a Minecraft server. Choose the one with the .jar file.",
+            "failed": "Couldn't add the server."
+        },
+        "install": {
+            "title": "Creating your server...",
+            "done": "Done! Opening your server...",
+            "starting": "Getting started...",
+            "failed_title": "Something went wrong",
+            "failed_hint": "Check your internet connection and try again. If it keeps failing, try another version.",
+            "retry": "Try again"
+        }
     }
 }

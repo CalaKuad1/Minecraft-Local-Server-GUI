@@ -456,5 +456,83 @@
             "management": "Gestion",
             "social": "Social"
         }
+    },
+    "wizard": {
+        "title": "Nouveau serveur",
+        "steps": {
+            "mode": "Début",
+            "type": "Type de jeu",
+            "details": "Détails",
+            "install": "Installation"
+        },
+        "footer": "Tourne sur ton propre PC. Gratuit et sans limites.",
+        "back": "Retour",
+        "next": "Suivant",
+        "exit": "Retour à la bibliothèque",
+        "mode": {
+            "title": "Que veux-tu faire ?",
+            "subtitle": "Tu peux avoir autant de serveurs que tu veux.",
+            "new_title": "Créer un nouveau serveur",
+            "new_desc": "On télécharge et on prépare tout pour toi. Ça prend environ une minute.",
+            "import_title": "J'ai déjà un serveur",
+            "import_desc": "Ajoute un dossier de serveur que tu as déjà sur ce PC."
+        },
+        "type": {
+            "title": "Comment veux-tu jouer ?",
+            "subtitle": "Tu ne sais pas ? Prends celui recommandé : il marche avec n'importe quel Minecraft normal.",
+            "recommended": "Recommandé",
+            "vanilla": "Minecraft tel quel, comme Mojang l'a fait.",
+            "paper": "Comme vanilla mais plus rapide, et accepte les plugins (mini-jeux, protections, crossplay).",
+            "fabric": "Pour les mods légers : performances, petits ajustements.",
+            "forge": "Pour les gros mods et les modpacks classiques.",
+            "neoforge": "Pour les modpacks modernes.",
+            "mods_note": "Avec des mods, chaque ami doit avoir les mêmes mods installés dans son jeu.",
+            "version": "Version de Minecraft",
+            "version_hint": "Doit être la même que celle de tes amis.",
+            "loader_version": "Version de {loader}",
+            "loader_hint": "Laisse-la telle quelle si tu n'es pas sûr.",
+            "loading": "Chargement...",
+            "select": "Choisis une version",
+            "versions_error": "Impossible de charger les versions. Vérifie ta connexion internet."
+        },
+        "details": {
+            "title": "Derniers détails",
+            "subtitle": "Tu pourras tout changer plus tard.",
+            "name": "Nom du serveur",
+            "folder": "Enregistré dans",
+            "ram": "Mémoire",
+            "ram_hint": "Plus de mémoire = plus de joueurs et de mods. N'utilise pas plus de la moitié de la RAM de ton PC.",
+            "ram_2": "Peu d'amis",
+            "ram_4": "Recommandé",
+            "ram_8": "Beaucoup de mods",
+            "java": "Java",
+            "java_checking": "Vérification de Java...",
+            "java_ready": "Prêt : Java {v} est déjà installé.",
+            "java_download": "Java {v} sera téléchargé automatiquement.",
+            "java_system": "Java {v} est nécessaire. Ton PC a Java {sys} ; on téléchargera le bon.",
+            "java_unknown": "Impossible de vérifier Java. On essaiera de le préparer pendant l'installation.",
+            "eula": "J'accepte l'EULA de Minecraft",
+            "eula_hint": "Les règles de Mojang pour héberger un serveur (aka.ms/MinecraftEULA).",
+            "create": "Créer le serveur",
+            "create_download": "Télécharger et créer"
+        },
+        "import": {
+            "title": "Ajouter un serveur existant",
+            "subtitle": "Choisis le dossier qui contient le fichier .jar du serveur.",
+            "folder": "Dossier du serveur",
+            "placeholder": "Choisis un dossier...",
+            "button": "Ajouter le serveur",
+            "adding": "Ajout...",
+            "invalid": "Ce dossier ne ressemble pas à un serveur Minecraft. Choisis celui avec le fichier .jar.",
+            "failed": "Impossible d'ajouter le serveur."
+        },
+        "install": {
+            "title": "Création de ton serveur...",
+            "done": "C'est prêt ! Ouverture de ton serveur...",
+            "starting": "Démarrage...",
+            "failed_title": "Quelque chose a échoué",
+            "failed_hint": "Vérifie ta connexion internet et réessaie. Si ça échoue encore, essaie une autre version.",
+            "retry": "Réessayer"
+        }
     }
 }

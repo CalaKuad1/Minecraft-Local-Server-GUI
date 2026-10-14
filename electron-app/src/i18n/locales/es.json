@@ -456,5 +456,83 @@
             "management": "Gestión",
             "social": "Social"
         }
+    },
+    "wizard": {
+        "title": "Nuevo servidor",
+        "steps": {
+            "mode": "Empezar",
+            "type": "Tipo de juego",
+            "details": "Detalles",
+            "install": "Instalando"
+        },
+        "footer": "Funciona en tu propio PC. Gratis y sin límites.",
+        "back": "Atrás",
+        "next": "Siguiente",
+        "exit": "Volver a la biblioteca",
+        "mode": {
+            "title": "¿Qué quieres hacer?",
+            "subtitle": "Puedes tener todos los servidores que quieras.",
+            "new_title": "Crear un servidor nuevo",
+            "new_desc": "Lo descargamos y lo preparamos todo por ti. Tarda más o menos un minuto.",
+            "import_title": "Ya tengo un servidor",
+            "import_desc": "Añade una carpeta de servidor que ya tengas en este PC."
+        },
+        "type": {
+            "title": "¿Cómo quieres jugar?",
+            "subtitle": "¿No lo sabes? Elige el recomendado: funciona con cualquier Minecraft normal.",
+            "recommended": "Recomendado",
+            "vanilla": "Minecraft tal cual, igual que lo hizo Mojang.",
+            "paper": "Como vanilla pero más rápido, y admite plugins (minijuegos, protecciones, crossplay).",
+            "fabric": "Para mods ligeros: rendimiento, pequeños cambios.",
+            "forge": "Para mods grandes y modpacks clásicos.",
+            "neoforge": "Para modpacks modernos.",
+            "mods_note": "Con mods, cada amigo necesita tener los mismos mods instalados en su juego.",
+            "version": "Versión de Minecraft",
+            "version_hint": "Tiene que coincidir con la versión con la que juegan tus amigos.",
+            "loader_version": "Versión de {loader}",
+            "loader_hint": "Déjala como está si no estás seguro.",
+            "loading": "Cargando...",
+            "select": "Elige una versión",
+            "versions_error": "No se pudieron cargar las versiones. Revisa tu conexión a internet."
+        },
+        "details": {
+            "title": "Últimos detalles",
+            "subtitle": "Todo esto lo puedes cambiar después.",
+            "name": "Nombre del servidor",
+            "folder": "Se guarda en",
+            "ram": "Memoria",
+            "ram_hint": "Más memoria = más jugadores y mods. No uses más de la mitad de la RAM de tu PC.",
+            "ram_2": "Pocos amigos",
+            "ram_4": "Recomendado",
+            "ram_8": "Muchos mods",
+            "java": "Java",
+            "java_checking": "Comprobando Java...",
+            "java_ready": "Listo: Java {v} ya está instalado.",
+            "java_download": "Java {v} se descargará automáticamente.",
+            "java_system": "Hace falta Java {v}. Tu PC tiene Java {sys}; descargaremos el correcto.",
+            "java_unknown": "No se pudo comprobar Java. Intentaremos prepararlo durante la instalación.",
+            "eula": "Acepto el EULA de Minecraft",
+            "eula_hint": "Las normas de Mojang para tener un servidor (aka.ms/MinecraftEULA).",
+            "create": "Crear servidor",
+            "create_download": "Descargar y crear"
+        },
+        "import": {
+            "title": "Añadir un servidor existente",
+            "subtitle": "Elige la carpeta que contiene el archivo .jar del servidor.",
+            "folder": "Carpeta del servidor",
+            "placeholder": "Elige una carpeta...",
+            "button": "Añadir servidor",
+            "adding": "Añadiendo...",
+            "invalid": "Esa carpeta no parece un servidor de Minecraft. Elige la que tiene el archivo .jar.",
+            "failed": "No se pudo añadir el servidor."
+        },
+        "install": {
+            "title": "Creando tu servidor...",
+            "done": "¡Listo! Abriendo tu servidor...",
+            "starting": "Empezando...",
+            "failed_title": "Algo ha fallado",
+            "failed_hint": "Revisa tu conexión a internet y vuelve a intentarlo. Si sigue fallando, prueba otra versión.",
+            "retry": "Reintentar"
+        }
     }
 }

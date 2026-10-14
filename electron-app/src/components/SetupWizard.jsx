@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, API_TOKEN, WS_BASE } from '../api';
+import { useTranslation } from '../contexts/LanguageContext';
 import { Select } from './ui/Select';
-import { Check, ChevronRight, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Cpu, Box, HardDrive, Terminal, Monitor } from './ui/PixelIcons';
+import { Check, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Box, HardDrive, Terminal, AlertTriangle, Info, Plus, Play } from './ui/PixelIcons';
 import fabricLogo from '../assets/engines/fabric.png';
 import forgeLogo from '../assets/engines/forge.png';
 import neoforgeLogo from '../assets/engines/neoforge.png';
@@ -34,26 +35,39 @@ function StepItem({ icon, label, active, completed }) {
     return (
         <div className={`flex items-center gap-3 transition-all ${active ? 'opacity-100' : completed ? 'opacity-60' : 'opacity-30'}`}>
             <div className={`w-8 h-8 rounded-sm border flex items-center justify-center transition-all ${
-                active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 
-                completed ? 'bg-white/5 border-white/10 text-white' : 
+                active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                completed ? 'bg-white/5 border-white/10 text-white' :
                 'bg-black/20 border-white/5 text-ink-faint'
             }`}>
                 {completed ? <Check size={14} /> : icon}
             </div>
-            <span className={`text-[10px] uppercase tracking-widest font-minecraft ${active ? 'text-white' : 'text-ink-faint'}`}>{label}</span>
+            <span className={`text-xs font-medium ${active ? 'text-white' : 'text-ink-faint'}`}>{label}</span>
         </div>
     );
 }
 
+// Order matters: the list reads from "simplest" to "most modded".
+const ENGINES = ['paper', 'vanilla', 'fabric', 'forge', 'neoforge'];
+const RECOMMENDED_ENGINE = 'paper';
+const MODDED_ENGINES = ['fabric', 'forge', 'neoforge'];
+const ENGINE_NAMES = { vanilla: 'Vanilla', paper: 'Paper', fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge' };
+
+const labelClass = "text-xs font-semibold text-gray-300 mb-2 block";
+const hintClass = "text-[11px] text-ink-faint mt-2 leading-relaxed";
+const backButtonClass = "text-xs text-ink-faint hover:text-white transition-colors flex items-center gap-2";
+const primaryButtonClass = "ml-auto px-6 py-2.5 rounded-sm text-[11px] font-minecraft uppercase tracking-widest transition-all disabled:opacity-30 flex items-center gap-2";
+
 export default function SetupWizard({ onComplete, onCancel }) {
+    const { t } = useTranslation();
     const [step, setStep] = useState(1);
     const [mode, setMode] = useState('install');
 
     // Engine Data
-    const [serverType, setServerType] = useState('vanilla');
+    const [serverType, setServerType] = useState(RECOMMENDED_ENGINE);
     const [version, setVersion] = useState('');
     const [versionsList, setVersionsList] = useState([]);
     const [loadingVersions, setLoadingVersions] = useState(false);
+    const [versionsError, setVersionsError] = useState(false);
     const [loaderVersionsList, setLoaderVersionsList] = useState([]);
     const [loaderVersion, setLoaderVersion] = useState('');
     const [allVersionData, setAllVersionData] = useState(null);
@@ -81,7 +95,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
             .catch(() => { /* fall back to the browser default */ });
         return () => { cancelled = true; };
     }, []);
-    
+
     // RAM config
     const [ramPreset, setRamPreset] = useState("4"); // Default 4GB
     const [eulaAccepted, setEulaAccepted] = useState(false);
@@ -93,7 +107,8 @@ export default function SetupWizard({ onComplete, onCancel }) {
     // Install State
     const [installing, setInstalling] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [statusMessage, setStatusMessage] = useState('Initializing deployment...');
+    const [statusMessage, setStatusMessage] = useState('');
+    const [installError, setInstallError] = useState('');
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState('');
     const ws = useRef(null);
@@ -104,6 +119,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
     useEffect(() => {
         if (step === 2 && mode === 'install') {
             setLoadingVersions(true);
+            setVersionsError(false);
             setVersionsList([]);
             setVersion('');
 
@@ -112,7 +128,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                     setVersionsList(data.versions);
                     setVersion(data.versions[0]);
                     setFolderName(`${serverType}-${data.versions[0]}`);
-                    
+
                     if (data.all_data) {
                         setAllVersionData(data.all_data);
                         const subVersions = data.all_data[data.versions[0]] || [];
@@ -123,10 +139,13 @@ export default function SetupWizard({ onComplete, onCancel }) {
                         setLoaderVersionsList([]);
                         setLoaderVersion('');
                     }
+                } else {
+                    setVersionsError(true);
                 }
             }).catch(err => {
                 console.error("Failed to load versions:", err);
                 setVersionsList([]);
+                setVersionsError(true);
             }).finally(() => setLoadingVersions(false));
         }
     }, [serverType, step, mode]);
@@ -134,7 +153,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
     const handleVersionChange = (ver) => {
         setVersion(ver);
         setFolderName(`${serverType}-${ver}`);
-        
+
         if (allVersionData) {
             const subVersions = allVersionData[ver] || [];
             setLoaderVersionsList(subVersions);
@@ -163,7 +182,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                     setProgress(d.value);
                     setStatusMessage(d.message);
                     if (d.error) {
-                        setStatusMessage(`Deployment Failed: ${d.error}`);
+                        setInstallError(String(d.error));
                         setInstalling(false);
                     }
                     if (d.server_id) installedServerId.current = d.server_id;
@@ -172,8 +191,8 @@ export default function SetupWizard({ onComplete, onCancel }) {
                         setTimeout(() => onComplete && onComplete(installedServerId.current), 1500);
                     }
                 }
-                if (d.type === 'java_progress') {
-                    setStatusMessage(d.message || "Resolving dependencies...");
+                if (d.type === 'java_progress' && d.message) {
+                    setStatusMessage(d.message);
                 }
             };
 
@@ -195,7 +214,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                         setProgress(prev => Math.max(prev, data.value));
                         if (data.message) setStatusMessage(data.message);
                         if (data.error) {
-                            setStatusMessage(`Deployment Failed: ${data.error}`);
+                            setInstallError(String(data.error));
                             setInstalling(false);
                             clearInterval(intervalId);
                         }
@@ -214,10 +233,12 @@ export default function SetupWizard({ onComplete, onCancel }) {
 
     const handleDeploy = async () => {
         setInstalling(true);
+        setInstallError('');
+        setStatusMessage('');
         setStep(4);
         setProgress(0);
         completedRef.current = false;
-        
+
         try {
             await api.installServer({
                 server_type: serverType,
@@ -232,7 +253,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
             });
         } catch (err) {
             console.error("Installation failed to start", err);
-            setStatusMessage(`Error: ${err.message}`);
+            setInstallError(err.message || String(err));
             setInstalling(false);
         }
     };
@@ -246,202 +267,244 @@ export default function SetupWizard({ onComplete, onCancel }) {
             if (result && result.id) {
                 onComplete(result.id);
             } else {
-                setImportError('Could not link the server folder. Is it a valid server directory?');
+                setImportError(t('wizard.import.invalid'));
             }
         } catch (err) {
             console.error("Import failed", err);
-            setImportError(err.message || 'Failed to link the server folder.');
+            setImportError(err.message || t('wizard.import.failed'));
         } finally {
             setImporting(false);
         }
     };
 
+    const javaLine = () => {
+        if (javaLoading) return { tone: 'muted', text: t('wizard.details.java_checking') };
+        if (!javaStatus) return { tone: 'muted', text: t('wizard.details.java_unknown') };
+        const v = String(javaStatus.required_version ?? '');
+        if (javaStatus.status_color === 'green') {
+            return { tone: 'ok', text: t('wizard.details.java_ready').replace('{v}', v) };
+        }
+        if (javaStatus.system_java) {
+            return {
+                tone: 'info',
+                text: t('wizard.details.java_system').replace('{v}', v).replace('{sys}', String(javaStatus.system_java[0]))
+            };
+        }
+        return { tone: 'info', text: t('wizard.details.java_download').replace('{v}', v) };
+    };
+
+    const needsJavaDownload = javaStatus && !javaStatus.local_java_available && javaStatus.needs_download;
+    const done = step === 4 && !installError && progress >= 100;
+
     return (
         <div className="flex flex-col h-full w-full bg-transparent animate-in fade-in duration-500 relative">
-            
+
             {/* Main Wizard Container */}
             <div className="w-full flex-1 flex overflow-hidden">
-                
+
                 {/* Sidebar */}
                 <div className="w-64 bg-[#0a0a0a]/80 border-r border-white/10 flex flex-col backdrop-blur-xl shadow-2xl z-10 flex-shrink-0">
                     <div className="p-8">
                         <div className="flex items-center gap-3 text-emerald-400 mb-10">
-                            <Terminal size={20} />
-                            <span className="font-minecraft text-lg tracking-wide uppercase">Setup</span>
+                            <Plus size={18} />
+                            <span className="font-minecraft text-lg tracking-wide">{t('wizard.title')}</span>
                         </div>
-                        
+
                         <div className="space-y-6">
-                            <StepItem icon={<Box size={14} />} label="Mode" active={step === 1} completed={step > 1} />
-                            <StepItem icon={<Cpu size={14} />} label="Engine" active={step === 2} completed={step > 2} />
-                            <StepItem icon={<HardDrive size={14} />} label="Config" active={step === 3} completed={step > 3} />
-                            <StepItem icon={<Terminal size={14} />} label="Status" active={step === 4} />
+                            <StepItem icon={<Box size={14} />} label={t('wizard.steps.mode')} active={step === 1} completed={step > 1} />
+                            {mode === 'install' && (
+                                <StepItem icon={<Play size={14} />} label={t('wizard.steps.type')} active={step === 2} completed={step > 2} />
+                            )}
+                            <StepItem icon={<HardDrive size={14} />} label={t('wizard.steps.details')} active={step === 3} completed={step > 3} />
+                            {mode === 'install' && (
+                                <StepItem icon={<Download size={14} />} label={t('wizard.steps.install')} active={step === 4} completed={done} />
+                            )}
                         </div>
                     </div>
 
-                    <div className="mt-auto p-8 border-t border-white/5 opacity-40">
-                        <div className="flex items-center gap-3">
-                            <Monitor size={14} className="text-gray-400" />
-                            <div className="text-[9px] uppercase tracking-widest font-minecraft text-ink-faint">Provisioning</div>
-                        </div>
+                    <div className="mt-auto p-8 border-t border-white/5">
+                        <p className="text-[11px] text-ink-faint leading-relaxed">{t('wizard.footer')}</p>
                     </div>
                 </div>
 
                 {/* Content Area */}
                 <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]/70 backdrop-blur-md">
                     <AnimatePresence mode="wait">
-                        
-                        {/* STEP 1: PROJECT TYPE */}
+
+                        {/* STEP 1: NEW OR EXISTING */}
                         {step === 1 && (
                             <motion.div
                                 key="step1"
                                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                                 className="flex-1 flex flex-col p-10 justify-center max-w-3xl"
                             >
-                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Deploy Server</h2>
-                                <p className="text-ink-faint text-xs mb-8 tracking-wide">Choose deployment architecture.</p>
+                                <h2 className="text-2xl font-minecraft tracking-wide text-emerald-400 mb-2">{t('wizard.mode.title')}</h2>
+                                <p className="text-ink-faint text-sm mb-8">{t('wizard.mode.subtitle')}</p>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => { setMode('install'); setStep(2); }}
-                                        className="p-6 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm text-left transition-all group"
+                                        className="p-6 bg-emerald-500/5 border border-emerald-500/30 hover:border-emerald-400/60 hover:bg-emerald-500/10 rounded-sm text-left transition-all group"
                                     >
-                                        <Download size={24} className="text-emerald-500/60 mb-4" />
-                                        <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">New Profile</h3>
-                                        <p className="text-[10px] text-ink-faint leading-relaxed">Install a fresh Minecraft server engine.</p>
+                                        <Download size={28} className="text-emerald-400 mb-4" />
+                                        <h3 className="text-sm font-minecraft tracking-wide text-white mb-2">{t('wizard.mode.new_title')}</h3>
+                                        <p className="text-xs text-gray-400 leading-relaxed">{t('wizard.mode.new_desc')}</p>
                                     </button>
 
                                     <button
                                         onClick={() => { setMode('existing'); setStep(3); }}
                                         className="p-6 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm text-left transition-all group"
                                     >
-                                        <Folder size={24} className="text-emerald-500/60 mb-4" />
-                                        <h3 className="text-xs font-minecraft tracking-widest text-white mb-2 uppercase">Import local</h3>
-                                        <p className="text-[10px] text-ink-faint leading-relaxed">Link an existing server folder.</p>
+                                        <Folder size={28} className="text-gray-400 mb-4" />
+                                        <h3 className="text-sm font-minecraft tracking-wide text-white mb-2">{t('wizard.mode.import_title')}</h3>
+                                        <p className="text-xs text-gray-400 leading-relaxed">{t('wizard.mode.import_desc')}</p>
                                     </button>
                                 </div>
-                                
+
                                 <div className="mt-12 flex justify-start">
-                                    <button onClick={onCancel} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors flex items-center gap-2">
-                                        <ArrowLeft size={12} /> Exit setup
+                                    <button onClick={onCancel} className={backButtonClass}>
+                                        <ArrowLeft size={12} /> {t('wizard.exit')}
                                     </button>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 2: ENGINE SELECTION */}
+                        {/* STEP 2: GAME TYPE + VERSION */}
                         {step === 2 && mode === 'install' && (
                             <motion.div
                                 key="step2"
                                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                className="flex-1 flex flex-col p-10 max-w-4xl"
+                                className="flex-1 flex flex-col p-10 max-w-4xl overflow-y-auto"
                             >
-                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Configure Engine</h2>
-                                <p className="text-ink-faint text-xs mb-10 tracking-wide">Select framework and target version.</p>
+                                <h2 className="text-2xl font-minecraft tracking-wide text-emerald-400 mb-2">{t('wizard.type.title')}</h2>
+                                <p className="text-ink-faint text-sm mb-6">{t('wizard.type.subtitle')}</p>
 
-                                <div className="space-y-8">
-                                    <div>
-                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Framework</label>
-                                        <div className="grid grid-cols-5 gap-3">
-                                            {['vanilla', 'paper', 'forge', 'neoforge', 'fabric'].map((type) => (
+                                <div className="space-y-6">
+                                    <div className="space-y-2" role="radiogroup">
+                                        {ENGINES.map((type) => {
+                                            const selected = serverType === type;
+                                            return (
                                                 <button
                                                     key={type}
+                                                    role="radio"
+                                                    aria-checked={selected}
                                                     onClick={() => setServerType(type)}
-                                                    className={`py-4 px-2 flex flex-col items-center justify-center rounded-sm border transition-all gap-3 ${
-                                                        serverType === type 
-                                                            ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' 
-                                                            : 'bg-black/30 border-white/5 text-ink-faint hover:border-white/10'
+                                                    className={`w-full px-4 py-3 flex items-center gap-4 rounded-sm border text-left transition-all ${
+                                                        selected
+                                                            ? 'bg-emerald-500/5 border-emerald-500/40'
+                                                            : 'bg-black/30 border-white/5 hover:border-white/15'
                                                     }`}
                                                 >
-                                                    <EngineIcon 
-                                                        type={type} 
-                                                        size={24} 
-                                                        className={`transition-opacity ${serverType === type ? "opacity-100" : "opacity-30"}`} 
+                                                    <EngineIcon
+                                                        type={type}
+                                                        size={22}
+                                                        className={`shrink-0 transition-opacity ${selected ? "opacity-100" : "opacity-40"}`}
                                                     />
-                                                    <span className={`capitalize text-[10px] font-minecraft tracking-widest ${serverType === type ? "text-emerald-400" : "text-ink-faint"}`}>{type}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-sm font-minecraft tracking-wide ${selected ? 'text-emerald-400' : 'text-white'}`}>{ENGINE_NAMES[type]}</span>
+                                                            {type === RECOMMENDED_ENGINE && (
+                                                                <span className="px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-300 text-[10px] font-semibold">
+                                                                    {t('wizard.type.recommended')}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-400 mt-0.5">{t(`wizard.type.${type}`)}</p>
+                                                    </div>
+                                                    <div className={`w-4 h-4 rounded-full border-2 shrink-0 ${selected ? 'border-emerald-400 bg-emerald-400/30' : 'border-white/20'}`} />
                                                 </button>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
 
-                                    <div>
-                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Minecraft Version</label>
-                                        <div className="max-w-xs">
+                                    {MODDED_ENGINES.includes(serverType) && (
+                                        <div className="flex items-start gap-2 text-xs text-yellow-200/80 bg-yellow-500/5 border border-yellow-500/20 rounded-sm px-3 py-2">
+                                            <Info size={14} className="shrink-0 mt-0.5" />
+                                            <span>{t('wizard.type.mods_note')}</span>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label className={labelClass}>{t('wizard.type.version')}</label>
                                             <Select
                                                 value={version}
                                                 onChange={handleVersionChange}
                                                 options={versionsList}
-                                                placeholder={loadingVersions ? "Loading..." : "Select version"}
+                                                placeholder={loadingVersions ? t('wizard.type.loading') : t('wizard.type.select')}
                                                 disabled={loadingVersions}
                                                 className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
                                             />
+                                            <p className={versionsError ? "text-[11px] text-red-400 mt-2" : hintClass}>
+                                                {versionsError ? t('wizard.type.versions_error') : t('wizard.type.version_hint')}
+                                            </p>
                                         </div>
-                                    </div>
 
-                                    {(serverType === 'forge' || serverType === 'neoforge') && version && (
-                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">
-                                                {serverType === 'forge' ? 'Forge' : 'NeoForge'} Version
-                                            </label>
-                                            <div className="max-w-xs">
+                                        {(serverType === 'forge' || serverType === 'neoforge') && version && (
+                                            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                <label className={labelClass}>
+                                                    {t('wizard.type.loader_version').replace('{loader}', ENGINE_NAMES[serverType])}
+                                                </label>
                                                 <Select
                                                     value={loaderVersion}
                                                     onChange={setLoaderVersion}
                                                     options={loaderVersionsList}
-                                                    placeholder="Select loader version"
+                                                    placeholder={t('wizard.type.select')}
                                                     className="bg-black/30 border-white/5 rounded-sm h-10 text-[11px] font-minecraft tracking-widest"
                                                 />
+                                                <p className={hintClass}>{t('wizard.type.loader_hint')}</p>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
-                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
-                                    <button 
-                                        onClick={() => setStep(3)} 
+                                <div className="mt-auto flex gap-4 pt-8 border-t border-white/5">
+                                    <button onClick={() => setStep(1)} className={backButtonClass}><ArrowLeft size={12} /> {t('wizard.back')}</button>
+                                    <button
+                                        onClick={() => setStep(3)}
                                         disabled={!version || loadingVersions}
-                                        className="ml-auto px-6 py-2.5 bg-white text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-colors hover:bg-gray-200 disabled:opacity-30 flex items-center gap-2"
+                                        className={`${primaryButtonClass} bg-white text-black hover:bg-gray-200`}
                                     >
-                                        Next <ArrowRight size={14} />
+                                        {t('wizard.next')} <ArrowRight size={14} />
                                     </button>
                                 </div>
                             </motion.div>
                         )}
-                        
-                        {/* STEP 3: CONFIGURATION (INSTALL) */}
+
+                        {/* STEP 3: DETAILS (INSTALL) */}
                         {step === 3 && mode === 'install' && (
                             <motion.div
                                 key="step3"
                                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                className="flex-1 flex flex-col p-10 max-w-4xl"
+                                className="flex-1 flex flex-col p-10 max-w-4xl overflow-y-auto"
                             >
-                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase">Parameters</h2>
-                                <p className="text-ink-faint text-xs mb-10 tracking-wide">Environment details.</p>
+                                <h2 className="text-2xl font-minecraft tracking-wide text-emerald-400 mb-2">{t('wizard.details.title')}</h2>
+                                <p className="text-ink-faint text-sm mb-8">{t('wizard.details.subtitle')}</p>
 
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Name</label>
+                                            <label className={labelClass}>{t('wizard.details.name')}</label>
                                             <input
                                                 type="text"
                                                 value={folderName}
                                                 onChange={(e) => setFolderName(e.target.value)}
-                                                className="w-full bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[11px] text-white focus:border-emerald-500/40 outline-none font-minecraft tracking-wider"
+                                                className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-sm text-white focus:border-emerald-500/40 outline-none"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Directory</label>
+                                            <label className={labelClass}>{t('wizard.details.folder')}</label>
                                             <div className="flex gap-2">
                                                 <input
                                                     type="text"
                                                     value={parentPath}
                                                     onChange={(e) => setParentPath(e.target.value)}
-                                                    className="flex-1 bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[10px] text-gray-400 font-mono outline-none truncate"
+                                                    className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-gray-400 font-mono outline-none truncate focus:border-emerald-500/40"
                                                 />
                                                 <button onClick={async () => {
                                                     const path = await api.openDirectoryPicker();
                                                     if (path) setParentPath(path);
-                                                }} className="px-3 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm transition-colors">
+                                                }} className="px-3 bg-black/40 border border-white/10 hover:border-white/20 rounded-sm transition-colors">
                                                     <Folder size={14} className="text-ink-faint" />
                                                 </button>
                                             </div>
@@ -449,155 +512,163 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     </div>
 
                                     <div>
-                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">RAM Allocation</label>
+                                        <label className={labelClass}>{t('wizard.details.ram')}</label>
                                         <div className="grid grid-cols-3 gap-3">
-                                            {[
-                                                { val: "2", label: "2 GB" },
-                                                { val: "4", label: "4 GB" },
-                                                { val: "8", label: "8 GB" }
-                                            ].map((opt) => (
+                                            {["2", "4", "8"].map((val) => (
                                                 <button
-                                                    key={opt.val}
-                                                    onClick={() => setRamPreset(opt.val)}
+                                                    key={val}
+                                                    onClick={() => setRamPreset(val)}
                                                     className={`p-3 text-center border rounded-sm transition-all ${
-                                                        ramPreset === opt.val 
-                                                            ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400' 
-                                                            : 'border-white/5 bg-black/20 text-ink-faint hover:border-white/10'
+                                                        ramPreset === val
+                                                            ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400'
+                                                            : 'border-white/5 bg-black/20 text-gray-400 hover:border-white/15'
                                                     }`}
                                                 >
-                                                    <div className="text-[10px] font-minecraft uppercase tracking-widest">{opt.label}</div>
+                                                    <div className="text-sm font-minecraft tracking-wide">{val} GB</div>
+                                                    <div className="text-[11px] mt-1 opacity-80">{t(`wizard.details.ram_${val}`)}</div>
                                                 </button>
                                             ))}
                                         </div>
+                                        <p className={hintClass}>{t('wizard.details.ram_hint')}</p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-xs">
+                                        {(() => {
+                                            const { tone, text } = javaLine();
+                                            const color = tone === 'ok' ? 'text-emerald-400' : tone === 'info' ? 'text-sky-300' : 'text-ink-faint';
+                                            return (
+                                                <>
+                                                    {javaLoading
+                                                        ? <Loader2 size={12} className="animate-spin text-ink-faint" />
+                                                        : tone === 'ok' ? <Check size={12} className={color} /> : <Info size={12} className={color} />}
+                                                    <span className="font-semibold text-gray-300">{t('wizard.details.java')}:</span>
+                                                    <span className={color}>{text}</span>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
 
                                     <div className="pt-4 border-t border-white/5">
-                                        <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-3 block">Java Runtime</label>
-                                        {javaLoading ? (
-                                            <div className="text-[10px] text-ink-faint font-minecraft uppercase tracking-widest flex items-center gap-2">
-                                                <Loader2 size={12} className="animate-spin" /> Checking...
-                                            </div>
-                                        ) : javaStatus ? (
-                                            <div className={`p-3 rounded-sm border ${
-                                                javaStatus.status_color === 'green' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                                                javaStatus.status_color === 'orange' ? 'bg-yellow-500/5 border-yellow-500/20' :
-                                                'bg-red-500/5 border-red-500/20'
-                                            }`}>
-                                                <div className={`text-[10px] font-minecraft uppercase tracking-widest ${
-                                                    javaStatus.status_color === 'green' ? 'text-emerald-400' :
-                                                    javaStatus.status_color === 'orange' ? 'text-yellow-400' :
-                                                    'text-red-400'
-                                                }`}>
-                                                    {javaStatus.status_color === 'green' ? 'Ready' : javaStatus.status_color === 'orange' ? 'Update Needed' : 'Missing'}
-                                                </div>
-                                                <div className="text-[10px] text-ink-faint mt-1">
-                                                    Requires Java {javaStatus.required_version} — {
-                                                        javaStatus.local_java_available ? 'Already installed' :
-                        javaStatus.system_java ? `System has Java ${javaStatus.system_java[0]}` :
-                        'Will be downloaded during setup'
-                                                    }
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="text-[10px] text-ink-faint font-minecraft">Java {version ? 'check unavailable' : 'not selected'}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="pt-4 border-t border-white/5">
-                                        <label className="flex items-center gap-3 cursor-pointer group">
-                                            <div className={`w-4 h-4 rounded-sm flex items-center justify-center border transition-all ${eulaAccepted ? 'bg-emerald-500 border-emerald-500' : 'bg-black/40 border-white/5 group-hover:border-white/20'}`}>
+                                        <label className="flex items-start gap-3 cursor-pointer group">
+                                            <div className={`mt-0.5 w-4 h-4 rounded-sm flex items-center justify-center border transition-all shrink-0 ${eulaAccepted ? 'bg-emerald-500 border-emerald-500' : 'bg-black/40 border-white/20 group-hover:border-white/40'}`}>
                                                 {eulaAccepted && <Check size={12} className="text-black" />}
                                             </div>
                                             <input type="checkbox" className="hidden" checked={eulaAccepted} onChange={(e) => setEulaAccepted(e.target.checked)} />
-                                            <span className="text-[10px] text-ink-faint group-hover:text-gray-400 select-none uppercase tracking-widest font-minecraft transition-colors">Accept Minecraft EULA</span>
+                                            <span className="select-none">
+                                                <span className="block text-sm text-gray-200">{t('wizard.details.eula')}</span>
+                                                <span className="block text-[11px] text-ink-faint mt-0.5">{t('wizard.details.eula_hint')}</span>
+                                            </span>
                                         </label>
                                     </div>
                                 </div>
 
-                                <div className="mt-auto flex gap-4 pt-10 border-t border-white/5">
-                                    <button onClick={() => setStep(2)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
-                                    <button 
-                                        onClick={handleDeploy} 
-                                        disabled={!eulaAccepted || !parentPath.trim()}
-                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30"
+                                <div className="mt-auto flex gap-4 pt-8 border-t border-white/5">
+                                    <button onClick={() => setStep(2)} className={backButtonClass}><ArrowLeft size={12} /> {t('wizard.back')}</button>
+                                    <button
+                                        onClick={handleDeploy}
+                                        disabled={!eulaAccepted || !parentPath.trim() || !folderName.trim()}
+                                        className={`${primaryButtonClass} bg-emerald-500 text-black hover:bg-emerald-400`}
                                     >
-                                        {javaStatus && !javaStatus.local_java_available && javaStatus.needs_download ? 'Download & Deploy' : 'Deploy'}
+                                        {needsJavaDownload ? t('wizard.details.create_download') : t('wizard.details.create')}
+                                        <ArrowRight size={14} />
                                     </button>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 3: CONFIGURATION (IMPORT) */}
+                        {/* STEP 3: ADD EXISTING SERVER */}
                         {step === 3 && mode === 'existing' && (
                             <motion.div
                                 key="step3_existing"
                                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                                 className="flex-1 flex flex-col p-10 max-w-4xl justify-center"
                             >
-                                <h2 className="text-xl font-minecraft tracking-widest text-emerald-400 mb-1 uppercase text-left">Mount Repository</h2>
-                                <p className="text-ink-faint text-xs mb-8 tracking-wide">Import existing server files.</p>
+                                <h2 className="text-2xl font-minecraft tracking-wide text-emerald-400 mb-2">{t('wizard.import.title')}</h2>
+                                <p className="text-ink-faint text-sm mb-8">{t('wizard.import.subtitle')}</p>
 
-                                <div className="space-y-4">
-                                    <label className="text-[9px] font-minecraft text-ink-faint uppercase tracking-widest mb-2 block">Source Path</label>
+                                <div>
+                                    <label className={labelClass}>{t('wizard.import.folder')}</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
                                             value={existingPath}
                                             onChange={(e) => setExistingPath(e.target.value)}
-                                            placeholder="/path/to/server"
-                                            className="flex-1 bg-black/40 border border-white/5 rounded-sm px-3 py-2 text-[10px] text-white font-mono outline-none focus:border-emerald-500/40"
+                                            placeholder={t('wizard.import.placeholder')}
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-500/40"
                                         />
                                         <button onClick={async () => {
                                             const path = await api.openDirectoryPicker();
                                             if (path) setExistingPath(path);
-                                        }} className="px-3 bg-black/40 border border-white/5 hover:border-white/20 rounded-sm transition-colors flex items-center justify-center">
+                                        }} className="px-3 bg-black/40 border border-white/10 hover:border-white/20 rounded-sm transition-colors flex items-center justify-center">
                                             <Folder size={16} className="text-emerald-500/60" />
                                         </button>
                                     </div>
                                 </div>
 
                                 {importError && (
-                                    <div className="text-[10px] text-red-400 font-minecraft uppercase tracking-widest mt-4">
-                                        {importError}
+                                    <div className="flex items-start gap-2 text-xs text-red-300 mt-4">
+                                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                                        <span>{importError}</span>
                                     </div>
                                 )}
 
                                 <div className="mt-12 flex gap-4">
-                                    <button onClick={() => setStep(1)} className="text-[10px] font-minecraft uppercase tracking-widest text-ink-faint hover:text-white transition-colors">Back</button>
+                                    <button onClick={() => setStep(1)} className={backButtonClass}><ArrowLeft size={12} /> {t('wizard.back')}</button>
                                     <button
                                         onClick={handleImport}
                                         disabled={!existingPath || importing}
-                                        className="ml-auto px-6 py-2.5 bg-emerald-500 text-black rounded-sm text-[10px] font-minecraft uppercase tracking-widest transition-all hover:bg-emerald-400 disabled:opacity-30 flex items-center gap-2"
+                                        className={`${primaryButtonClass} bg-emerald-500 text-black hover:bg-emerald-400`}
                                     >
-                                        {importing ? <><Loader2 size={12} className="animate-spin" /> Linking...</> : 'Link Project'}
+                                        {importing ? <><Loader2 size={12} className="animate-spin" /> {t('wizard.import.adding')}</> : t('wizard.import.button')}
                                     </button>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 4: DEPLOYING */}
+                        {/* STEP 4: INSTALLING */}
                         {step === 4 && (
                             <motion.div
                                 key="step4"
                                 initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
                                 className="flex-1 flex flex-col items-center justify-center p-10 text-center"
                             >
-                                <div className="w-12 h-12 rounded-sm bg-black border border-white/10 flex items-center justify-center mb-6 shadow-xl relative overflow-hidden">
-                                    <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />
-                                    <Terminal size={20} className="text-emerald-400 relative z-10" />
-                                </div>
-                                <h3 className="text-sm font-minecraft tracking-widest text-white mb-2 uppercase">Deploying...</h3>
-                                <p className="text-ink-faint text-[10px] h-4 font-mono truncate max-w-xs mb-8">{statusMessage}</p>
+                                {installError ? (
+                                    <>
+                                        <div className="w-12 h-12 rounded-sm bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-6">
+                                            <AlertTriangle size={22} className="text-red-400" />
+                                        </div>
+                                        <h3 className="text-lg font-minecraft tracking-wide text-white mb-2">{t('wizard.install.failed_title')}</h3>
+                                        <p className="text-sm text-gray-400 max-w-md mb-4">{t('wizard.install.failed_hint')}</p>
+                                        <pre className="text-[11px] text-red-300/80 bg-black/40 border border-white/5 rounded-sm px-3 py-2 max-w-lg w-full whitespace-pre-wrap break-words text-left max-h-32 overflow-y-auto mb-8">{installError}</pre>
+                                        <div className="flex gap-4">
+                                            <button onClick={() => setStep(3)} className={backButtonClass}><ArrowLeft size={12} /> {t('wizard.back')}</button>
+                                            <button onClick={handleDeploy} className={`${primaryButtonClass} ml-0 bg-white text-black hover:bg-gray-200`}>
+                                                {t('wizard.install.retry')}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-12 h-12 rounded-sm bg-black border border-white/10 flex items-center justify-center mb-6 shadow-xl relative overflow-hidden">
+                                            <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />
+                                            {done ? <Check size={20} className="text-emerald-400 relative z-10" /> : <Terminal size={20} className="text-emerald-400 relative z-10" />}
+                                        </div>
+                                        <h3 className="text-lg font-minecraft tracking-wide text-white mb-2">
+                                            {done ? t('wizard.install.done') : t('wizard.install.title')}
+                                        </h3>
+                                        <p className="text-ink-faint text-xs h-4 truncate max-w-md mb-8">{statusMessage || t('wizard.install.starting')}</p>
 
-                                <div className="w-64 max-w-full bg-black/40 rounded-sm h-1 overflow-hidden border border-white/5">
-                                    <motion.div 
-                                        className="h-full bg-emerald-500"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${progress}%` }}
-                                        transition={{ ease: "easeOut" }}
-                                    />
-                                </div>
-                                <div className="mt-3 text-[9px] font-minecraft text-emerald-500/40 uppercase tracking-widest">{Math.round(progress)}%</div>
+                                        <div className="w-72 max-w-full bg-black/40 rounded-sm h-1.5 overflow-hidden border border-white/5">
+                                            <motion.div
+                                                className="h-full bg-emerald-500"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${progress}%` }}
+                                                transition={{ ease: "easeOut" }}
+                                            />
+                                        </div>
+                                        <div className="mt-3 text-[10px] font-minecraft text-emerald-500/60 tracking-widest">{Math.round(progress)}%</div>
+                                    </>
+                                )}
                             </motion.div>
                         )}
                     </AnimatePresence>
