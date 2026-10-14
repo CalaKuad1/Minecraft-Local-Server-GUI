@@ -224,7 +224,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                 <div className="w-64 bg-ground/80 backdrop-blur-xl border-r border-white/10 flex flex-col shadow-2xl z-10 flex-shrink-0">
                     <div className="p-6">
                         <div className="flex items-center gap-3 text-white mb-8">
-                            <Cubi mood={onlineCount > 0 ? 'happy' : 'idle'} size={44} />
+                            <Cubi mood={onlineCount > 0 ? 'happy' : 'idle'} size={44} interactive />
                             <div className="min-w-0">
                                 <div className="font-brand text-2xl font-semibold leading-none">{APP_NAME}</div>
                                 <div className="mt-1 text-xs text-ink-faint truncate">{t('library.title')}</div>
@@ -342,7 +342,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             </div>
                         ) : totalCount === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center py-24">
-                                <Cubi mood="idle" size={112} className="mb-6" />
+                                <Cubi mood="idle" size={112} className="mb-6" interactive />
                                 <h3 className="text-2xl font-minecraft text-white tracking-wide mb-2">{t('library.empty_infrastructure')}</h3>
                                 <p className="text-ink-faint text-sm mb-6 max-w-sm">{t('library.empty_desc')}</p>
                                 <button

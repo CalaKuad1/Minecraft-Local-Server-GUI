@@ -137,7 +137,8 @@
             "upgrade_waiting": "Apruébalo en tu navegador...",
             "permanent": "Dirección permanente: es la misma cada vez que enciendes el servidor.",
             "switching": "Cambiando a tu dirección permanente...",
-            "time_limit": "Túnel gratuito: se corta cada 60 minutos y hay que volver a activarlo."
+            "time_limit": "Túnel gratuito: se corta cada 60 minutos y hay que volver a activarlo.",
+            "connecting_pill": "Conectando…"
         },
         "errors": {
             "mod_dependency": "A un mod le falta una dependencia",

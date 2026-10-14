@@ -84,3 +84,69 @@
   0%, 62%, 100% { transform: scale(1); opacity: 1; }
   77% { transform: scale(0.6); opacity: 0.45; }
 }
+
+/* ---- Click reactions (interactive Cubi) ---- */
+.cubi-eyes-dizzy,
+.cubi-mouth--wobbly { display: none; }
+.cubi-poke { -webkit-tap-highlight-color: transparent; }
+.cubi-poke:focus-visible .cubi { filter: drop-shadow(0 0 6px rgb(110 231 183 / 0.8)); }
+
+/* Any reaction wakes Cubi up for a moment. */
+.cubi[class*="cubi--react-"] .cubi-eyes { display: inline; }
+.cubi[class*="cubi--react-"] .cubi-eyes-closed,
+.cubi[class*="cubi--react-"] .cubi-zs { display: none; }
+
+.cubi.cubi--react-jump .cubi-body,
+.cubi.cubi--react-grin .cubi-body { animation: cubi-poke-jump 0.6s cubic-bezier(.3,.7,.4,1) 1; }
+.cubi.cubi--react-jump .cubi-shadow,
+.cubi.cubi--react-grin .cubi-shadow { animation: cubi-shadow-hop 0.6s cubic-bezier(.3,.7,.4,1) 1; }
+
+.cubi.cubi--react-wink .cubi-eye--right { animation: none; transform: scaleY(0.12); }
+.cubi.cubi--react-wink .cubi-body { animation: cubi-tilt 0.6s ease-out 1; }
+
+.cubi.cubi--react-grin .cubi-mouth--smile,
+.cubi.cubi--react-grin .cubi-mouth--flat { display: none; }
+.cubi.cubi--react-grin .cubi-mouth--grin { display: inline; }
+
+/* Dizzy: spiral eyes, wobbly mouth, wobble */
+.cubi--dizzy .cubi-eyes,
+.cubi--dizzy .cubi-eyes-closed,
+.cubi--dizzy .cubi-mouth--smile,
+.cubi--dizzy .cubi-mouth--grin,
+.cubi--dizzy .cubi-mouth--flat { display: none; }
+.cubi--dizzy .cubi-eyes-dizzy,
+.cubi--dizzy .cubi-mouth--wobbly { display: inline; }
+.cubi--dizzy .cubi-body { animation: cubi-wobble 0.5s ease-in-out infinite; }
+
+@keyframes cubi-poke-jump {
+  0%   { transform: translateY(0) scale(1.1, 0.88); }
+  30%  { transform: translateY(-20px) scale(0.94, 1.08) rotate(-8deg); }
+  55%  { transform: translateY(-22px) scale(1, 1) rotate(6deg); }
+  80%  { transform: translateY(0) scale(1.12, 0.88); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes cubi-tilt {
+  0%, 100% { transform: rotate(0); }
+  40% { transform: rotate(-9deg) translateY(-3px); }
+}
+@keyframes cubi-wobble {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+
+.cubi-particle {
+  position: absolute;
+  top: 12%;
+  transform: translateX(-50%);
+  opacity: 0;
+  font-weight: 700;
+  line-height: 1;
+  animation: cubi-particle 1s ease-out forwards;
+}
+.cubi-particle--heart { color: #f472b6; }
+.cubi-particle--spark { color: #6ee7b7; }
+@keyframes cubi-particle {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -38px) scale(1.15); }
+}

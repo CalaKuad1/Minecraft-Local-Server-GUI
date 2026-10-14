@@ -137,7 +137,8 @@
             "upgrade_waiting": "Approuve-le dans ton navigateur...",
             "permanent": "Adresse permanente : c'est la même à chaque démarrage du serveur.",
             "switching": "Passage à ton adresse permanente...",
-            "time_limit": "Tunnel gratuit : il se coupe toutes les 60 minutes et doit être relancé."
+            "time_limit": "Tunnel gratuit : il se coupe toutes les 60 minutes et doit être relancé.",
+            "connecting_pill": "Connexion…"
         },
         "errors": {
             "mod_dependency": "Il manque une dépendance à un mod",

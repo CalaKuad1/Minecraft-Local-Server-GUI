@@ -347,6 +347,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
         if (item.type === 'tunnel_connected') {
             setTunnelAddress(item.address);
+            try { if (lastIdRef.current) localStorage.setItem(`lastTunnelAddress:${lastIdRef.current}`, item.address); } catch { /* optional */ }
             setTunnelConnecting(false);
             setSwitchingToPlayit(false);
             return;
@@ -558,12 +559,21 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         try {
             await api.start();
             if (autoTunnel) {
-                setTimeout(async () => {
+                // Open the tunnel together with the server: it only forwards a
+                // local port, so it doesn't need to wait for the world to load.
+                setTunnelConnecting(true);
+                (async () => {
+                    let provider = activeProviderRef.current;
                     try {
-                        setTunnelConnecting(true);
-                        await api.startTunnel(tunnelRegionRef.current, activeProviderRef.current);
+                        // playit's link status may not have loaded yet (e.g. right after the wizard).
+                        const ps = await api.getPlayitStatus();
+                        const preferred = localStorage.getItem('preferredTunnelProvider') || 'playit';
+                        provider = preferred === 'playit' && ps?.linked ? 'playit' : 'pinggy';
+                    } catch { /* keep the known provider */ }
+                    try {
+                        await api.startTunnel(tunnelRegionRef.current, provider);
                     } catch (e) { setTunnelConnecting(false); }
-                }, 5000);
+                })();
             }
             if (onRefresh) onRefresh();
         } catch (e) {
@@ -596,6 +606,15 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
     const shareAddress = tunnelAddress ? ((dnsAddress && dnsStatus !== 'error') ? dnsAddress : tunnelAddress) : null;
     const shareVisible = isOnline || isStarting;
+    // While the tunnel connects, show the address we already know will be used:
+    // the fixed subdomain, or the last permanent playit address of this server.
+    const expectedAddress = (() => {
+        if (dnsAddress && dnsStatus !== 'error') return dnsAddress;
+        if (activeProvider !== 'playit') return null; // Pinggy addresses change every time
+        try { return localStorage.getItem(`lastTunnelAddress:${status.server_id}`); } catch { return null; }
+    })();
+    const shownAddress = shareAddress || ((tunnelConnecting || switchingToPlayit) ? expectedAddress : null);
+    const addressPending = !shareAddress && !!shownAddress;
 
     const stopPublicTunnel = async () => {
         try {
@@ -628,7 +647,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
     const copyShareAddress = async () => {
         try {
-            await navigator.clipboard.writeText(shareAddress);
+            await navigator.clipboard.writeText(shownAddress);
             setShareCopied(true);
             setTimeout(() => setShareCopied(false), 2000);
         } catch (e) { console.error('Copy failed', e); }
@@ -823,18 +842,24 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
             {/* Share card: the one thing a new user needs once the server runs */}
             {(isOnline || isStarting) && (
-                <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shareAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-panel/60 border-white/5'}`}>
-                    {shareAddress ? (
+                <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shownAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-panel/60 border-white/5'}`}>
+                    {shownAddress ? (
                         <>
                             <div className="flex items-start gap-4">
-                                <Cubi mood="happy" size={44} className="shrink-0" />
+                                <Cubi mood={addressPending ? 'busy' : 'happy'} size={44} className="shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-base font-display font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
                                     <div className="mt-1 flex flex-wrap items-center gap-3">
-                                        <span className="text-2xl font-mono font-bold text-emerald-300 select-all break-all">{shareAddress}</span>
+                                        <span className={`text-2xl font-mono font-bold select-all break-all ${addressPending ? 'text-emerald-300/60' : 'text-emerald-300'}`}>{shownAddress}</span>
                                         <Button variant="primary" size="sm" icon={shareCopied ? Check : Copy} onClick={copyShareAddress} aria-live="polite">
                                             {shareCopied ? t('dashboard.share.copied') : t('dashboard.share.copy')}
                                         </Button>
+                                        {addressPending && (
+                                            <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-0.5 text-xs font-medium text-gold">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+                                                {t('dashboard.share.connecting_pill')}
+                                            </span>
+                                        )}
                                     </div>
                                     <p className="mt-2 text-sm text-ink-dim">
                                         {t('dashboard.share.how_to')}

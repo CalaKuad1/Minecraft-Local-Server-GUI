@@ -58,7 +58,7 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings, status })
         </button>
       </div>
       <div className="flex flex-col items-center px-4 pt-3 pb-5">
-        <Cubi mood={moodFor(state)} size={72} />
+        <Cubi mood={moodFor(state)} size={72} interactive />
         <div className="mt-2 max-w-full truncate font-display text-lg font-semibold text-ink" title={status?.name || undefined}>
           {status?.name || APP_NAME}
         </div>

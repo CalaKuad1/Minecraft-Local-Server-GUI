@@ -137,7 +137,8 @@
             "upgrade_waiting": "Approve it in your browser...",
             "permanent": "Permanent address: it stays the same every time you start the server.",
             "switching": "Switching to your permanent address...",
-            "time_limit": "Free tunnel: it disconnects every 60 minutes and has to be restarted."
+            "time_limit": "Free tunnel: it disconnects every 60 minutes and has to be restarted.",
+            "connecting_pill": "Connecting…"
         },
         "errors": {
             "mod_dependency": "A mod is missing a dependency",
