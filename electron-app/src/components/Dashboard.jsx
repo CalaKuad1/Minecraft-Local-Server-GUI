@@ -375,6 +375,18 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             }
             return;
         }
+        if (item.type === 'playit_error') {
+            // e.g. the free playit account is over its agent limit: explain it
+            // and fall back to a temporary Pinggy address so friends can still join.
+            toast.error(t('dashboard.tunnel.playit_over_limit').replace('{url}', item.url || 'playit.gg/account/agents'), {
+                title: t('dashboard.tunnel.playit_unavailable'),
+                duration: 15000,
+            });
+            setSwitchingToPlayit(false);
+            setTunnelConnecting(true);
+            api.startTunnel(tunnelRegionRef.current, 'pinggy').catch(() => setTunnelConnecting(false));
+            return;
+        }
         if (item.type === 'playit_link_failed') {
             setPlayit(p => ({ ...p, linking: false, claim_url: null }));
             toast.error(item.error, { title: t('dashboard.tunnel.playit_link_failed') });

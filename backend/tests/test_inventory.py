@@ -215,3 +215,16 @@ def test_mod_icons_and_names_from_jars(vanilla, tmp_path):
     names = mc_assets.item_names(roots, {"create"}, "es_es")
     assert mc_assets.display_name(names, "create:wrench") == "Llave inglesa"
     assert mc_assets.display_name(names, "create:unknown_thing") == "Unknown thing"
+
+
+def test_players_folder_of_minecraft_26():
+    # 26.x stores player files in <world>/players/data instead of playerdata
+    with tempfile.TemporaryDirectory() as srv:
+        d = os.path.join(srv, "world", "players", "data")
+        os.makedirs(d)
+        with open(os.path.join(d, f"{UUID}.dat"), "wb") as f:
+            f.write(nbt_file(MODERN))
+        assert [p["uuid"] for p in player_data.list_players(srv, "world")] == [UUID]
+        assert player_data.read_player(srv, "world", UUID)["inventory"]
+        with pytest.raises(FileNotFoundError):
+            player_data.read_player(srv, "world", "00000000-0000-4000-8000-000000000000")

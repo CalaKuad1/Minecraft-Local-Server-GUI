@@ -118,7 +118,9 @@
             "playit_linked": "playit.gg lié. Le prochain tunnel utilisera votre adresse permanente.",
             "playit_link_failed": "Impossible de lier playit.gg",
             "playit_unlink": "Délier playit.gg",
-            "playit_unlink_confirm": "Délier playit.gg ? Votre adresse permanente reste sur votre compte playit, mais Cubi utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison."
+            "playit_unlink_confirm": "Délier playit.gg ? Ton adresse permanente reste sur ton compte playit, mais Cubi utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison. Relier crée un nouvel agent : les comptes gratuits sont limités, supprime l'ancien sur playit.gg/account/agents.",
+            "playit_unavailable": "playit.gg n'est pas disponible",
+            "playit_over_limit": "Ton compte gratuit playit.gg a trop d'agents (un est ajouté à chaque liaison). Supprime les anciens sur {url}. En attendant, tu as une adresse temporaire."
         },
         "share": {
             "starting_title": "Démarrage de ton serveur...",

@@ -152,8 +152,19 @@ def parse_player(data: dict) -> dict:
     return {"inventory": inventory, "armor": armor, "offhand": offhand, "ender_chest": ender, "stats": stats}
 
 
-def playerdata_dir(server_path: str, world_name: str) -> str:
-    return os.path.join(server_path, world_name, "playerdata")
+def playerdata_dirs(server_path: str, world_name: str):
+    """Folders holding <uuid>.dat files: Minecraft 26.x moved them from
+    <world>/playerdata to <world>/players/data. Newest layout first."""
+    world = os.path.join(server_path, world_name)
+    return [d for d in (os.path.join(world, "players", "data"), os.path.join(world, "playerdata")) if os.path.isdir(d)]
+
+
+def _player_file(server_path, world_name, uuid):
+    for d in playerdata_dirs(server_path, world_name):
+        path = os.path.join(d, f"{uuid}.dat")
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def load_names(server_path: str) -> dict:
@@ -170,30 +181,29 @@ def load_names(server_path: str) -> dict:
 
 
 def list_players(server_path: str, world_name: str):
-    folder = playerdata_dir(server_path, world_name)
     names = load_names(server_path)
-    out = []
-    try:
-        entries = os.listdir(folder)
-    except OSError:
-        return out
-    for fn in entries:
-        if not fn.endswith(".dat"):
+    found = {}
+    for folder in playerdata_dirs(server_path, world_name):
+        try:
+            entries = os.listdir(folder)
+        except OSError:
             continue
-        uuid = fn[:-4].lower()
-        if not _UUID_RE.match(uuid):
-            continue
-        path = os.path.join(folder, fn)
-        out.append({"uuid": uuid, "name": names.get(uuid), "last_saved": os.path.getmtime(path)})
-    out.sort(key=lambda p: p["last_saved"], reverse=True)
-    return out
+        for fn in entries:
+            uuid = fn[:-4].lower() if fn.endswith(".dat") else ""
+            if not _UUID_RE.match(uuid) or uuid in found:
+                continue
+            found[uuid] = {"uuid": uuid, "name": names.get(uuid),
+                           "last_saved": os.path.getmtime(os.path.join(folder, fn))}
+    return sorted(found.values(), key=lambda p: p["last_saved"], reverse=True)
 
 
 def read_player(server_path: str, world_name: str, uuid: str) -> dict:
     uuid = (uuid or "").lower()
     if not _UUID_RE.match(uuid):
         raise ValueError("Invalid player id")
-    path = os.path.join(playerdata_dir(server_path, world_name), f"{uuid}.dat")
+    path = _player_file(server_path, world_name, uuid)
+    if not path:
+        raise FileNotFoundError(uuid)
     data = parse_player(nbt.load(path))
     data["uuid"] = uuid
     data["name"] = load_names(server_path).get(uuid)

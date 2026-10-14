@@ -118,7 +118,9 @@
             "playit_linked": "playit.gg linked. Your next tunnel uses the permanent address.",
             "playit_link_failed": "Could not link playit.gg",
             "playit_unlink": "Unlink playit.gg",
-            "playit_unlink_confirm": "Unlink playit.gg? Your permanent address stays in your playit account, but Cubi will use temporary Pinggy tunnels until you link again."
+            "playit_unlink_confirm": "Unlink playit.gg? Your permanent address stays in your playit account, but Cubi will use temporary Pinggy tunnels until you link again. Linking again creates a new agent: free accounts have an agent limit, so delete the old one at playit.gg/account/agents.",
+            "playit_unavailable": "playit.gg isn't available",
+            "playit_over_limit": "Your free playit.gg account has too many agents (one is added every time you link). Delete the old ones at {url}. For now you get a temporary address."
         },
         "share": {
             "starting_title": "Starting your server...",

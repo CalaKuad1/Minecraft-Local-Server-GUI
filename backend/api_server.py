@@ -1653,12 +1653,22 @@ def inventory_players():
     try:
         if state.server_handler.get_status() == "online":
             online = {n.lower() for n in (state.server_handler.get_active_players_list(trigger_refresh=False) or [])}
+            # Player files are only written on autosave/logout; save first so
+            # someone who just joined shows up.
+            _save_players_if_stale()
     except Exception:
         pass
     players = player_data.list_players(server_path, world)
     for p in players:
         p["online"] = bool(p.get("name") and p["name"].lower() in online)
     return {"world": world, "players": players}
+
+
+def _save_players_if_stale():
+    if time.time() - _last_inventory_save["t"] > 5:
+        state.server_handler.send_command("save-all", silent=True)
+        _last_inventory_save["t"] = time.time()
+        time.sleep(1.5)
 
 
 @app.get("/inventory/players/{uuid}")
@@ -1669,10 +1679,8 @@ def inventory_player(uuid: str, lang: str = Query("en")):
     server_path, world, version = _inventory_ctx()
     # While the server runs, ask it to write player files first so the view is current.
     try:
-        if state.server_handler.get_status() == "online" and time.time() - _last_inventory_save["t"] > 5:
-            state.server_handler.send_command("save-all", silent=True)
-            _last_inventory_save["t"] = time.time()
-            time.sleep(1.5)
+        if state.server_handler.get_status() == "online":
+            _save_players_if_stale()
     except Exception:
         pass
     try:
@@ -2996,6 +3004,13 @@ def start_tunnel(
                 logging.error(f"Failed to generate SSH key: {e}")
                 return None
 
+        gen = state._tunnel_gen
+
+        def superseded():
+            # A newer start/stop replaced this tunnel: its shutdown must not
+            # clear the new tunnel's address or delete its DNS record.
+            return state._tunnel_gen != gen
+
         def run_tunnel():
             import subprocess
             import re
@@ -3099,6 +3114,9 @@ def start_tunnel(
                             }
                         )
                         connected_emitted = True
+                        # Started: a later /tunnel/start (e.g. switching to
+                        # playit) must be able to replace this tunnel.
+                        state._tunnel_starting = False
                         # Update DNS record via proxy
                         _update_dns_record_proxy(state)
 
@@ -3117,19 +3135,22 @@ def start_tunnel(
                         state.broadcast_log_sync(f"Tunnel crashed: {err_out}", "error")
 
                 # If we exit the loop, tunnel has closed
-                state.broadcast_log_sync("🔴 Tunnel closed", "warning")
-                state.broadcast_log_sync({"type": "tunnel_disconnected"})
-                state.tunnel_address = None
+                if not superseded():
+                    state.broadcast_log_sync("🔴 Tunnel closed", "warning")
+                    state.broadcast_log_sync({"type": "tunnel_disconnected"})
+                    state.tunnel_address = None
 
             except Exception as e:
                 logging.exception(f"Tunnel error: {e}")
-                state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
-                state.tunnel_address = None
+                if not superseded():
+                    state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
+                    state.tunnel_address = None
             finally:
-                state._tunnel_starting = False
-                # Remove the SRV: the tunnel is down, so the record is useless
-                # and keeping it would fill Cloudflare's record quota over time.
-                _delete_dns_record_proxy(state)
+                if not superseded():
+                    state._tunnel_starting = False
+                    # Remove the SRV: the tunnel is down, so the record is useless
+                    # and keeping it would fill Cloudflare's record quota over time.
+                    _delete_dns_record_proxy(state)
 
         threading.Thread(target=run_tunnel, daemon=True).start()
         return {"message": "Tunnel starting...", "status": "connecting"}
@@ -3246,6 +3267,14 @@ def _run_playit_tunnel(state, port, gen):
         if superseded():
             return
 
+        started_at = time.time() - 2
+        fatal = {"code": None}
+
+        def agent_failed():
+            if fatal["code"] is None:
+                fatal["code"] = pm.agent_fatal_error(state.app_data_dir, started_at)
+            return fatal["code"] is not None
+
         proc = subprocess.Popen(
             pm.agent_command(agent, state.app_data_dir),
             stdin=subprocess.DEVNULL,
@@ -3255,11 +3284,16 @@ def _run_playit_tunnel(state, port, gen):
         )
         state.tunnel_process = proc
 
-        tunnel = pm.ensure_tunnel(
-            secret,
-            port,
-            should_cancel=lambda: superseded() or proc.poll() is not None,
-        )
+        try:
+            tunnel = pm.ensure_tunnel(
+                secret,
+                port,
+                should_cancel=lambda: superseded() or proc.poll() is not None or agent_failed(),
+            )
+        except pm.PlayitError as e:
+            if e.code == "Cancelled" and fatal["code"]:
+                raise pm.PlayitError(fatal["code"], "playit.gg agent disabled") from e
+            raise
         if superseded():
             return
         address = tunnel.get("display_address")
@@ -3284,7 +3318,13 @@ def _run_playit_tunnel(state, port, gen):
         if not superseded():
             state.broadcast_log_sync("🔴 Tunnel closed", "warning")
     except pm.PlayitError as e:
-        if e.code != "Cancelled" and not superseded():
+        if e.code == "AgentOverLimit" and not superseded():
+            # The UI explains it and falls back to a temporary Pinggy address.
+            logging.error("playit tunnel error: account over the agent limit")
+            state.broadcast_log_sync(
+                f"❌ playit.gg: your free account has too many agents. Remove old ones at {pm.AGENTS_URL}", "error")
+            state.broadcast_log_sync({"type": "playit_error", "code": e.code, "url": pm.AGENTS_URL})
+        elif e.code != "Cancelled" and not superseded():
             logging.error(f"playit tunnel error: {e.code}: {e}")
             hint = ""
             if "auth" in f"{e.code} {e}".lower():

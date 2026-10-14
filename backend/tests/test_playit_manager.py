@@ -217,3 +217,21 @@ def test_verify_binary():
 def test_pinned_assets_cover_platform_picks():
     asset = pm.pick_agent_asset()
     assert asset is None or asset in pm.PLAYIT_AGENT_ASSETS
+
+
+def test_agent_fatal_error_reads_recent_log_lines(tmp_path):
+    import datetime as dt
+
+    (tmp_path / "playit").mkdir()
+    now = dt.datetime.now(dt.timezone.utc)
+    old = (now - dt.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    new = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    log = tmp_path / "playit" / "playitd.log"
+    log.write_text(f'{old}  WARN playitd::daemon: agent disabled error=ApiFail("\\"AgentDisabledOverLimit\\"")\n', encoding="utf-8")
+    since = now.timestamp() - 60
+    assert pm.agent_fatal_error(str(tmp_path), since) is None  # only old lines
+    with open(log, "a", encoding="utf-8") as f:
+        f.write(f"{new}  INFO playitd::daemon: Starting playitd\n")
+        f.write(f'{new}  WARN playitd::daemon: agent disabled error=ApiFail("\\"AgentDisabledOverLimit\\"")\n')
+    assert pm.agent_fatal_error(str(tmp_path), since) == "AgentOverLimit"
+    assert pm.agent_fatal_error(str(tmp_path / "missing"), since) is None

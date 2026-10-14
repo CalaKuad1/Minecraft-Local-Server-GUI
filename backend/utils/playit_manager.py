@@ -373,3 +373,43 @@ def agent_command(agent_path, app_data_dir):
         "--socket-path", socket,
         "--log-path", os.path.join(base, "playitd.log"),
     ]
+
+
+# --- Agent failures that make waiting pointless ---
+
+AGENTS_URL = "https://playit.gg/account/agents"
+# playitd log marker -> our error code
+_FATAL_AGENT_ERRORS = {"AgentDisabledOverLimit": "AgentOverLimit"}
+
+
+def agent_log_path(app_data_dir):
+    return os.path.join(app_data_dir, "playit", "playitd.log")
+
+
+def agent_fatal_error(app_data_dir, since):
+    """Error code if the agent logged a fatal error after `since` (epoch secs).
+
+    playitd keeps retrying forever on e.g. "account over the agent limit",
+    so without this we'd wait for an address that will never come.
+    """
+    from datetime import datetime
+
+    try:
+        with open(agent_log_path(app_data_dir), "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 32768))
+            lines = f.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        stamp = line.split(" ", 1)[0]
+        try:
+            ts = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+        if ts < since:
+            break
+        for marker, code in _FATAL_AGENT_ERRORS.items():
+            if marker in line:
+                return code
+    return None

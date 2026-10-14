@@ -118,7 +118,9 @@
             "playit_linked": "playit.gg vinculado. El próximo túnel usará tu dirección permanente.",
             "playit_link_failed": "No se pudo vincular playit.gg",
             "playit_unlink": "Desvincular playit.gg",
-            "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero Cubi usará túneles temporales de Pinggy hasta que vuelvas a vincularlo."
+            "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero Cubi usará túneles temporales de Pinggy hasta que vuelvas a vincularlo. Al volver a vincular se crea otro agente: las cuentas gratuitas tienen un límite, así que borra el antiguo en playit.gg/account/agents.",
+            "playit_unavailable": "playit.gg no está disponible",
+            "playit_over_limit": "Tu cuenta gratuita de playit.gg tiene demasiados agentes (se añade uno cada vez que vinculas). Borra los antiguos en {url}. Mientras tanto usamos una dirección temporal."
         },
         "share": {
             "starting_title": "Arrancando tu servidor...",
