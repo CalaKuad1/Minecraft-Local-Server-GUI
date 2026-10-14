@@ -158,7 +158,7 @@ export default function Mods({ status, onOpenWizard }) {
     const cats = ['all', 'technology', 'magic', 'adventure', 'decoration', 'optimization', 'library'].map(v => ({ value: v, label: t(`mods.categories.${v}`) }));
 
     return (
-        <div className="h-full flex flex-col animate-in fade-in zoom-in duration-500 w-full">
+        <div className="h-full flex flex-col animate-in fade-in duration-200 w-full">
             {isNonModdedServer && (
                 <div className="mb-4 p-4 rounded-sm border border-yellow-500/20 bg-yellow-500/10 text-yellow-100/90 text-sm">
                     <div className="font-bold text-yellow-200 mb-1 font-minecraft tracking-wider uppercase">{t('mods.unsupported_title')}</div>

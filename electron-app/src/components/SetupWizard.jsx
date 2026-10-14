@@ -3,34 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, API_TOKEN, WS_BASE } from '../api';
 import { useTranslation } from '../contexts/LanguageContext';
 import { Select } from './ui/Select';
+import { EngineIcon } from './ui/EngineIcon';
 import Cubi from './ui/Cubi';
 import { Check, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Box, HardDrive, Terminal, AlertTriangle, Info, Plus, Play } from './ui/PixelIcons';
-import fabricLogo from '../assets/engines/fabric.png';
-import forgeLogo from '../assets/engines/forge.png';
-import neoforgeLogo from '../assets/engines/neoforge.png';
-import paperLogo from '../assets/engines/Paper_JE2_BE2.webp';
-import spigotLogo from '../assets/engines/spigot.png';
-import vanillaLogo from '../assets/engines/vanilla.webp';
 
-function EngineIcon({ type, size = 16, className = "" }) {
-    const t = (type || '').toLowerCase();
-    let src = null;
-    if (t.includes('paper')) src = paperLogo;
-    else if (t.includes('neoforge')) src = neoforgeLogo;
-    else if (t.includes('forge')) src = forgeLogo;
-    else if (t.includes('fabric')) src = fabricLogo;
-    else if (t.includes('spigot')) src = spigotLogo;
-    else if (t.includes('vanilla')) src = vanillaLogo;
-
-    if (src) {
-        return (
-            <div className={`flex items-center justify-center overflow-hidden ${className}`} style={{ width: size, height: size }}>
-                <img src={src} className="w-full h-full object-contain brightness-0 invert" alt={type} />
-            </div>
-        );
-    }
-    return <Server size={size} className={className} />;
-}
 
 function StepItem({ icon, label, active, completed }) {
     return (

@@ -190,7 +190,7 @@ export default function Worlds() {
     }
 
     return (
-        <div className="animate-in fade-in zoom-in duration-500 max-w-5xl mx-auto w-full">
+        <div className="animate-in fade-in duration-200 max-w-5xl mx-auto w-full">
             <div className="mb-8">
                 <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('worlds.title')}</h2>
                 <p className="text-ink-faint text-sm">{t('worlds.subtitle')}</p>

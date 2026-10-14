@@ -175,7 +175,7 @@ export default function Plugins({ status }) {
 
     if (!isPaper) {
         return (
-            <div className="h-full flex flex-col justify-center items-center text-center p-8 animate-in fade-in zoom-in duration-500">
+            <div className="h-full flex flex-col justify-center items-center text-center p-8 animate-in fade-in duration-200">
                 <div className="p-6 rounded-sm bg-panel/60 border border-white/10 max-w-md">
                     <h2 className="text-xl font-minecraft text-emerald-400 uppercase tracking-widest mb-2">{t('plugins.unsupported_title')}</h2>
                     <p className="text-zinc-400 mb-4 text-sm">
@@ -188,7 +188,7 @@ export default function Plugins({ status }) {
     }
 
     return (
-        <div className="h-full flex flex-col animate-in fade-in zoom-in duration-500 w-full">
+        <div className="h-full flex flex-col animate-in fade-in duration-200 w-full">
             {error && <div className="mb-4 p-3 rounded-sm border border-red-500/20 bg-red-500/10 text-red-200 text-sm">{error}</div>}
 
             <div className="flex items-center justify-between mb-6">

@@ -1,41 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
 import { Plus, Server, Trash2, Play, Settings, Activity, Clock, FolderOpen, Search, Terminal, LayoutDashboard } from './ui/PixelIcons';
-import fabricLogo from '../assets/engines/fabric.png';
-import forgeLogo from '../assets/engines/forge.png';
-import neoforgeLogo from '../assets/engines/neoforge.png';
-import paperLogo from '../assets/engines/Paper_JE2_BE2.webp';
-import spigotLogo from '../assets/engines/spigot.png';
-import vanillaLogo from '../assets/engines/vanilla.webp';
 import { useDialog } from './ui/DialogContext';
 import { motion } from 'framer-motion';
 import AppSettings from './AppSettings';
 import { useTranslation } from '../contexts/LanguageContext';
+import { EngineIcon } from './ui/EngineIcon';
+import { engineInfo } from './ui/engines';
 import Cubi from './ui/Cubi';
 import { APP_NAME } from '../brand';
 
-function engineInfo(type) {
-    const t = (type || '').toLowerCase();
-    if (t.includes('paper')) return { src: paperLogo, color: 'text-sky-400', border: 'border-sky-500/30', bg: 'bg-sky-500/10' };
-    if (t.includes('neoforge')) return { src: neoforgeLogo, color: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10' };
-    if (t.includes('forge')) return { src: forgeLogo, color: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-500/10' };
-    if (t.includes('fabric')) return { src: fabricLogo, color: 'text-amber-200', border: 'border-amber-500/30', bg: 'bg-amber-500/10' };
-    if (t.includes('spigot')) return { src: spigotLogo, color: 'text-yellow-400', border: 'border-yellow-500/30', bg: 'bg-yellow-500/10' };
-    if (t.includes('vanilla')) return { src: vanillaLogo, color: 'text-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10' };
-    return { src: null, color: 'text-zinc-400', border: 'border-white/10', bg: 'bg-white/5' };
-}
 
-function EngineIcon({ type, size = 16, className = '' }) {
-    const { src } = engineInfo(type);
-    if (src) {
-        return (
-            <div className={`flex items-center justify-center overflow-hidden ${className}`} style={{ width: size, height: size }}>
-                <img src={src} className="w-full h-full object-contain brightness-0 invert" alt={type} />
-            </div>
-        );
-    }
-    return <Server size={size} className={className} />;
-}
 
 function StatusPill({ status }) {
     const { t } = useTranslation();
@@ -251,7 +226,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                         <div className="flex items-center gap-3 text-white mb-8">
                             <Cubi mood={onlineCount > 0 ? 'happy' : 'idle'} size={44} />
                             <div className="min-w-0">
-                                <div className="font-display text-2xl font-semibold leading-none">{APP_NAME}</div>
+                                <div className="font-brand text-2xl font-semibold leading-none">{APP_NAME}</div>
                                 <div className="mt-1 text-xs text-ink-faint truncate">{t('library.title')}</div>
                             </div>
                         </div>

@@ -15,12 +15,12 @@ import { useDialog } from './ui/DialogContext';
 
 const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true }) => {
     return (
-        <div className="bg-ground/40 border border-white/5 rounded-sm p-5 flex flex-col transition-all group cursor-default hover:border-white/10 hover:bg-ground/60 relative overflow-hidden h-[120px] min-w-0">
+        <div className="bg-panel/60 border border-white/5 rounded-sm p-4 flex flex-col transition-colors group cursor-default hover:border-white/10 relative overflow-hidden h-[92px] min-w-0">
             <div className="flex items-center gap-2 mb-3 relative z-10">
                 <Icon size={14} className="text-ink-faint group-hover:text-gray-300 transition-colors" />
                 <h3 className="text-ink-faint text-xs font-bold uppercase tracking-widest">{label}</h3>
             </div>
-            <div className="text-3xl font-minecraft text-white tracking-tight leading-none mb-1 mt-auto relative z-10">{value}</div>
+            <div className="text-2xl font-minecraft text-white tracking-tight leading-none mb-1 mt-auto relative z-10 tabular-nums">{value}</div>
             <div className="text-[10px] text-ink-faint font-bold uppercase tracking-widest relative z-10">{sublabel}</div>
 
             {data.length > 0 && active && (
@@ -654,10 +654,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     };
 
     return (
-        <div className="flex flex-col h-full animate-in fade-in zoom-in duration-500">
-            <div className="space-y-4 flex-none">
+        <div className="flex flex-col h-full min-h-0 animate-in fade-in duration-200">
+            <div className="space-y-3 flex-none">
                 {/* Header & Controls */}
-                <div className="flex items-center justify-between px-6 py-5 bg-panel/60 border border-white/5 shadow-sm relative overflow-hidden backdrop-blur-2xl rounded-sm">
+                <div className="flex items-center justify-between px-5 py-4 bg-panel/60 border border-white/5 shadow-sm relative overflow-hidden backdrop-blur-2xl rounded-sm">
                     <div className="relative z-10 flex items-center gap-4">
                         <div className={`w-3 h-3 rounded-sm ${isOnline ? 'bg-grass' : (isStarting || isStopping) ? 'bg-gold animate-pulse' : 'bg-ink-faint'}`} aria-hidden="true"></div>
                         <div>
@@ -1200,7 +1200,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         </button>
                     </div>
                 </div>
-            ) : (
+            ) : !(isOnline || isStarting) ? (
                 <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <div className="p-1.5 rounded-sm bg-white/5 border border-white/10 text-zinc-400">
@@ -1224,11 +1224,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         </button>
                     )}
                 </div>
-            )}
+            ) : null}
 
             {/* Stats Grid */}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
                 <StatCard icon={Users} label={t('dashboard.players_online')} value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} ${t('status.online')}`} />
                 <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} active={active} />
                 <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} active={active} />
@@ -1237,7 +1237,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             </div>
 
             {/* Mini Console (Real-time via WS) */}
-            <div className="mt-8 h-80 flex-none bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
+            <div className="mt-3 flex-1 min-h-[140px] bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
                 <div className="bg-black/40 px-4 py-2 border-b border-white/5 flex items-center justify-between">
                     <span className="text-[10px] font-bold text-ink-faint uppercase tracking-widest flex items-center gap-2 font-minecraft">
                         {t('dashboard.sys_event_log')}

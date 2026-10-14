@@ -57,7 +57,7 @@ export default function StartupSplash() {
                         <Cubi mood="busy" size={112} />
                     </motion.div>
                     <motion.div
-                        className="mt-5 font-display text-4xl font-semibold tracking-tight text-ink"
+                        className="mt-5 font-brand text-4xl font-semibold tracking-tight text-ink"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.25, duration: 0.4 }}

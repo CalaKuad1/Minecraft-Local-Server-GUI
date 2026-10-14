@@ -174,7 +174,7 @@ export default function Players() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500 w-full">
+        <div className="space-y-8 animate-in fade-in duration-200 w-full">
             <div>
                 <div className="flex items-center justify-between mb-6">
                     <div>

@@ -287,7 +287,7 @@ function App() {
         />
         
         <main className="flex-1 overflow-hidden relative flex flex-col bg-ground/70 backdrop-blur-md w-full">
-          <div className="flex-1 overflow-y-auto p-8 relative z-10 flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent w-full">
+          <div className="flex-1 overflow-y-auto px-6 py-5 relative z-10 flex flex-col [scrollbar-gutter:stable] w-full">
           <div className="mx-auto w-full flex-1 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>

@@ -139,7 +139,7 @@ export default function Settings() {
     }
 
     return (
-        <div className="animate-in fade-in zoom-in duration-500 w-full h-full">
+        <div className="animate-in fade-in duration-200 w-full h-full">
             <div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto items-start h-full pb-10">
                 
                 {/* Left Navigation Rails */}

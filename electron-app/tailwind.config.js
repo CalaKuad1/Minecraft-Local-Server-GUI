@@ -46,22 +46,23 @@ export default {
             },
             fontFamily: {
                 sans: ['"Figtree Variable"', 'Figtree', 'system-ui', 'sans-serif'],
-                // Display face. The class keeps its historical name (`font-minecraft`,
-                // ~150 uses); it now maps to Fredoka, whose rounded strokes match the
-                // logo's soft corners.
-                display: ['"Fredoka Variable"', 'Fredoka', '"Figtree Variable"', 'system-ui', 'sans-serif'],
-                minecraft: ['"Fredoka Variable"', 'Fredoka', '"Figtree Variable"', 'system-ui', 'sans-serif'],
+                // Headings: Outfit, geometric and clean. The class keeps its historical
+                // name (`font-minecraft`, ~150 uses). Fredoka's rounder strokes are kept
+                // for the "Cubi" wordmark only (`font-brand`).
+                display: ['"Outfit Variable"', 'Outfit', '"Figtree Variable"', 'system-ui', 'sans-serif'],
+                minecraft: ['"Outfit Variable"', 'Outfit', '"Figtree Variable"', 'system-ui', 'sans-serif'],
+                brand: ['"Fredoka Variable"', 'Fredoka', '"Outfit Variable"', 'system-ui', 'sans-serif'],
                 mono: ['ui-monospace', '"Cascadia Code"', 'Consolas', 'monospace'],
             },
-            // Soft, rounded corners like the logo. `rounded-sm` is the codebase's
-            // default radius, so it carries the main value.
+            // Slightly softened corners. `rounded-sm` is the codebase's default
+            // radius, so it carries the main value.
             borderRadius: {
-                sm: '0.5rem',
-                DEFAULT: '0.5rem',
-                md: '0.625rem',
-                lg: '0.75rem',
-                xl: '1rem',
-                '2xl': '1.25rem',
+                sm: '0.375rem',
+                DEFAULT: '0.375rem',
+                md: '0.5rem',
+                lg: '0.625rem',
+                xl: '0.75rem',
+                '2xl': '1rem',
             },
             // Names kept from the old pixel-bevel style; values are now a soft
             // top highlight plus a quiet drop shadow.
