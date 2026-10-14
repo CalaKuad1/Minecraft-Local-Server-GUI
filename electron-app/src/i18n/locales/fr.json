@@ -405,7 +405,8 @@
             "online": "En ligne",
             "ops": "Opérateurs",
             "whitelist": "Liste blanche",
-            "banned": "Bannis"
+            "banned": "Bannis",
+            "inventory": "Inventaires"
         },
         "stats": {
             "online": "En ligne",
@@ -624,5 +625,36 @@
         "update": "Mise à jour",
         "starting": "Démarrage...",
         "starting_slow": "C'est un peu plus long que d'habitude. Un instant..."
+    },
+    "inventory": {
+        "durability": "Durabilité",
+        "level": "Niveau",
+        "saved": "Enregistré",
+        "view_inventory": "Inventaire",
+        "view_ender": "Coffre de l'Ender",
+        "offhand": "Main",
+        "armor": {
+            "head": "Tête",
+            "chest": "Torse",
+            "legs": "Jambes",
+            "feet": "Pieds"
+        },
+        "gamemode": {
+            "survival": "Survie",
+            "creative": "Créatif",
+            "adventure": "Aventure",
+            "spectator": "Spectateur"
+        },
+        "dimension": {
+            "overworld": "Surface",
+            "the_nether": "Nether",
+            "the_end": "L'End"
+        },
+        "empty_title": "Pas encore de données joueur",
+        "empty_desc": "Les inventaires apparaissent ici dès que quelqu'un a rejoint ce monde.",
+        "assets_title": "Afficher les objets avec leur vrai look",
+        "assets_desc": "Cubi télécharge les graphismes officiels du jeu depuis Mojang (environ 25 Mo, une seule fois pour tous tes serveurs) et dessine les icônes sur ton PC. Les objets moddés utilisent les mods que tu as déjà.",
+        "assets_eula": "J'accepte l'EULA de Minecraft (aka.ms/MinecraftEULA)",
+        "assets_button": "Télécharger les graphismes"
     }
 }

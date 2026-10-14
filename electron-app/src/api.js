@@ -148,6 +148,25 @@ export const api = {
     getPlayers: async () => {
         return await fetchJson(`${API_URL}/players/lists`);
     },
+    // Inventory inspector
+    getInventoryPlayers: async () => {
+        return await fetchJson(`${API_URL}/inventory/players`, {}, 30000);
+    },
+    getPlayerInventory: async (uuid, lang = 'en') => {
+        return await fetchJson(`${API_URL}/inventory/players/${encodeURIComponent(uuid)}?lang=${encodeURIComponent(lang)}`, {}, 60000);
+    },
+    getItemAssetsStatus: async () => {
+        return await fetchJson(`${API_URL}/mc-assets/status`);
+    },
+    downloadItemAssets: async (lang = 'en') => {
+        return await fetchJson(`${API_URL}/mc-assets/download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accept_eula: true, lang })
+        });
+    },
+    // Plain URL for <img src>: the backend serves these without the token.
+    itemIconUrl: (id, version = '') => `${API_URL}/mc-assets/icon?id=${encodeURIComponent(id)}&v=${encodeURIComponent(version || '')}`,
     opPlayer: async (name) => {
         await fetchJson(`${API_URL}/players/op`, {
             method: 'POST',

@@ -1,3 +1,4 @@
+import InventoryInspector from './InventoryInspector';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
@@ -197,7 +198,7 @@ export default function Players() {
 
             <div className="flex items-center justify-between">
                 <div className="flex bg-ground/60 backdrop-blur-xl border border-white/5 p-1 rounded-sm mb-4 relative max-w-fit shadow-md">
-                    {['online', 'ops', 'whitelist', 'banned'].map(tab => (
+                    {['online', 'ops', 'whitelist', 'banned', 'inventory'].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -211,7 +212,7 @@ export default function Players() {
                     ))}
                 </div>
 
-                {activeTab !== 'online' && (
+                {activeTab !== 'online' && activeTab !== 'inventory' && (
                     <button
                         onClick={() => setShowAddModal(true)}
                         className="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 px-5 py-2.5 rounded-sm flex items-center gap-2 font-minecraft uppercase tracking-wider text-xs transition-all shrink-0 ml-4"
@@ -222,6 +223,7 @@ export default function Players() {
                 )}
             </div>
 
+            {activeTab === 'inventory' ? <InventoryInspector /> : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {currentList.length > 0 ? (
                     currentList.map((player, i) => (
@@ -241,6 +243,7 @@ export default function Players() {
                     </div>
                 )}
             </div>
+            )}
 
             {showAddModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">

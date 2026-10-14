@@ -175,7 +175,9 @@ async def token_auth_middleware(request: Request, call_next):
         # The server icon is rendered via <img src>, which cannot send custom
         # headers. It only ever serves the fixed server-icon.png, so it is safe
         # to leave unauthenticated.
-        if request.url.path != "/server/icon/image":
+        # Item icons are also <img> sources: generated game-item PNGs only,
+        # looked up by a validated id (see /mc-assets/icon).
+        if request.url.path not in ("/server/icon/image", "/mc-assets/icon"):
             provided = request.headers.get("x-mlsg-token", "")
             if not secrets.compare_digest(provided, API_TOKEN):
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
@@ -1611,6 +1613,145 @@ def open_server_folder():
             open_file_explorer(path)
             return {"message": "Folder opened"}
     raise HTTPException(status_code=404, detail="Server path not found")
+
+
+# --- Inventory inspector -------------------------------------------------
+# Reads players' saved inventories from the world and renders item icons from
+# official game files fetched on the user's PC (see utils/mc_assets.py).
+
+_assets_downloader = None
+_last_inventory_save = {"t": 0.0}
+
+
+def _assets():
+    global _assets_downloader
+    from utils import mc_assets
+
+    if _assets_downloader is None:
+        _assets_downloader = mc_assets.Downloader()
+    return mc_assets, _assets_downloader
+
+
+def _inventory_ctx():
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="No server selected")
+    h = state.server_handler
+    return h.server_path, _resolve_world_name(h.server_path), (h.minecraft_version or "")
+
+
+def _locale(lang):
+    mc, _ = _assets()
+    return mc.LOCALES.get((lang or "en")[:2], "en_us")
+
+
+@app.get("/inventory/players")
+def inventory_players():
+    from utils import player_data
+
+    server_path, world, _ = _inventory_ctx()
+    online = set()
+    try:
+        if state.server_handler.get_status() == "online":
+            online = {n.lower() for n in (state.server_handler.get_active_players_list(trigger_refresh=False) or [])}
+    except Exception:
+        pass
+    players = player_data.list_players(server_path, world)
+    for p in players:
+        p["online"] = bool(p.get("name") and p["name"].lower() in online)
+    return {"world": world, "players": players}
+
+
+@app.get("/inventory/players/{uuid}")
+def inventory_player(uuid: str, lang: str = Query("en")):
+    from utils import player_data
+
+    mc, _ = _assets()
+    server_path, world, version = _inventory_ctx()
+    # While the server runs, ask it to write player files first so the view is current.
+    try:
+        if state.server_handler.get_status() == "online" and time.time() - _last_inventory_save["t"] > 5:
+            state.server_handler.send_command("save-all", silent=True)
+            _last_inventory_save["t"] = time.time()
+            time.sleep(1.5)
+    except Exception:
+        pass
+    try:
+        data = player_data.read_player(server_path, world, uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid player id")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Player not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read player data: {e}")
+
+    icons_version = mc.pick_version(state.app_data_dir, version)
+    locale = _locale(lang)
+    names = {}
+    if icons_version:
+        roots = mc.Roots(state.app_data_dir, icons_version, server_path)
+        mc.ensure_locale(state.app_data_dir, icons_version, locale)
+        all_items = data["inventory"] + list(data["armor"].values()) + data["ender_chest"] + ([data["offhand"]] if data["offhand"] else [])
+        namespaces = {i["id"].split(":", 1)[0] for i in all_items}
+        names = mc.item_names(roots, namespaces, locale)
+
+    def enrich(item):
+        if not item:
+            return item
+        item["name"] = mc.display_name(names, item["id"])
+        for key in ("enchantments", "stored_enchantments"):
+            for e in item.get(key, []):
+                e["name"] = mc.enchantment_name(names, e["id"])
+        return item
+
+    for it in data["inventory"] + data["ender_chest"]:
+        enrich(it)
+    for it in data["armor"].values():
+        enrich(it)
+    enrich(data["offhand"])
+    data["icons_version"] = icons_version
+    return data
+
+
+@app.get("/mc-assets/status")
+def mc_assets_status():
+    mc, dl = _assets()
+    version = state.server_handler.minecraft_version if state and state.server_handler else None
+    return {
+        "wanted": version,
+        "ready_version": mc.pick_version(state.app_data_dir, version),
+        "cached": mc.cached_versions(state.app_data_dir),
+        "download": dl.status(),
+    }
+
+
+@app.post("/mc-assets/download")
+def mc_assets_download(payload: dict):
+    if not payload.get("accept_eula"):
+        raise HTTPException(status_code=400, detail="The Minecraft EULA must be accepted")
+    mc, dl = _assets()
+    version = payload.get("version") or (state.server_handler.minecraft_version if state.server_handler else None)
+    if not version:
+        raise HTTPException(status_code=400, detail="Unknown Minecraft version")
+    started = dl.start(state.app_data_dir, version, _locale(payload.get("lang")))
+    return {"started": started, "download": dl.status()}
+
+
+@app.get("/mc-assets/icon")
+def mc_assets_icon(id: str = Query(...), v: str = Query("")):
+    from fastapi.responses import FileResponse
+
+    mc, _ = _assets()
+    version = mc.pick_version(state.app_data_dir, v or (state.server_handler.minecraft_version if state.server_handler else None))
+    if not version:
+        raise HTTPException(status_code=404, detail="Item graphics not downloaded")
+    server_path = state.server_handler.server_path if state.server_handler else None
+    try:
+        path = mc.icon_path(mc.Roots(state.app_data_dir, version, server_path), id)
+    except mc.AssetError:
+        raise HTTPException(status_code=400, detail="Invalid item id")
+    if not path:
+        raise HTTPException(status_code=404, detail="No icon for this item")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "max-age=86400"})
 
 
 @app.get("/players/lists")

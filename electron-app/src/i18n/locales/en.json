@@ -405,7 +405,8 @@
             "online": "Online",
             "ops": "Operators",
             "whitelist": "Whitelist",
-            "banned": "Banned"
+            "banned": "Banned",
+            "inventory": "Inventories"
         },
         "stats": {
             "online": "Online",
@@ -626,5 +627,36 @@
         "update": "Update",
         "starting": "Starting up...",
         "starting_slow": "Taking a bit longer than usual. Hang on..."
+    },
+    "inventory": {
+        "durability": "Durability",
+        "level": "Level",
+        "saved": "Saved",
+        "view_inventory": "Inventory",
+        "view_ender": "Ender chest",
+        "offhand": "Off",
+        "armor": {
+            "head": "Head",
+            "chest": "Chest",
+            "legs": "Legs",
+            "feet": "Feet"
+        },
+        "gamemode": {
+            "survival": "Survival",
+            "creative": "Creative",
+            "adventure": "Adventure",
+            "spectator": "Spectator"
+        },
+        "dimension": {
+            "overworld": "Overworld",
+            "the_nether": "Nether",
+            "the_end": "The End"
+        },
+        "empty_title": "No player data yet",
+        "empty_desc": "Inventories appear here once someone has joined this world.",
+        "assets_title": "Show items with their real look",
+        "assets_desc": "Cubi downloads the official game graphics from Mojang (about 25 MB, only once for all your servers) and draws the icons on your PC. Modded items use the mods you already have.",
+        "assets_eula": "I accept the Minecraft EULA (aka.ms/MinecraftEULA)",
+        "assets_button": "Download graphics"
     }
 }

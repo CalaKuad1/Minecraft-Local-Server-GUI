@@ -148,3 +148,12 @@ input[type=range].ram-slider::-moz-range-thumb {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-white/20;
 }
+
+/* Enchanted items in the inventory inspector: a soft purple shimmer. */
+.inv-glint {
+  animation: inv-glint 2.4s ease-in-out infinite;
+}
+@keyframes inv-glint {
+  0%, 100% { filter: drop-shadow(0 0 1px rgb(168 85 247 / 0.55)) brightness(1); }
+  50% { filter: drop-shadow(0 0 4px rgb(192 132 252 / 0.9)) brightness(1.12); }
+}
