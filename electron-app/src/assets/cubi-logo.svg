@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Cubi">
+  <g stroke-linejoin="round" stroke-width="5">
+    <polygon points="50,12 86,32 50,52 14,32" fill="#6ee7b7" stroke="#6ee7b7"/>
+    <polygon points="14,32 50,52 50,92 14,72" fill="#10b981" stroke="#10b981"/>
+    <polygon points="86,32 86,72 50,92 50,52" fill="#047857" stroke="#047857"/>
+  </g>
+  <g transform="matrix(1,-0.5556,0,1,50,52)" fill="#032b1f">
+    <rect x="9" y="10" width="5" height="9" rx="2"/>
+    <rect x="22" y="10" width="5" height="9" rx="2"/>
+    <path d="M8 25 Q18 34 28 25" fill="none" stroke="#032b1f" stroke-width="3.6" stroke-linecap="round"/>
+  </g>
+</svg>

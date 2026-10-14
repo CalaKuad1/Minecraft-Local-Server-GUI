@@ -4,7 +4,8 @@ import { LayoutDashboard, Terminal, Settings as SettingsIcon, Users, Activity, G
 import { api } from './api';
 import { useTranslation } from './contexts/LanguageContext';
 
-import logo from './assets/logo-minimal.png';
+import logo from './assets/cubi-logo.svg';
+import { APP_NAME } from './brand';
 
 // Effects
 import AbstractBackground from './components/effects/AbstractBackground';
@@ -43,7 +44,7 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
       {/* App Drag Region (Titlebar offset) */}
       <div className="h-4 w-full bg-transparent" style={{ WebkitAppRegion: 'drag' }}></div>
       <div className="p-6 flex justify-center mb-2">
-        <img src={logo} alt="Server Manager" className="w-full max-h-16 object-contain opacity-90 drop-shadow-[0_0_15px_rgba(16,185,129,0.15)]" />
+        <img src={logo} alt={APP_NAME} className="w-full max-h-16 object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.25)]" />
       </div>
       <div className="px-4 mb-2 mt-2">
         <button onClick={onBack} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-xs font-minecraft tracking-wider uppercase text-ink-faint hover:text-white hover:bg-white/5 transition-colors border border-transparent">
