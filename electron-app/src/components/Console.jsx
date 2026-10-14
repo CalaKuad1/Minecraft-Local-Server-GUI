@@ -260,21 +260,21 @@ export default function Console({ serverId }) {
                         <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
                         <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
                     </div>
-                    <span>Integrated Terminal</span>
+                    <span>{t('console.title')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDownload}
                         disabled={logs.length === 0}
                         className="flex items-center gap-1.5 text-ink-faint hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-[10px] font-bold uppercase tracking-widest"
-                        title="Download logs"
+                        title={t('console.download')}
                     >
                         <Download size={12} />
                         Log
                     </button>
                     <div className={`flex items-center gap-2 ${isConnected ? 'text-green-500' : 'text-yellow-500'}`}>
                         <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                        {isConnected ? t('status.online') : 'Disconnected'}
+                        {isConnected ? t('status.online') : t('console.disconnected')}
                     </div>
                 </div>
             </div>
@@ -285,7 +285,7 @@ export default function Console({ serverId }) {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search logs..."
+                    placeholder={t('console.search')}
                     className="flex-1 bg-[#050505] border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-ink-faint font-mono outline-none focus:border-white/20 transition-colors"
                 />
                 <div className="flex gap-1">
@@ -299,7 +299,7 @@ export default function Console({ serverId }) {
                                     : 'text-ink-faint hover:text-zinc-400 hover:bg-white/5'
                             }`}
                         >
-                            {lvl === 'all' ? 'All' : lvl.slice(0, 3)}
+                            {t(`console.f_${lvl}`)}
                         </button>
                     ))}
                 </div>
@@ -328,7 +328,7 @@ export default function Console({ serverId }) {
                 ))}
                 {filteredLogs.length === 0 && (
                     <div className="text-ink-faint italic flex items-center gap-2 h-full justify-center opacity-50 font-sans text-center px-8">
-                        {logs.length === 0 ? t('dashboard.waiting_logs') : 'No logs match your filter'}
+                        {logs.length === 0 ? t('dashboard.waiting_logs') : t('console.no_match')}
                     </div>
                 )}
             </div>

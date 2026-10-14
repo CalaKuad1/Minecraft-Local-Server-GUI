@@ -138,13 +138,45 @@
             "permanent": "Adresse permanente : c'est la même à chaque démarrage du serveur.",
             "switching": "Passage à ton adresse permanente...",
             "time_limit": "Tunnel gratuit : il se coupe toutes les 60 minutes et doit être relancé."
+        },
+        "errors": {
+            "mod_dependency": "Il manque une dépendance à un mod",
+            "java_version": "Mauvaise version de Java",
+            "port_conflict": "Le port est déjà utilisé",
+            "out_of_memory": "Mémoire insuffisante",
+            "mod_loading": "Un mod n'a pas pu se charger",
+            "dns_error": "Problème avec ton adresse fixe",
+            "bedrock_tunnel": "Erreur du tunnel Bedrock",
+            "generic": "Erreur du serveur",
+            "unknown_fix": "Erreur inconnue. Regarde la Console pour plus de détails.",
+            "bedrock_fix": "Impossible de démarrer le tunnel Bedrock. Regarde la Console pour plus de détails.",
+            "dismiss": "Fermer"
+        },
+        "force_kill_title": "Forcer la fermeture ?",
+        "bedrock": {
+            "title": "Crossplay avec Bedrock",
+            "floodgate_active": "Floodgate actif",
+            "floodgate_hint": "Floodgate permet aux joueurs Bedrock de rejoindre sans compte Java",
+            "address": "Adresse",
+            "port": "Port",
+            "copy_address": "Copier l'adresse",
+            "copy_port": "Copier le port",
+            "how_to": "Les joueurs Bedrock saisissent l'adresse et le port dans Jouer → Serveurs → Ajouter un serveur.",
+            "pinggy_note": "Les tunnels gratuits expirent après environ 60 minutes ; relance-le pour le renouveler.",
+            "local_port": "Port UDP local : {port}. Laisse entrer les joueurs iOS, Android, Windows Bedrock et consoles.",
+            "stop": "Arrêter Bedrock",
+            "connecting": "Connexion",
+            "enable": "Activer Bedrock",
+            "cta_title": "Joue avec tes amis sur mobile et console",
+            "cta_desc": "Installe GeyserMC depuis Plugins pour que les joueurs iOS, Android, PlayStation, Xbox, Switch et Windows Bedrock puissent rejoindre.",
+            "cta_button": "Installer GeyserMC"
         }
     },
     "library": {
         "title": "Bibliothèque de Serveurs",
         "new_server": "Nouveau Serveur",
         "recently_opened": "Vus Récemment",
-        "all_servers": "Toute l'Infrastructure",
+        "all_servers": "Tous les serveurs",
         "stats": {
             "total": "Nombre total de serveurs",
             "active": "Actif maintenant",
@@ -158,13 +190,16 @@
         "detailed_view": "Détail",
         "search_results": "Résultats de recherche",
         "no_matches": "Aucun résultat",
-        "empty_infrastructure": "Infrastructure vide",
+        "empty_infrastructure": "Pas encore de serveurs",
         "quick_filters": "Filtres rapides",
         "view_mode": "Mode d'affichage",
         "delete_title": "Supprimer le serveur",
         "delete_profile": "Supprimer uniquement le profil",
         "delete_files": "Supprimer le profil et les fichiers",
-        "load_error": "Échec du chargement des serveurs."
+        "load_error": "Échec du chargement des serveurs.",
+        "empty_desc": "Crée ton premier serveur et joue avec tes amis en une minute.",
+        "clear_search": "Effacer la recherche",
+        "delete_failed": "Impossible de supprimer le serveur :"
     },
     "settings": {
         "title": "Paramètres",
@@ -216,7 +251,22 @@
         "developer": "Développeur",
         "framework": "Framework",
         "license": "Licence",
-        "view_github": "Voir sur GitHub"
+        "view_github": "Voir sur GitHub",
+        "tray": {
+            "title": "Réduire dans la barre",
+            "desc": "L'app continue de tourner dans la barre système quand tu fermes la fenêtre."
+        },
+        "dns": {
+            "nav": "Adresse fixe",
+            "title": "Adresse fixe",
+            "desc": "Donne à ton serveur une adresse qui ne change jamais, même si le tunnel change.",
+            "enable": "Utiliser une adresse fixe",
+            "enable_desc": "Ton serveur aura une adresse comme survival.play.ariser.app qui se met à jour à chaque démarrage du tunnel.",
+            "url": "URL du proxy DNS",
+            "url_placeholder": "Laisse vide pour utiliser le proxy communautaire gratuit",
+            "url_hint": "Avancé : ne change ceci que si tu héberges ton propre proxy.",
+            "info": "Au démarrage du tunnel, ton serveur reçoit automatiquement une adresse fixe [nom].play.ariser.app. Gratuit pour tous."
+        }
     },
     "common": {
         "back": "Retour",
@@ -341,7 +391,8 @@
             "java_path": "Chemin de l'exécutable Java",
             "java_path_desc": "Chemin explicite ou variables d'environnement.",
             "browse": "Parcourir"
-        }
+        },
+        "appearance_icon": "Apparence et icône"
     },
     "players": {
         "title": "Joueurs",
@@ -553,5 +604,21 @@
             "failed_hint": "Vérifie ta connexion internet et réessaie. Si ça échoue encore, essaie une autre version.",
             "retry": "Réessayer"
         }
+    },
+    "console": {
+        "title": "Console du serveur",
+        "download": "Télécharger le journal",
+        "disconnected": "Déconnecté",
+        "search": "Rechercher dans le journal...",
+        "no_match": "Aucune ligne ne correspond à ta recherche",
+        "f_all": "Tout",
+        "f_normal": "Info",
+        "f_input": "Commandes",
+        "f_warning": "Alertes",
+        "f_error": "Erreurs"
+    },
+    "app": {
+        "saving_world": "Sauvegarde du monde et fermeture en toute sécurité...",
+        "update": "Mise à jour"
     }
 }

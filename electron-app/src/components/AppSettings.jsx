@@ -92,7 +92,7 @@ export default function AppSettings({ isOpen, onClose }) {
         { id: 'general', label: t('settings.general'), Icon: Settings },
         { id: 'language', label: t('settings.language'), Icon: Globe },
         { id: 'appearance', label: t('settings.appearance'), Icon: Palette },
-        { id: 'dns', label: 'Cloudflare', Icon: Globe },
+        { id: 'dns', label: t('settings.dns.nav'), Icon: Globe },
         { id: 'about', label: t('settings.about'), Icon: Info },
     ];
 
@@ -119,7 +119,7 @@ export default function AppSettings({ isOpen, onClose }) {
                     <div className="w-48 bg-[#070707] border-r border-white/5 py-6 px-3 flex flex-col shrink-0">
                         <div className="flex items-center gap-2 px-3 mb-6">
                             <Settings size={14} className="text-emerald-400" />
-                            <span className="font-minecraft text-xs tracking-widest uppercase text-zinc-300">Settings</span>
+                            <span className="font-minecraft text-xs tracking-widest uppercase text-zinc-300">{t('settings.title')}</span>
                         </div>
 
                         <nav className="space-y-0.5 flex-1">
@@ -177,16 +177,16 @@ export default function AppSettings({ isOpen, onClose }) {
 
                                     {/* Notifications */}
                                     <ToggleSetting
-                                        label="Desktop Notifications"
-                                        description="Show notifications when server status changes."
+                                        label={t('settings.notifications.title')}
+                                        description={t('settings.notifications.desc')}
                                         value={settings.notifications}
                                         onChange={(v) => updateSetting('notifications', v)}
                                     />
 
                                     {/* Minimize to tray */}
                                     <ToggleSetting
-                                        label="Minimize to Tray"
-                                        description="Keep the app running in the system tray when closed."
+                                        label={t('settings.tray.title')}
+                                        description={t('settings.tray.desc')}
                                         value={settings.minimizeToTray}
                                         onChange={(v) => updateSetting('minimizeToTray', v)}
                                     />
@@ -290,36 +290,34 @@ export default function AppSettings({ isOpen, onClose }) {
 
                         {activeSection === 'dns' && (
                             <div>
-                                <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">Fixed Address</h2>
-                                <p className="text-xs text-ink-faint mb-6">Give your server a permanent domain that never changes, even when the tunnel IP does.</p>
+                                <h2 className="font-minecraft text-sm tracking-widest uppercase text-zinc-300 mb-2">{t('settings.dns.title')}</h2>
+                                <p className="text-xs text-ink-faint mb-6">{t('settings.dns.desc')}</p>
 
                                 <div className="space-y-5">
                                     <ToggleSetting
-                                        label="Enable Fixed Address"
-                                        description="Auto-update DNS when tunnel starts. Your server gets a permanent domain like survival.play.ariser.com"
+                                        label={t('settings.dns.enable')}
+                                        description={t('settings.dns.enable_desc')}
                                         value={settings.dns_proxy_enabled}
                                         onChange={(v) => updateSetting('dns_proxy_enabled', v)}
                                     />
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-ink-faint">DNS Proxy URL</label>
+                                        <label className="text-[10px] font-minecraft tracking-wider uppercase text-ink-faint">{t('settings.dns.url')}</label>
                                         <input
                                             type="text"
                                             value={settings.dns_proxy_url || ''}
                                             onChange={(e) => updateSetting('dns_proxy_url', e.target.value)}
-                                            placeholder="Default: community proxy (leave empty)"
+                                            placeholder={t('settings.dns.url_placeholder')}
                                             className="w-full bg-black/40 border border-white/10 rounded-sm px-3 py-2 text-xs text-white placeholder-ink-faint font-mono outline-none focus:border-white/30 transition-colors"
                                         />
                                         <p className="text-[9px] text-ink-faint mt-1">
-                                            Leave empty to use the community proxy. Advanced users can host their own.
+                                            {t('settings.dns.url_hint')}
                                         </p>
                                     </div>
 
                                     <div className="p-3 bg-white/[0.02] border border-white/5 rounded-sm">
                                         <p className="text-[10px] text-ink-faint leading-relaxed font-mono">
-                                            When the tunnel starts, your server automatically gets a fixed address at{' '}
-                                            <span className="text-emerald-400">[servername].play.ariser.com</span>.
-                                            Max 1 update per minute per server. Free for everyone.
+                                            {t('settings.dns.info')}
                                         </p>
                                     </div>
                                 </div>

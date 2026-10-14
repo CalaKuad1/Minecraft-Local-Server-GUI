@@ -1048,6 +1048,7 @@ def get_status():
         "pid": state.server_handler.get_pid(),
         "server_id": state.server_handler.server_id,
         "server_type": state.server_handler.server_type,
+        "name": (state.config_manager.get_server(state.server_handler.server_id) or {}).get("name"),
         "minecraft_version": state.server_handler.minecraft_version,
         "version": state.server_handler.minecraft_version,
         "cpu": stats["cpu"],

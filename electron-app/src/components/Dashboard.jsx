@@ -604,7 +604,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         if (isStopping) {
             const ok = await dialog.confirm(
                 t('dashboard.force_stop_confirm', 'Server is not responding. Force close immediately? (Unsaved progress may be lost)'),
-                { title: 'Force Kill?', variant: 'destructive', confirmLabel: 'Force Kill', cancelLabel: 'Cancel' }
+                { title: t('dashboard.force_kill_title'), variant: 'destructive', confirmLabel: t('dashboard.force_kill'), cancelLabel: t('common.cancel') }
             );
             if (ok) {
                 setLoading(true);
@@ -685,8 +685,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     {togglingMode ? '…' : onlineMode ? t('dashboard.premium') : t('dashboard.no_premium')}
                                 </button>
                             </div>
-                            <h2 className="text-2xl font-minecraft text-white tracking-wide">
-                                Minecraft Server
+                            <h2 className="text-2xl font-minecraft text-white tracking-wide truncate max-w-md" title={status.name || undefined}>
+                                {status.name || 'Minecraft Server'}
                             </h2>
                             <p className="mt-0.5 text-sm capitalize text-ink-dim">
                                 {status.server_type ? `${status.server_type} ${status.version || status.minecraft_version || ''}` : t('status.not_configured')}
@@ -767,22 +767,17 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="text-xs font-minecraft tracking-wider uppercase text-red-400 mb-0.5">
-                                {serverError.error === 'mod_dependency' ? 'Missing Mod Dependency' :
-                                 serverError.error === 'java_version' ? 'Java Version Error' :
-                                 serverError.error === 'port_conflict' ? 'Port Conflict' :
-                                 serverError.error === 'out_of_memory' ? 'Out of Memory' :
-                                 serverError.error === 'mod_loading' ? 'Mod Loading Error' :
-                                 serverError.error === 'dns_error' ? 'DNS Error' :
-                                 serverError.error === 'bedrock_tunnel' ? 'Bedrock Tunnel Error' :
-                                 'Server Error'}
+                                {['mod_dependency', 'java_version', 'port_conflict', 'out_of_memory', 'mod_loading', 'dns_error', 'bedrock_tunnel'].includes(serverError.error)
+                                    ? t(`dashboard.errors.${serverError.error}`)
+                                    : t('dashboard.errors.generic')}
                             </div>
                             <div className="text-[11px] text-zinc-400 leading-relaxed">
-                                {serverError.fix || 'Unknown error. Check the console for details.'}
+                                {serverError.fix || t('dashboard.errors.unknown_fix')}
                                 {serverError.mod && <span className="text-ink-faint ml-1">— {serverError.mod}</span>}
                             </div>
                             <div className="text-[9px] text-ink-faint font-mono mt-1 truncate">{serverError.detail}</div>
                         </div>
-                        <button onClick={() => setServerError(null)} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 transition-colors shrink-0">
+                        <button onClick={() => setServerError(null)} aria-label={t('dashboard.errors.dismiss')} className="p-1 rounded-sm text-ink-faint hover:text-white hover:bg-white/5 transition-colors shrink-0">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
@@ -1099,23 +1094,23 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-minecraft">
-                                        Bedrock Crossplay
+                                        {t('dashboard.bedrock.title')}
                                     </span>
                                     <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold uppercase tracking-wider">
                                         GeyserMC
                                     </span>
                                     {geyserInfo.floodgate_installed && (
-                                        <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold uppercase tracking-wider" title="Floodgate allows Bedrock players to join without needing a Java account">
-                                            Floodgate Active
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold uppercase tracking-wider" title={t('dashboard.bedrock.floodgate_hint')}>
+                                            {t('dashboard.bedrock.floodgate_active')}
                                         </span>
                                     )}
                                     {bedrockAddress ? (
                                         <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-sm border border-emerald-500/20 font-bold uppercase tracking-wider">
-                                            ONLINE (UDP)
+                                            {t('status.online')} (UDP)
                                         </span>
                                     ) : (
                                         <span className="text-[8px] px-1.5 py-0.5 bg-zinc-500/10 text-ink-faint rounded-sm border border-zinc-500/20 font-bold uppercase tracking-wider">
-                                            OFFLINE
+                                            {t('status.offline')}
                                         </span>
                                     )}
                                 </div>
@@ -1124,42 +1119,42 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     <div className="space-y-1 mt-1">
                                         <div className="flex flex-wrap items-center gap-3">
                                             <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
-                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">Address:</span>
+                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">{t('dashboard.bedrock.address')}:</span>
                                                 <span className="text-xs font-mono font-bold text-cyan-300 select-all">
                                                     {bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress}
                                                 </span>
                                                 <button
                                                     onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[0] : bedrockAddress)}
                                                     className="p-1 hover:text-white text-ink-faint transition-colors"
-                                                    title="Copy Server Address"
+                                                    title={t('dashboard.bedrock.copy_address')}
                                                 >
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-sm">
-                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">Port:</span>
+                                                <span className="text-[9px] uppercase tracking-wider text-ink-faint font-bold">{t('dashboard.bedrock.port')}:</span>
                                                 <span className="text-xs font-mono font-bold text-emerald-400 select-all">
                                                     {bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132'}
                                                 </span>
                                                 <button
                                                     onClick={() => navigator.clipboard.writeText(bedrockAddress.includes(':') ? bedrockAddress.split(':')[1] : '19132')}
                                                     className="p-1 hover:text-white text-ink-faint transition-colors"
-                                                    title="Copy Port"
+                                                    title={t('dashboard.bedrock.copy_port')}
                                                 >
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                                 </button>
                                             </div>
                                         </div>
                                         <div className="text-[10px] text-ink-faint">
-                                            Bedrock players enter Address &amp; Port into <span className="text-zinc-400">Play &gt; Servers &gt; Add Server</span>
+                                            {t('dashboard.bedrock.how_to')}
                                         </div>
                                         <div className="text-[10px] text-amber-500/80">
-                                            Free Pinggy tunnels expire after ~60 min — restart the tunnel to renew it.
+                                            {t('dashboard.bedrock.pinggy_note')}
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="text-[11px] text-zinc-400 mt-0.5">
-                                        Local UDP Port: <span className="font-mono text-zinc-300">{geyserInfo.bedrock_port || 19132}</span>. Share server with iOS, Android, Windows Bedrock &amp; Consoles.
+                                        {t('dashboard.bedrock.local_port').replace('{port}', geyserInfo.bedrock_port || 19132)}
                                     </div>
                                 )}
                             </div>
@@ -1180,7 +1175,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     setBedrockConnecting(false);
                                     setServerError({
                                         error: 'bedrock_tunnel',
-                                        fix: 'Could not start the Bedrock tunnel. Check the console for details.',
+                                        fix: t('dashboard.errors.bedrock_fix'),
                                         detail: err.response?.data?.detail || err.message,
                                     });
                                 }
@@ -1195,11 +1190,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             }`}
                         >
                             {bedrockAddress ? (
-                                <><Square size={12} /> Stop Bedrock</>
+                                <><Square size={12} /> {t('dashboard.bedrock.stop')}</>
                             ) : bedrockConnecting ? (
-                                <><div className="w-3 h-3 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> Connecting</>
+                                <><div className="w-3 h-3 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" /> {t('dashboard.bedrock.connecting')}</>
                             ) : (
-                                <><Zap size={12} /> Enable Bedrock</>
+                                <><Zap size={12} /> {t('dashboard.bedrock.enable')}</>
                             )}
                         </button>
                     </div>
@@ -1211,11 +1206,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             <Zap size={14} />
                         </div>
                         <div>
-                            <div className="text-xs font-bold text-zinc-300 font-minecraft">
-                                Bedrock &amp; Console Crossplay
+                            <div className="text-sm font-semibold text-zinc-200">
+                                {t('dashboard.bedrock.cta_title')}
                             </div>
-                            <div className="text-[10px] text-ink-faint">
-                                Want iOS, Android, PlayStation, Xbox, Switch &amp; Windows Bedrock players to join? Install GeyserMC in Plugins.
+                            <div className="text-xs text-ink-faint">
+                                {t('dashboard.bedrock.cta_desc')}
                             </div>
                         </div>
                     </div>
@@ -1224,7 +1219,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                             onClick={() => onNavigate('plugins')}
                             className="px-3 py-1.5 rounded-sm border border-white/10 bg-white/5 hover:bg-white/10 text-[10px] font-minecraft text-white tracking-widest uppercase transition-all flex-shrink-0"
                         >
-                            Get GeyserMC
+                            {t('dashboard.bedrock.cta_button')}
                         </button>
                     )}
                 </div>

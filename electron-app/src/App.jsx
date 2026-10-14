@@ -83,7 +83,7 @@ function Sidebar({ activeTab, setActiveTab, onBack, onOpenAppSettings }) {
           >
             <SettingsIcon size={16} />
           </button>
-          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white" title="View on GitHub" aria-label="View on GitHub"><Github size={16} /></a>
+          <a href="https://github.com/CalaKuad1" target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-sm transition-colors text-ink-faint hover:text-white" title={t('settings.view_github')} aria-label={t('settings.view_github')}><Github size={16} /></a>
         </div>
       </div>
     </div>
@@ -227,7 +227,7 @@ function App() {
       <div className="h-screen w-screen bg-black/90 flex flex-col items-center justify-center text-white z-[9999] fixed inset-0 font-sans">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-6"></div>
         <h2 className="text-3xl font-minecraft mb-2">{t('status.stopping')}</h2>
-        <p className="text-gray-400">Saving world and closing gracefully...</p>
+        <p className="text-gray-400">{t('app.saving_world')}</p>
       </div>
     );
   }
@@ -318,7 +318,7 @@ function App() {
 
       {updateStatus && ['available', 'downloading', 'downloaded', 'error'].includes(updateStatus.state) && (
         <div className="fixed bottom-5 right-5 z-[9998] max-w-xs bg-[#0f0f0f] border border-white/10 rounded-sm shadow-2xl p-4 text-xs">
-          <div className="font-minecraft uppercase tracking-widest text-white mb-1">Update</div>
+          <div className="font-minecraft uppercase tracking-widest text-white mb-1">{t('app.update')}</div>
           {updateStatus.state === 'available' && (
             <div className="text-zinc-400">
               New version {updateStatus.version} available.

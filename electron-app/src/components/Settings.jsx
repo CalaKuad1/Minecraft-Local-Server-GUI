@@ -8,6 +8,19 @@ import MotdPreview from './MotdPreview';
 import { Palette, Upload } from './ui/PixelIcons';
 import { useTranslation } from '../contexts/LanguageContext';
 
+// Newer servers write `level-type=minecraft\:normal` (namespaced, escaped);
+// older ones use `default`. Show both as the same option and write back in
+// whichever format the server already uses.
+const LEVEL_NS = /^minecraft\\?:/;
+const levelTypeKey = (raw) => {
+    const key = (raw || 'default').replace(LEVEL_NS, '');
+    return key === 'normal' ? 'default' : key;
+};
+const levelTypeValue = (key, previousRaw) => {
+    if (!LEVEL_NS.test(previousRaw || '')) return key;
+    return `minecraft\\:${key === 'default' ? 'normal' : key}`;
+};
+
 export default function Settings() {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('general');
@@ -202,8 +215,8 @@ export default function Settings() {
                                         <div className="flex flex-col">
                                             <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.level_type')}</label>
                                             <Select
-                                                value={serverProps['level-type'] || 'default'}
-                                                onChange={(val) => handlePropChange('level-type', val)}
+                                                value={levelTypeKey(serverProps['level-type'])}
+                                                onChange={(val) => handlePropChange('level-type', levelTypeValue(val, serverProps['level-type']))}
                                                 options={[
                                                     { value: 'default', label: t('server_settings.props.level_types.default') },
                                                     { value: 'flat', label: t('server_settings.props.level_types.flat') },
@@ -304,7 +317,7 @@ export default function Settings() {
 
                         {activeTab === 'appearance' && (
                             <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">Appearance & Icon</h3>
+                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.appearance_icon')}</h3>
                                 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                     <div className="space-y-4">

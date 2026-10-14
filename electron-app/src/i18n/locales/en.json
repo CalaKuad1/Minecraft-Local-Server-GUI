@@ -138,13 +138,45 @@
             "permanent": "Permanent address: it stays the same every time you start the server.",
             "switching": "Switching to your permanent address...",
             "time_limit": "Free tunnel: it disconnects every 60 minutes and has to be restarted."
+        },
+        "errors": {
+            "mod_dependency": "A mod is missing a dependency",
+            "java_version": "Wrong Java version",
+            "port_conflict": "The port is already in use",
+            "out_of_memory": "Out of memory",
+            "mod_loading": "A mod failed to load",
+            "dns_error": "Problem with your fixed address",
+            "bedrock_tunnel": "Bedrock tunnel error",
+            "generic": "Server error",
+            "unknown_fix": "Unknown error. Check the Console for details.",
+            "bedrock_fix": "Couldn't start the Bedrock tunnel. Check the Console for details.",
+            "dismiss": "Dismiss"
+        },
+        "force_kill_title": "Force close?",
+        "bedrock": {
+            "title": "Crossplay with Bedrock",
+            "floodgate_active": "Floodgate on",
+            "floodgate_hint": "Floodgate lets Bedrock players join without a Java account",
+            "address": "Address",
+            "port": "Port",
+            "copy_address": "Copy address",
+            "copy_port": "Copy port",
+            "how_to": "Bedrock players type the address and port in Play → Servers → Add Server.",
+            "pinggy_note": "Free tunnels expire after about 60 minutes; restart it to renew.",
+            "local_port": "Local UDP port: {port}. Let iOS, Android, Windows Bedrock and console players join.",
+            "stop": "Stop Bedrock",
+            "connecting": "Connecting",
+            "enable": "Enable Bedrock",
+            "cta_title": "Play with mobile and console friends",
+            "cta_desc": "Install GeyserMC from Plugins so iOS, Android, PlayStation, Xbox, Switch and Windows Bedrock players can join.",
+            "cta_button": "Get GeyserMC"
         }
     },
     "library": {
         "title": "Server Library",
         "new_server": "New Server",
         "recently_opened": "Recently Viewed",
-        "all_servers": "All Infrastructure",
+        "all_servers": "All servers",
         "stats": {
             "total": "Total Servers",
             "active": "Active Now",
@@ -158,13 +190,16 @@
         "detailed_view": "Detailed",
         "search_results": "Search Results",
         "no_matches": "No matches found",
-        "empty_infrastructure": "Infrastructure empty",
+        "empty_infrastructure": "No servers yet",
         "quick_filters": "Quick Filters",
         "view_mode": "View Mode",
         "delete_title": "Delete Server",
         "delete_profile": "Delete Profile Only",
         "delete_files": "Delete Profile & Files",
-        "load_error": "Failed to load servers."
+        "load_error": "Failed to load servers.",
+        "empty_desc": "Create your first server and play with your friends in a minute.",
+        "clear_search": "Clear search",
+        "delete_failed": "Couldn't delete the server:"
     },
     "settings": {
         "title": "App Settings",
@@ -216,7 +251,22 @@
         "developer": "Developer",
         "framework": "Framework",
         "license": "License",
-        "view_github": "View on GitHub"
+        "view_github": "View on GitHub",
+        "tray": {
+            "title": "Minimize to tray",
+            "desc": "Keep the app running in the system tray when you close the window."
+        },
+        "dns": {
+            "nav": "Fixed address",
+            "title": "Fixed address",
+            "desc": "Give your server an address that never changes, even when the tunnel does.",
+            "enable": "Use a fixed address",
+            "enable_desc": "Your server gets an address like survival.play.ariser.app that updates itself every time the tunnel starts.",
+            "url": "DNS proxy URL",
+            "url_placeholder": "Leave empty to use the free community proxy",
+            "url_hint": "Advanced: only change this if you host your own proxy.",
+            "info": "When the tunnel starts, your server automatically gets a fixed address at [name].play.ariser.app. Free for everyone."
+        }
     },
     "common": {
         "back": "Back",
@@ -341,7 +391,8 @@
             "java_path": "Java Executable Path",
             "java_path_desc": "Explicit path or system environment variables.",
             "browse": "Browse"
-        }
+        },
+        "appearance_icon": "Appearance and icon"
     },
     "players": {
         "title": "Players",
@@ -555,5 +606,21 @@
             "failed_hint": "Check your internet connection and try again. If it keeps failing, try another version.",
             "retry": "Try again"
         }
+    },
+    "console": {
+        "title": "Server console",
+        "download": "Download log",
+        "disconnected": "Disconnected",
+        "search": "Search the log...",
+        "no_match": "No lines match your search",
+        "f_all": "All",
+        "f_normal": "Info",
+        "f_input": "Commands",
+        "f_warning": "Warnings",
+        "f_error": "Errors"
+    },
+    "app": {
+        "saving_world": "Saving the world and closing safely...",
+        "update": "Update"
     }
 }

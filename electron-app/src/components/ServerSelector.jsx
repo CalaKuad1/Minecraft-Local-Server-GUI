@@ -50,15 +50,21 @@ function StatusPill({ status }) {
     );
 }
 
+// Localized "5 min ago" / "hace 5 min". LanguageProvider keeps <html lang> in sync.
 function formatRelative(iso) {
     if (!iso) return null;
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
+    let rtf;
+    try {
+        rtf = new Intl.RelativeTimeFormat(document.documentElement.lang || 'en', { numeric: 'auto', style: 'short' });
+    } catch {
+        rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' });
+    }
+    if (mins < 60) return rtf.format(-Math.max(0, mins), 'minute');
+    if (hours < 24) return rtf.format(-hours, 'hour');
+    return rtf.format(-Math.floor(hours / 24), 'day');
 }
 
 // Poll the backend until the given server reports offline (or nothing is
@@ -210,7 +216,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
             loadServers();
         } catch (err) {
             console.error("Failed to delete", err);
-            dialog.alert(`Failed to delete: ${err.message}`, { title: 'Error', variant: 'destructive' });
+            dialog.alert(`${t('library.delete_failed')} ${err.message}`, { title: t('common.error'), variant: 'destructive' });
         }
     };
 
@@ -319,7 +325,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                 <button
                                     onClick={() => { setSearchQuery(''); }}
                                     className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-ink-faint hover:text-white hover:bg-white/10 transition-colors"
-                                    title="Clear search"
+                                    title={t('library.clear_search')}
                                 >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                 </button>
@@ -360,7 +366,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                     <Server size={48} className="text-emerald-400/60" />
                                 </div>
                                 <h3 className="text-2xl font-minecraft text-white tracking-wide mb-2">{t('library.empty_infrastructure')}</h3>
-                                <p className="text-ink-faint text-sm mb-6 max-w-sm">Create your first Minecraft server to get started.</p>
+                                <p className="text-ink-faint text-sm mb-6 max-w-sm">{t('library.empty_desc')}</p>
                                 <button
                                     onClick={onAdd}
                                     className="px-6 py-3 bg-white text-black rounded-sm font-minecraft uppercase tracking-wider text-sm hover:bg-zinc-200 transition-colors flex items-center gap-2"
