@@ -122,7 +122,7 @@ const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) =
 
 const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
 
-export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate }) {
+export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate, autoStart = false, onAutoStartHandled }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
     const dialog = useDialog();
@@ -159,6 +159,11 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [togglingMode, setTogglingMode] = useState(false);
     const [serverError, setServerError] = useState(null);
     const [addressCopied, setAddressCopied] = useState(false);
+    const [shareCopied, setShareCopied] = useState(false);
+    const [switchingToPlayit, setSwitchingToPlayit] = useState(false);
+    const tunnelActiveRef = useRef(false);
+    const tunnelRegionRef = useRef(tunnelRegion);
+    const autoStartedRef = useRef(false);
 
     const isStoppingRef = useRef(serverStatus?.status === 'stopping');
     const lastIdRef = useRef(serverStatus?.server_id);
@@ -268,6 +273,9 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         }
     }, [serverStatus]);
 
+    useEffect(() => { tunnelActiveRef.current = !!tunnelAddress; }, [tunnelAddress]);
+    useEffect(() => { tunnelRegionRef.current = tunnelRegion; }, [tunnelRegion]);
+
     // Load DNS subdomain
     useEffect(() => {
         if (!serverStatus?.server_id) return;
@@ -335,6 +343,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         if (item.type === 'tunnel_connected') {
             setTunnelAddress(item.address);
             setTunnelConnecting(false);
+            setSwitchingToPlayit(false);
             return;
         }
         if (item.type === 'tunnel_disconnected') {
@@ -347,6 +356,17 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             setTunnelProvider('playit');
             localStorage.setItem('preferredTunnelProvider', 'playit');
             toast.success(t('dashboard.tunnel.playit_linked'));
+            // A temporary Pinggy tunnel is running: swap it for the permanent
+            // address right away instead of waiting for the next start.
+            if (tunnelActiveRef.current) {
+                setSwitchingToPlayit(true);
+                setTunnelConnecting(true);
+                api.startTunnel(tunnelRegionRef.current, 'playit').catch((err) => {
+                    setSwitchingToPlayit(false);
+                    setTunnelConnecting(false);
+                    toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.error_title') });
+                });
+            }
             return;
         }
         if (item.type === 'playit_link_failed') {
@@ -546,6 +566,39 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         }
     };
 
+    // Right after the setup wizard: start the new server (and, through
+    // autoTunnel, its public address) without making the user hunt for buttons.
+    useEffect(() => {
+        if (!autoStart) { autoStartedRef.current = false; return; }
+        if (autoStartedRef.current) return;
+        if (!serverStatus?.server_id || localStatus !== 'offline') return;
+        autoStartedRef.current = true;
+        if (onAutoStartHandled) onAutoStartHandled();
+        handleStart();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoStart, serverStatus?.server_id, localStatus]);
+
+    const startPublicTunnel = async () => {
+        try {
+            setTunnelConnecting(true);
+            await api.startTunnel(tunnelRegion, activeProvider);
+        } catch (err) {
+            setTunnelConnecting(false);
+            toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.error_title') });
+        }
+    };
+
+    const shareAddress = tunnelAddress ? ((dnsAddress && dnsStatus !== 'error') ? dnsAddress : tunnelAddress) : null;
+    const serverVersion = status.version || status.minecraft_version || '';
+
+    const copyShareAddress = async () => {
+        try {
+            await navigator.clipboard.writeText(shareAddress);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 2000);
+        } catch (e) { console.error('Copy failed', e); }
+    };
+
     const handleStop = async () => {
         // If already stopping, second click is a Force Kill
         if (isStopping) {
@@ -738,6 +791,72 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 </div>
             )}
 
+            {/* Share card: the one thing a new user needs once the server runs */}
+            {(isOnline || isStarting) && (
+                <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shareAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-[#18181b]/60 border-white/5'}`}>
+                    {shareAddress ? (
+                        <>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Users size={16} className="text-emerald-400" />
+                                <h3 className="text-base font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-2xl font-mono font-bold text-emerald-300 select-all break-all">{shareAddress}</span>
+                                <Button variant="primary" icon={shareCopied ? Check : Copy} onClick={copyShareAddress} aria-live="polite">
+                                    {shareCopied ? t('dashboard.share.copied') : t('dashboard.share.copy')}
+                                </Button>
+                            </div>
+                            <p className="mt-3 text-sm text-ink-dim">
+                                {t('dashboard.share.how_to')}
+                                {serverVersion && <span className="text-ink-faint"> {t('dashboard.share.version_note').replace('{version}', serverVersion)}</span>}
+                            </p>
+                            {switchingToPlayit ? (
+                                <p className="mt-3 text-xs text-gold">{t('dashboard.share.switching')}</p>
+                            ) : activeProvider === 'playit' ? (
+                                <p className="mt-3 text-xs text-emerald-400/80">{t('dashboard.share.permanent')}</p>
+                            ) : (
+                                <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-3">
+                                    <Clock size={14} className="shrink-0 text-gold" aria-hidden="true" />
+                                    <span className="text-xs text-gold flex-1 min-w-[12rem]">{shareAddress === dnsAddress ? t('dashboard.share.time_limit') : t('dashboard.share.temporary')}</span>
+                                    {playit.supported && !playit.linked && (playit.linking ? <>
+                                        <span className="text-xs text-ink-dim">{t('dashboard.share.upgrade_waiting')}</span>
+                                        <Button size="sm" variant="secondary" onClick={handleLinkPlayit}>{t('dashboard.tunnel.playit_reopen')}</Button>
+                                        <Button size="sm" variant="ghost" onClick={handleCancelPlayitLink}>{t('common.cancel')}</Button>
+                                    </> : (
+                                        <Button size="sm" variant="primary" icon={Zap} onClick={handleLinkPlayit}>{t('dashboard.share.upgrade')}</Button>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    ) : (tunnelConnecting || switchingToPlayit) ? (
+                        <div className="flex items-center gap-3">
+                            <Globe size={18} className="text-emerald-400 animate-pulse shrink-0" />
+                            <div>
+                                <h3 className="text-base font-semibold text-white">{t('dashboard.share.connecting_title')}</h3>
+                                <p className="text-sm text-ink-dim">{t('dashboard.share.connecting_desc')}</p>
+                            </div>
+                        </div>
+                    ) : isStarting ? (
+                        <div className="flex items-center gap-3">
+                            <Activity size={18} className="text-gold animate-pulse shrink-0" />
+                            <div>
+                                <h3 className="text-base font-semibold text-white">{t('dashboard.share.starting_title')}</h3>
+                                <p className="text-sm text-ink-dim">{t('dashboard.share.starting_desc')}</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Globe size={18} className="text-ink-dim shrink-0" />
+                            <div className="flex-1 min-w-[14rem]">
+                                <h3 className="text-base font-semibold text-white">{t('dashboard.share.private_title')}</h3>
+                                <p className="text-sm text-ink-dim">{t('dashboard.share.private_desc')}</p>
+                            </div>
+                            <Button variant="primary" icon={Globe} onClick={startPublicTunnel}>{t('dashboard.tunnel.make_public')}</Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Tunnel Section */}
             <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
                 <div className="flex items-center gap-4">
@@ -845,8 +964,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     setTunnelAddress(null);
                                     setTunnelConnecting(false);
                                 } else {
-                                    setTunnelConnecting(true);
-                                    await api.startTunnel(tunnelRegion, activeProvider);
+                                    await startPublicTunnel();
                                 }
                             } catch (err) {
                                 setTunnelConnecting(false);
@@ -879,7 +997,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                 </div>
 
-                {playit.supported && !playit.linked && (
+                {playit.supported && !playit.linked && !shareAddress && (
                     <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
                         <Zap size={16} className="shrink-0 text-gold" aria-hidden="true" />
                         <div className="flex-1 min-w-[12rem]">

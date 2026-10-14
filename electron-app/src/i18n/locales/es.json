@@ -119,6 +119,25 @@
             "playit_link_failed": "No se pudo vincular playit.gg",
             "playit_unlink": "Desvincular playit.gg",
             "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero MLSG usará túneles temporales de Pinggy hasta que vuelvas a vincularlo."
+        },
+        "share": {
+            "starting_title": "Arrancando tu servidor...",
+            "starting_desc": "La primera vez tarda un poco más mientras se genera el mundo.",
+            "connecting_title": "Preparando tu dirección...",
+            "connecting_desc": "En unos segundos tendrás una dirección para compartir con tus amigos.",
+            "private_title": "Tu servidor está encendido, pero solo puedes entrar tú",
+            "private_desc": "Hazlo público para tener una dirección con la que tus amigos entren desde cualquier sitio.",
+            "ready_title": "Comparte esta dirección con tus amigos",
+            "copy": "Copiar",
+            "copied": "¡Copiado!",
+            "how_to": "En Minecraft: Multijugador → Añadir servidor → pega la dirección.",
+            "version_note": "Tus amigos necesitan Minecraft Java {version}.",
+            "temporary": "Dirección temporal: cambia cada vez y caduca a los 60 minutos.",
+            "upgrade": "Conseguir una dirección permanente gratis",
+            "upgrade_waiting": "Apruébalo en tu navegador...",
+            "permanent": "Dirección permanente: es la misma cada vez que enciendes el servidor.",
+            "switching": "Cambiando a tu dirección permanente...",
+            "time_limit": "Túnel gratuito: se corta cada 60 minutos y hay que volver a activarlo."
         }
     },
     "library": {

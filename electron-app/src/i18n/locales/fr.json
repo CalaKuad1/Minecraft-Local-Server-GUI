@@ -119,6 +119,25 @@
             "playit_link_failed": "Impossible de lier playit.gg",
             "playit_unlink": "Délier playit.gg",
             "playit_unlink_confirm": "Délier playit.gg ? Votre adresse permanente reste sur votre compte playit, mais MLSG utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison."
+        },
+        "share": {
+            "starting_title": "Démarrage de ton serveur...",
+            "starting_desc": "Le premier démarrage prend un peu plus de temps, le temps de générer le monde.",
+            "connecting_title": "Préparation de ton adresse...",
+            "connecting_desc": "Dans quelques secondes tu auras une adresse à partager avec tes amis.",
+            "private_title": "Ton serveur est allumé, mais toi seul peux le rejoindre",
+            "private_desc": "Rends-le public pour avoir une adresse que tes amis peuvent rejoindre de n'importe où.",
+            "ready_title": "Partage cette adresse avec tes amis",
+            "copy": "Copier",
+            "copied": "Copié !",
+            "how_to": "Dans Minecraft : Multijoueur → Ajouter un serveur → colle l'adresse.",
+            "version_note": "Tes amis ont besoin de Minecraft Java {version}.",
+            "temporary": "Adresse temporaire : elle change à chaque fois et expire après 60 minutes.",
+            "upgrade": "Obtenir une adresse permanente gratuite",
+            "upgrade_waiting": "Approuve-le dans ton navigateur...",
+            "permanent": "Adresse permanente : c'est la même à chaque démarrage du serveur.",
+            "switching": "Passage à ton adresse permanente...",
+            "time_limit": "Tunnel gratuit : il se coupe toutes les 60 minutes et doit être relancé."
         }
     },
     "library": {

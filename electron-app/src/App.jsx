@@ -95,6 +95,8 @@ function App() {
   const [selectedServer, setSelectedServer] = useState(null);
   const [serverStatus, setServerStatus] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
+  // Set when the wizard finishes so the new server starts by itself.
+  const [autoStartServer, setAutoStartServer] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -215,6 +217,7 @@ function App() {
   }, [selectedServer?.id]);
 
   const handleBackToLibrary = async () => {
+    setAutoStartServer(false);
     setSelectedServer(null);
     setServerStatus(null);
   };
@@ -236,7 +239,7 @@ function App() {
         <NoiseGrain />
         <TitleBar />
         <div className="flex-1 overflow-y-auto relative z-10">
-          <SetupWizard onComplete={(serverId) => { setShowWizard(false); handleServerSelected(serverId); }} onCancel={() => setShowWizard(false)} />
+          <SetupWizard onComplete={(serverId) => { setShowWizard(false); setAutoStartServer(true); handleServerSelected(serverId); }} onCancel={() => setShowWizard(false)} />
         </div>
       </div>
     );
@@ -275,7 +278,7 @@ function App() {
           <div className="mx-auto w-full flex-1 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>
-              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} />
+              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} autoStart={autoStartServer} onAutoStartHandled={() => setAutoStartServer(false)} />
             </div>
 
 
