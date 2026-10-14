@@ -118,7 +118,7 @@
             "playit_linked": "playit.gg linked. Your next tunnel uses the permanent address.",
             "playit_link_failed": "Could not link playit.gg",
             "playit_unlink": "Unlink playit.gg",
-            "playit_unlink_confirm": "Unlink playit.gg? Your permanent address stays in your playit account, but MLSG will use temporary Pinggy tunnels until you link again."
+            "playit_unlink_confirm": "Unlink playit.gg? Your permanent address stays in your playit account, but Cubi will use temporary Pinggy tunnels until you link again."
         },
         "share": {
             "starting_title": "Starting your server...",
@@ -266,7 +266,9 @@
             "url_placeholder": "Leave empty to use the free community proxy",
             "url_hint": "Advanced: only change this if you host your own proxy.",
             "info": "When the tunnel starts, your server automatically gets a fixed address at [name].play.ariser.app. Free for everyone."
-        }
+        },
+        "about_tagline": "Create a Minecraft server on your own PC and play with your friends in a minute. Free, no limits. Supports Vanilla, Paper, Fabric, Forge and NeoForge.",
+        "about_disclaimer": "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT."
     },
     "common": {
         "back": "Back",

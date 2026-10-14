@@ -1,5 +1,6 @@
 import React from 'react';
 import { Minus, Square, X } from './ui/PixelIcons';
+import { APP_NAME } from '../brand';
 
 const TitleBar = () => {
     const handleMinimize = async () => {
@@ -19,7 +20,7 @@ const TitleBar = () => {
             {/* Title / Logo Area */}
             <div className="px-4 flex items-center gap-2">
                 <div className="w-3 h-3 bg-primary rounded-sm rotate-45" />
-                <span className="text-xs font-bold text-gray-400 tracking-wider uppercase">Minecraft Server GUI</span>
+                <span className="text-xs font-bold text-gray-300 tracking-wider">{APP_NAME}</span>
             </div>
 
             {/* Window Controls */}

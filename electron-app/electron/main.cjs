@@ -25,6 +25,11 @@ if (!gotTheLock) {
   });
 }
 
+// User-facing product name. app.setName below keeps the legacy name on purpose:
+// it decides Electron's userData folder, and changing it would orphan
+// existing users' local settings.
+const APP_DISPLAY_NAME = 'Cubi';
+
 // Identify if we are in dev mode
 const isDev = !app.isPackaged;
 // Port of the local backend API. 8000 is preferred (stable across launches),
@@ -81,7 +86,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 650,
-    title: 'Minecraft Local Server GUI',
+    title: APP_DISPLAY_NAME,
     icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
@@ -120,7 +125,7 @@ function createWindow() {
         if (tray) {
           try {
             tray.displayBalloon({
-              title: 'Minecraft Server GUI',
+              title: APP_DISPLAY_NAME,
               content: 'Servers still running. App minimized to tray.'
             });
           } catch (_) { /* displayBalloon is Windows-only */ }
@@ -414,7 +419,7 @@ function createTray() {
     }
   ]);
   
-  tray.setToolTip('Minecraft Server GUI');
+  tray.setToolTip(APP_DISPLAY_NAME);
   tray.setContextMenu(contextMenu);
   
   tray.on('click', () => {

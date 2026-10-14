@@ -118,7 +118,7 @@
             "playit_linked": "playit.gg lié. Le prochain tunnel utilisera votre adresse permanente.",
             "playit_link_failed": "Impossible de lier playit.gg",
             "playit_unlink": "Délier playit.gg",
-            "playit_unlink_confirm": "Délier playit.gg ? Votre adresse permanente reste sur votre compte playit, mais MLSG utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison."
+            "playit_unlink_confirm": "Délier playit.gg ? Votre adresse permanente reste sur votre compte playit, mais Cubi utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison."
         },
         "share": {
             "starting_title": "Démarrage de ton serveur...",
@@ -266,7 +266,9 @@
             "url_placeholder": "Laisse vide pour utiliser le proxy communautaire gratuit",
             "url_hint": "Avancé : ne change ceci que si tu héberges ton propre proxy.",
             "info": "Au démarrage du tunnel, ton serveur reçoit automatiquement une adresse fixe [nom].play.ariser.app. Gratuit pour tous."
-        }
+        },
+        "about_tagline": "Crée un serveur Minecraft sur ton propre PC et joue avec tes amis en une minute. Gratuit et sans limites. Compatible Vanilla, Paper, Fabric, Forge et NeoForge.",
+        "about_disclaimer": "PRODUIT NON OFFICIEL DE MINECRAFT. NON APPROUVÉ PAR MOJANG OU MICROSOFT ET NON ASSOCIÉ À EUX."
     },
     "common": {
         "back": "Retour",

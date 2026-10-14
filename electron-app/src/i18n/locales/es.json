@@ -118,7 +118,7 @@
             "playit_linked": "playit.gg vinculado. El próximo túnel usará tu dirección permanente.",
             "playit_link_failed": "No se pudo vincular playit.gg",
             "playit_unlink": "Desvincular playit.gg",
-            "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero MLSG usará túneles temporales de Pinggy hasta que vuelvas a vincularlo."
+            "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero Cubi usará túneles temporales de Pinggy hasta que vuelvas a vincularlo."
         },
         "share": {
             "starting_title": "Arrancando tu servidor...",
@@ -266,7 +266,9 @@
             "url_placeholder": "Déjalo vacío para usar el proxy comunitario gratuito",
             "url_hint": "Avanzado: cámbialo solo si tienes tu propio proxy.",
             "info": "Al arrancar el túnel, tu servidor recibe automáticamente una dirección fija en [nombre].play.ariser.app. Gratis para todos."
-        }
+        },
+        "about_tagline": "Crea un servidor de Minecraft en tu propio PC y juega con tus amigos en un minuto. Gratis y sin límites. Compatible con Vanilla, Paper, Fabric, Forge y NeoForge.",
+        "about_disclaimer": "NO ES UN PRODUCTO OFICIAL DE MINECRAFT. NO ESTÁ APROBADO POR MOJANG NI MICROSOFT NI ASOCIADO CON ELLOS."
     },
     "common": {
         "back": "Atrás",

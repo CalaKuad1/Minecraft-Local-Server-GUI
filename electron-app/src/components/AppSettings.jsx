@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { APP_NAME } from '../brand';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Settings, Globe, Palette, Save, FolderOpen, Info } from './ui/PixelIcons';
 import { api } from '../api';
@@ -330,12 +331,10 @@ export default function AppSettings({ isOpen, onClose }) {
 
                                 <div className="space-y-4">
                                     <div className="bg-white/[0.02] border border-white/5 rounded-md p-5">
-                                        <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">Minecraft Server GUI</div>
+                                        <div className="font-minecraft text-lg tracking-wider text-emerald-400 mb-1">{APP_NAME}</div>
                                         <div className="text-xs font-mono text-ink-faint mb-4">{appVersion ? `v${appVersion}` : ''}</div>
-                                        <p className="text-xs text-ink-faint leading-relaxed">
-                                            A professional server management tool for Minecraft servers.
-                                            Supports Vanilla, Paper, Spigot, Fabric, Forge, and NeoForge server types.
-                                        </p>
+                                        <p className="text-xs text-ink-faint leading-relaxed">{t('settings.about_tagline')}</p>
+                                        <p className="text-[10px] text-ink-faint/70 leading-relaxed mt-3">{t('settings.about_disclaimer')}</p>
                                     </div>
 
                                     <div className="flex items-center justify-between py-3 border-b border-white/[0.03]">
