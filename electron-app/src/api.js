@@ -1,4 +1,7 @@
-const API_URL = "http://127.0.0.1:8000";
+// Port chosen by Electron at launch (8000 unless something else holds it).
+const API_PORT = (typeof window !== 'undefined' && window.electron && window.electron.apiPort) || 8000;
+export const API_URL = `http://127.0.0.1:${API_PORT}`;
+export const WS_BASE = `ws://127.0.0.1:${API_PORT}`;
 
 // Shared secret injected by Electron (see electron/preload.cjs). Required by the
 // backend on every request; absent when running the backend standalone in dev.

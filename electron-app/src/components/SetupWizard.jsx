@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { api, API_TOKEN } from '../api';
+import { api, API_TOKEN, WS_BASE } from '../api';
 import { Select } from './ui/Select';
 import { Check, ChevronRight, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Cpu, Box, HardDrive, Terminal, Monitor } from './ui/PixelIcons';
 import fabricLogo from '../assets/engines/fabric.png';
@@ -156,7 +156,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
     useEffect(() => {
         if (step === 4 && installing) {
             if (ws.current) ws.current.close();
-            ws.current = new WebSocket(`ws://127.0.0.1:8000/ws/console${API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''}`);
+            ws.current = new WebSocket(`${WS_BASE}/ws/console${API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''}`);
 
             const handleData = (d) => {
                 if (d.type === 'progress') {

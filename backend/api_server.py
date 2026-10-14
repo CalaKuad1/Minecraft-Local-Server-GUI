@@ -4477,4 +4477,5 @@ if __name__ == "__main__":
 
     # Iniciar el watchdog antes de arrancar el servidor
     start_parent_watchdog(args.parent_pid)
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.environ.get("MLSG_PORT") or 8000)
+    uvicorn.run(app, host="127.0.0.1", port=port)

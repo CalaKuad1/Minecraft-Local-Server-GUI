@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { API_TOKEN } from '../api';
+import { API_TOKEN, WS_BASE } from '../api';
 
-const WS_URL = `ws://127.0.0.1:8000/ws/console${API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''}`;
+const WS_URL = `${WS_BASE}/ws/console${API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : ''}`;
 const RECONNECT_DELAY = 3000;
 
 // Global per-server log store. Kept at module scope so a component that

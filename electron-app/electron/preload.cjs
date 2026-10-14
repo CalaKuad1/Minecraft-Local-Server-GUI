@@ -3,9 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Shared API token, injected by the main process via additionalArguments.
 const tokenArg = process.argv.find((a) => a.startsWith('--mlsg-token='));
 const apiToken = tokenArg ? tokenArg.slice('--mlsg-token='.length) : '';
+const portArg = process.argv.find((a) => a.startsWith('--mlsg-port='));
+const apiPort = portArg ? Number(portArg.slice('--mlsg-port='.length)) : 0;
 
 contextBridge.exposeInMainWorld('electron', {
     apiToken,
+    apiPort,
     getAppInfo: () => ipcRenderer.invoke('app:info'),
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
     openFile: () => ipcRenderer.invoke('dialog:openFile'),

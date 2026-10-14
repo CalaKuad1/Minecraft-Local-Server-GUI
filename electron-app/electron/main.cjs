@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const http = require('http');
+const net = require('net');
 
 let mainWindow;
 let pythonProcess;
@@ -10,7 +11,7 @@ let isQuitting = false;
 let tray = null;
 
 // Prevent multiple instances: each instance would spawn its own backend
-// (only one can bind port 8000), leaking processes and RAM.
+// (each binds its own API port), leaking processes and RAM.
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -26,7 +27,29 @@ if (!gotTheLock) {
 
 // Identify if we are in dev mode
 const isDev = !app.isPackaged;
-const API_PORT = 8000;
+// Port of the local backend API. 8000 is preferred (stable across launches),
+// but if another program already uses it we fall back to any free port
+// instead of letting the backend crash on startup. MLSG_PORT overrides it.
+const PREFERRED_API_PORT = Number(process.env.MLSG_PORT) || 8000;
+let API_PORT = PREFERRED_API_PORT;
+
+const canBind = (port) => new Promise((resolve) => {
+  const srv = net.createServer();
+  srv.once('error', () => resolve(false));
+  srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+});
+
+const pickApiPort = async () => {
+  if (await canBind(PREFERRED_API_PORT)) return PREFERRED_API_PORT;
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(PREFERRED_API_PORT));
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+};
 
 // Shared secret between the renderer, Electron and the Python backend.
 // Generated fresh on every launch; never written to disk.
@@ -66,7 +89,7 @@ function createWindow() {
       webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs'),
       // Expose the API token to the preload script (sandbox-safe, synchronous).
-      additionalArguments: [`--mlsg-token=${API_TOKEN}`]
+      additionalArguments: [`--mlsg-token=${API_TOKEN}`, `--mlsg-port=${API_PORT}`]
     },
     frame: false,
     backgroundColor: '#0f0f0f',
@@ -245,7 +268,7 @@ function startPythonBackend() {
       cwd: path.dirname(binaryPath),
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
-      env: { ...process.env, MLSG_TOKEN: API_TOKEN }
+      env: { ...process.env, MLSG_TOKEN: API_TOKEN, MLSG_PORT: String(API_PORT) }
     });
   } else {
     console.log(`Starting Python Script: ${scriptPath} (using ${pythonCmd})`);
@@ -253,7 +276,7 @@ function startPythonBackend() {
       cwd: path.dirname(scriptPath),
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
-      env: { ...process.env, MLSG_TOKEN: API_TOKEN }
+      env: { ...process.env, MLSG_TOKEN: API_TOKEN, MLSG_PORT: String(API_PORT) }
     });
   }
 
@@ -525,8 +548,12 @@ function setupAutoUpdater() {
   })();
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!gotTheLock) return;
+  API_PORT = await pickApiPort();
+  if (API_PORT !== PREFERRED_API_PORT) {
+    console.log(`Port ${PREFERRED_API_PORT} is busy; backend API will use ${API_PORT}`);
+  }
   startPythonBackend();
   createWindow();
   createTray();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { api, API_TOKEN } from '../api';
+import { api, API_TOKEN, API_URL } from '../api';
 import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
 import { Select } from './ui/Select';
 import AdvancedSettingsModal from './AdvancedSettingsModal';
@@ -29,7 +29,7 @@ export default function Settings() {
 
     const [iconTs, setIconTs] = useState(Date.now());
     const [iconExists, setIconExists] = useState(false);
-    const API_BASE = "http://127.0.0.1:8000";
+    const API_BASE = API_URL;
     const FALLBACK_ICON = '/images/Dirt_background_BE1.webp';
 
     useEffect(() => {
@@ -46,7 +46,7 @@ export default function Settings() {
             setAppSettings(app);
             setDirty(false);
             try {
-                const res = await fetch('http://127.0.0.1:8000/system/info', {
+                const res = await fetch(`${API_URL}/system/info`, {
                     headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {}
                 });
                 if (res.ok) setSystemInfo(await res.json());
