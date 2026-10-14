@@ -137,7 +137,10 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [tunnelAddress, setTunnelAddress] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
-    const [tunnelProvider] = useState('pinggy');
+    // playit.gg = permanent address once linked; Pinggy = temporary fallback.
+    const [tunnelProvider, setTunnelProvider] = useState(localStorage.getItem('preferredTunnelProvider') || 'playit');
+    const [playit, setPlayit] = useState({ supported: false, linked: false, linking: false, claim_url: null });
+    const activeProvider = tunnelProvider === 'playit' && playit.linked ? 'playit' : 'pinggy';
     const [bedrockAddress, setBedrockAddress] = useState(null);
     const [bedrockConnecting, setBedrockConnecting] = useState(false);
     const [geyserInfo, setGeyserInfo] = useState({ installed: false, bedrock_port: 19132, floodgate_installed: false });
@@ -339,6 +342,18 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             setTunnelConnecting(false);
             return;
         }
+        if (item.type === 'playit_linked') {
+            setPlayit(p => ({ ...p, linked: true, linking: false, claim_url: null }));
+            setTunnelProvider('playit');
+            localStorage.setItem('preferredTunnelProvider', 'playit');
+            toast.success(t('dashboard.tunnel.playit_linked'));
+            return;
+        }
+        if (item.type === 'playit_link_failed') {
+            setPlayit(p => ({ ...p, linking: false, claim_url: null }));
+            toast.error(item.error, { title: t('dashboard.tunnel.playit_link_failed') });
+            return;
+        }
         if (item.type === 'tunnel_bedrock_connected') {
             setBedrockAddress(item.address);
             setBedrockConnecting(false);
@@ -405,7 +420,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 isStoppingRef.current = true;
             }
         }
-    }, [onRefresh, appendLocalLog]);
+    }, [onRefresh, appendLocalLog, t, toast]);
 
     useEffect(() => {
         return subscribe('dashboard', handleWsMessage);
@@ -429,6 +444,50 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         userScrolledUpRef.current = !atBottom;
     }, []);
+
+    // playit.gg link state (polled faster while waiting for browser approval)
+    useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            try {
+                const s = await api.getPlayitStatus();
+                if (!cancelled && s) setPlayit(s);
+            } catch (e) { }
+        };
+        refresh();
+        const interval = setInterval(refresh, playit.linking ? 3000 : 30000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [playit.linking]);
+
+    const handleLinkPlayit = async () => {
+        try {
+            const r = await api.linkPlayit();
+            setPlayit(p => ({ ...p, linking: true, claim_url: r?.claim_url || null }));
+        } catch (err) {
+            toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.playit_link_failed') });
+        }
+    };
+
+    const handleCancelPlayitLink = async () => {
+        try { await api.cancelPlayitLink(); } catch (e) { }
+        setPlayit(p => ({ ...p, linking: false, claim_url: null }));
+    };
+
+    const handleUnlinkPlayit = async () => {
+        const ok = await dialog.confirm(t('dashboard.tunnel.playit_unlink_confirm'), {
+            title: t('dashboard.tunnel.playit_unlink'),
+            variant: 'destructive',
+            confirmLabel: t('dashboard.tunnel.playit_unlink'),
+            cancelLabel: t('common.cancel'),
+        });
+        if (!ok) return;
+        try {
+            await api.unlinkPlayit();
+            setPlayit(p => ({ ...p, linked: false }));
+        } catch (err) {
+            toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.error_title') });
+        }
+    };
 
     // Tunnel Polling
     useEffect(() => {
@@ -476,7 +535,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 setTimeout(async () => {
                     try {
                         setTunnelConnecting(true);
-                        await api.startTunnel(tunnelRegion, tunnelProvider);
+                        await api.startTunnel(tunnelRegion, activeProvider);
                     } catch (e) { setTunnelConnecting(false); }
                 }, 5000);
             }
@@ -787,8 +846,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                     setTunnelConnecting(false);
                                 } else {
                                     setTunnelConnecting(true);
-                                    if (tunnelProvider === 'pinggy') localStorage.setItem('preferredTunnelProvider', 'pinggy');
-                                    await api.startTunnel(tunnelRegion, tunnelProvider);
+                                    await api.startTunnel(tunnelRegion, activeProvider);
                                 }
                             } catch (err) {
                                 setTunnelConnecting(false);
@@ -821,12 +879,38 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                 </div>
 
+                {playit.supported && !playit.linked && (
+                    <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
+                        <Zap size={16} className="shrink-0 text-gold" aria-hidden="true" />
+                        <div className="flex-1 min-w-[12rem]">
+                            <div className="text-sm font-semibold text-ink">{t('dashboard.tunnel.playit_cta_title')}</div>
+                            <div className="text-xs text-ink-dim">
+                                {playit.linking ? t('dashboard.tunnel.playit_waiting') : t('dashboard.tunnel.playit_cta_desc')}
+                            </div>
+                        </div>
+                        {playit.linking ? <>
+                            <Button size="sm" variant="secondary" onClick={handleLinkPlayit}>{t('dashboard.tunnel.playit_reopen')}</Button>
+                            <Button size="sm" variant="ghost" onClick={handleCancelPlayitLink}>{t('common.cancel')}</Button>
+                        </> : (
+                            <Button size="sm" variant="primary" onClick={handleLinkPlayit}>{t('dashboard.tunnel.playit_activate')}</Button>
+                        )}
+                    </div>
+                )}
+
                 {showAdvanced && <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
                     <span className="text-sm text-ink-dim">{t('dashboard.tunnel.provider')}</span>
-                        <div className="w-28 rounded-sm border border-white/10 bg-white/5">
-                            <Select value={tunnelProvider} onChange={() => {}} options={[{ value: 'pinggy', label: 'Pinggy' }]} />
+                        <div className="w-32 rounded-sm border border-white/10 bg-white/5">
+                            <Select
+                                value={activeProvider}
+                                onChange={(v) => { setTunnelProvider(v); localStorage.setItem('preferredTunnelProvider', v); }}
+                                options={[
+                                    ...(playit.linked ? [{ value: 'playit', label: 'playit.gg' }] : []),
+                                    { value: 'pinggy', label: 'Pinggy' },
+                                ]}
+                            />
                         </div>
-                    {tunnelProvider === 'pinggy' && <><span className="text-sm text-ink-dim">{t('dashboard.tunnel.region')}</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: t('dashboard.tunnel.region_asia') }]} /></div></>}
+                    {playit.linked && <Button size="sm" variant="ghost" onClick={handleUnlinkPlayit}>{t('dashboard.tunnel.playit_unlink')}</Button>}
+                    {activeProvider === 'pinggy' && <><span className="text-sm text-ink-dim">{t('dashboard.tunnel.region')}</span><div className="w-20 rounded-sm border border-white/10 bg-white/5"><Select value={tunnelRegion} onChange={setTunnelRegion} options={[{ value: 'eu', label: 'EU' }, { value: 'us', label: 'US' }, { value: 'ap', label: t('dashboard.tunnel.region_asia') }]} /></div></>}
                     <div className="w-px h-6 bg-white/5"></div>
                     <button
                         role="switch"

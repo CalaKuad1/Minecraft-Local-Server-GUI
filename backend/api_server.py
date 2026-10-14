@@ -261,6 +261,12 @@ class AppState:
         # Tunnel management
         self.tunnel_process: Optional[subprocess.Popen] = None
         self.tunnel_address: Optional[str] = None
+        # "pinggy" or "playit"; playit addresses can be SRV-only domains, so the
+        # DNS record needs the resolved host:port kept separately.
+        self.tunnel_provider: Optional[str] = None
+        self.tunnel_dns_target: Optional[str] = None
+        # Pending playit.gg link (claim code + browser URL) while the user approves it.
+        self.playit_link: Optional[dict] = None
         self.dns_address: Optional[str] = None
         # Last DNS verification result (None=unknown, True=ok, False=failed)
         self._dns_ok: Optional[bool] = None
@@ -268,6 +274,9 @@ class AppState:
         # processes (which happened: two tunnels for the same port).
         self._tunnel_lock = threading.Lock()
         self._tunnel_starting = False
+        # Bumped on every start/stop so a playit start that is still
+        # downloading/allocating can tell it was superseded.
+        self._tunnel_gen = 0
         # Subdomain whose SRV record is currently published, so it can be removed
         # exactly (tunnel stop / server change) instead of leaking records.
         self._dns_active_slug: Optional[str] = None
@@ -544,7 +553,7 @@ class AppState:
                         self,
                         "create",
                         self._dns_active_slug,
-                        self.tunnel_address,
+                        _dns_target(self),
                     )
                     logging.info("[dns] refreshed SRV record")
             except asyncio.CancelledError:
@@ -2619,6 +2628,13 @@ def _verify_and_notify_dns(state, slug, address):
         )
 
 
+def _dns_target(state):
+    """host:port the SRV record must point to for the running tunnel."""
+    if state.tunnel_provider == "playit":
+        return state.tunnel_dns_target
+    return state.tunnel_dns_target or state.tunnel_address
+
+
 def _update_dns_record_proxy(state):
     """Creates/updates the SRV record for the selected server, reporting errors."""
     settings = _get_dns_settings(state)
@@ -2637,7 +2653,10 @@ def _update_dns_record_proxy(state):
         state.config_manager.update_server(state.selected_server_id, {"dns_subdomain": slug})
         state.broadcast_log_sync(f"🌐 Auto-generated subdomain: {slug}", "info")
 
-    ok, data = _call_dns_proxy(state, "create", slug, state.tunnel_address)
+    target = _dns_target(state)
+    if not target:
+        return
+    ok, data = _call_dns_proxy(state, "create", slug, target)
     if not ok:
         state.dns_address = None
         state._dns_ok = False
@@ -2670,7 +2689,7 @@ def _update_dns_record_proxy(state):
     # Verify the record actually resolves and tell the UI (async, with retries).
     threading.Thread(
         target=_verify_and_notify_dns,
-        args=(state, slug, state.tunnel_address),
+        args=(state, slug, target),
         daemon=True,
     ).start()
 
@@ -2719,6 +2738,9 @@ def start_tunnel(
             if state._tunnel_starting:
                 return {"message": "Tunnel is already starting...", "status": "connecting"}
             state._tunnel_starting = True
+            # Supersede the previous playit run before killing its process,
+            # so its cleanup can't clobber the tunnel we are about to start.
+            state._tunnel_gen += 1
 
         # Stop any existing tunnel before starting a new one
         if state.tunnel_process and state.tunnel_process.poll() is None:
@@ -2734,6 +2756,18 @@ def start_tunnel(
                     pass
             state.tunnel_process = None
             state.tunnel_address = None
+
+        state.tunnel_dns_target = None
+
+        if provider == "playit":
+            state.tunnel_provider = "playit"
+            threading.Thread(
+                target=_run_playit_tunnel,
+                args=(state, _server_port(state), state._tunnel_gen),
+                daemon=True,
+            ).start()
+            return {"message": "Tunnel starting...", "status": "connecting"}
+        state.tunnel_provider = "pinggy"
 
         # Verify SSH is available BEFORE starting the thread
         ssh_executable = shutil.which("ssh")
@@ -2779,21 +2813,7 @@ def start_tunnel(
         if not ssh_keygen_executable:
             ssh_keygen_executable = "ssh-keygen"  # Fallback to PATH and hope for the best if we couldn't find it explicitly
 
-        # Get server port (default 25565)
-        port = "25565"
-        if state.server_handler:
-            try:
-                props_path = os.path.join(
-                    state.server_handler.server_path, "server.properties"
-                )
-                if os.path.exists(props_path):
-                    with open(props_path, "r", encoding="utf-8", errors="replace") as f:
-                        for line in f:
-                            if line.startswith("server-port="):
-                                port = line.split("=")[1].strip()
-                                break
-            except:
-                pass
+        port = _server_port(state)
 
         def _ensure_ssh_key():
             """Ensures a dedicated SSH key exists for the app to authenticate with Pinggy."""
@@ -2980,6 +3000,10 @@ def stop_tunnel():
     if not state:
         raise HTTPException(status_code=500, detail="App state not initialized")
 
+    state._tunnel_gen += 1  # aborts a playit start still in progress
+    state._tunnel_starting = False
+    state.tunnel_dns_target = None
+
     if state.tunnel_process:
         try:
             state.tunnel_process.terminate()
@@ -3022,6 +3046,203 @@ def set_tunnel_address(req: SetTunnelAddressRequest):
     state.broadcast_log_sync(f"✅ Custom IP set: {req.address}", "success")
     state.broadcast_log_sync({"type": "tunnel_connected", "address": req.address})
     return {"status": "success"}
+
+
+def _server_port(state):
+    """The selected server's port from server.properties (default 25565)."""
+    port = "25565"
+    if state.server_handler:
+        try:
+            props_path = os.path.join(state.server_handler.server_path, "server.properties")
+            if os.path.exists(props_path):
+                with open(props_path, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if line.startswith("server-port="):
+                            port = line.split("=")[1].strip() or port
+                            break
+        except Exception:
+            pass
+    return port
+
+
+# --- playit.gg Tunnel (permanent address, no time limit) ---
+
+
+def _playit_srv_target(address):
+    """host:port behind a playit address, for our own SRV record.
+
+    Java tunnels get an SRV-only domain (e.g. name.gl.joinmc.link), so the real
+    host and port come from its _minecraft._tcp record.
+    """
+    import re
+
+    if re.search(r":\d+$", address):
+        return address
+    results, _ = _dns_srv_lookup(f"_minecraft._tcp.{address}")
+    if results:
+        return f"{results[0]['target']}:{results[0]['port']}"
+    return None
+
+
+def _run_playit_tunnel(state, port, gen):
+    """Starts the private playitd agent and ensures a Minecraft tunnel for port."""
+    from utils import playit_manager as pm
+
+    def superseded():
+        return state._tunnel_gen != gen
+
+    proc = None
+    try:
+        secret = pm.load_secret(state.app_data_dir)
+        if not secret:
+            raise pm.PlayitError("NotLinked", "playit.gg is not linked yet")
+
+        state.broadcast_log_sync(f"🌐 Starting playit.gg tunnel for port {port}...", "info")
+        agent = pm.get_agent_path(state.app_data_dir, superseded, state.broadcast_log_sync)
+        if superseded():
+            return
+
+        proc = subprocess.Popen(
+            pm.agent_command(agent, state.app_data_dir),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        state.tunnel_process = proc
+
+        tunnel = pm.ensure_tunnel(
+            secret,
+            port,
+            should_cancel=lambda: superseded() or proc.poll() is not None,
+        )
+        if superseded():
+            return
+        address = tunnel.get("display_address")
+        if not address:
+            raise pm.PlayitError("NoAddress", "playit.gg returned no address")
+
+        state.tunnel_address = address
+        state.tunnel_dns_target = _playit_srv_target(address)
+        state._tunnel_starting = False
+        logging.info(f"playit tunnel established: {address}")
+        state.broadcast_log_sync(f"✅ Public server active! Address: {address}", "success")
+        state.broadcast_log_sync({"type": "tunnel_connected", "address": address})
+        try:
+            notices = pm.account_notices(pm.get_run_data(secret))
+        except pm.PlayitError:
+            notices = []
+        for msg in notices:
+            state.broadcast_log_sync(f"playit.gg: {msg}", "warning")
+        _update_dns_record_proxy(state)
+
+        proc.wait()
+        if not superseded():
+            state.broadcast_log_sync("🔴 Tunnel closed", "warning")
+    except pm.PlayitError as e:
+        if e.code != "Cancelled" and not superseded():
+            logging.error(f"playit tunnel error: {e.code}: {e}")
+            hint = ""
+            if "auth" in f"{e.code} {e}".lower():
+                hint = " Link playit.gg again from the tunnel options."
+            state.broadcast_log_sync(f"❌ playit.gg tunnel error: {e}.{hint}", "error")
+    except Exception as e:
+        logging.exception(f"playit tunnel error: {e}")
+        if not superseded():
+            state.broadcast_log_sync(f"❌ Tunnel error: {e}", "error")
+    finally:
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        if not superseded():
+            state._tunnel_starting = False
+            state.tunnel_process = None
+            state.tunnel_address = None
+            state.tunnel_dns_target = None
+            state.broadcast_log_sync({"type": "tunnel_disconnected"})
+            _delete_dns_record_proxy(state)
+
+
+@app.get("/tunnel/playit/status")
+def get_playit_status():
+    from utils import playit_manager as pm
+
+    if not state:
+        return {"supported": False, "linked": False, "linking": False}
+    link = state.playit_link or {}
+    return {
+        "supported": pm.pick_agent_asset() is not None,
+        "linked": pm.load_secret(state.app_data_dir) is not None,
+        "linking": bool(link),
+        "claim_url": link.get("url"),
+    }
+
+
+@app.post("/tunnel/playit/link")
+def link_playit():
+    """Starts the one-time link: opens playit.gg in the browser for approval."""
+    from utils import playit_manager as pm
+    import webbrowser
+
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    if pm.pick_agent_asset() is None:
+        raise HTTPException(status_code=400, detail="playit.gg is not available on this OS")
+    if state.playit_link:
+        webbrowser.open(state.playit_link["url"])
+        return {"status": "linking", "claim_url": state.playit_link["url"]}
+
+    code = pm.generate_claim_code()
+    try:
+        pm.claim_setup(code)
+    except pm.PlayitError as e:
+        raise HTTPException(status_code=502, detail=f"playit.gg: {e}")
+    link = {"code": code, "url": pm.claim_url(code)}
+    state.playit_link = link
+
+    def wait():
+        try:
+            secret = pm.wait_for_claim(code, should_cancel=lambda: state.playit_link is not link)
+            pm.save_secret(state.app_data_dir, secret)
+            state.broadcast_log_sync("✅ playit.gg linked: permanent address ready.", "success")
+            state.broadcast_log_sync({"type": "playit_linked"})
+        except pm.PlayitError as e:
+            if e.code != "Cancelled":
+                state.broadcast_log_sync(f"❌ playit.gg link failed: {e}", "error")
+                state.broadcast_log_sync({"type": "playit_link_failed", "error": str(e)})
+        finally:
+            if state.playit_link is link:
+                state.playit_link = None
+
+    threading.Thread(target=wait, daemon=True).start()
+    webbrowser.open(link["url"])
+    return {"status": "linking", "claim_url": link["url"]}
+
+
+@app.post("/tunnel/playit/link/cancel")
+def cancel_playit_link():
+    if state:
+        state.playit_link = None
+    return {"status": "cancelled"}
+
+
+@app.post("/tunnel/playit/unlink")
+def unlink_playit():
+    from utils import playit_manager as pm
+
+    if not state:
+        raise HTTPException(status_code=500, detail="App state not initialized")
+    if state.tunnel_provider == "playit":
+        stop_tunnel()
+    state.playit_link = None
+    pm.delete_secret(state.app_data_dir)
+    return {"status": "unlinked"}
 
 
 # --- Bedrock / GeyserMC Tunnel Endpoints (Pinggy UDP) ---
@@ -3465,7 +3686,7 @@ async def set_dns_subdomain(request: Request):
         _call_dns_proxy(state, "release", old_subdomain)
 
     if state.tunnel_address and state.tunnel_process and state.tunnel_process.poll() is None:
-        ok, data = _call_dns_proxy(state, "create", subdomain, state.tunnel_address)
+        ok, data = _call_dns_proxy(state, "create", subdomain, _dns_target(state))
         if ok:
             state.dns_address = address
             _track_dns_subdomain(state, subdomain)
@@ -3535,7 +3756,7 @@ def verify_dns_record():
         return {"verified": False, "error": "No subdomain configured"}
 
     if state.tunnel_address:
-        ok, data = _verify_dns_record(state, slug, state.tunnel_address, attempts=3, delay=2.0)
+        ok, data = _verify_dns_record(state, slug, _dns_target(state), attempts=3, delay=2.0)
         return {
             "verified": ok,
             "address": f"{slug}.play.ariser.app",

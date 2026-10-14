@@ -383,6 +383,20 @@ export const api = {
         });
     },
 
+    // --- playit.gg (permanent address) ---
+    getPlayitStatus: async () => {
+        return await fetchJson(`${API_URL}/tunnel/playit/status`);
+    },
+    linkPlayit: async () => {
+        return await fetchJson(`${API_URL}/tunnel/playit/link`, { method: 'POST' }, 20000);
+    },
+    cancelPlayitLink: async () => {
+        return await fetchJson(`${API_URL}/tunnel/playit/link/cancel`, { method: 'POST' });
+    },
+    unlinkPlayit: async () => {
+        return await fetchJson(`${API_URL}/tunnel/playit/unlink`, { method: 'POST' }, 15000);
+    },
+
     // --- Bedrock Tunnel (GeyserMC Crossplay) ---
     getBedrockTunnelStatus: async () => {
         return await fetchJson(`${API_URL}/tunnel/bedrock/status`);

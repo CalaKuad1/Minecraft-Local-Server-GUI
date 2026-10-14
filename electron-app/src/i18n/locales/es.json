@@ -109,7 +109,16 @@
             "dns_failed": "La verificación de DNS ha fallado",
             "dns_cleanup_title": "Limpieza de DNS",
             "dns_cleanup_done": "Registros obsoletos eliminados:",
-            "dns_cleanup_failed": "No se pudo limpiar el DNS"
+            "dns_cleanup_failed": "No se pudo limpiar el DNS",
+            "playit_cta_title": "Dirección permanente y sin límite de tiempo",
+            "playit_cta_desc": "Gratis con playit.gg. Tus amigos usan siempre la misma dirección. Un clic, una sola vez.",
+            "playit_activate": "Activar gratis",
+            "playit_waiting": "Aprueba la vinculación en tu navegador…",
+            "playit_reopen": "Abrir de nuevo",
+            "playit_linked": "playit.gg vinculado. El próximo túnel usará tu dirección permanente.",
+            "playit_link_failed": "No se pudo vincular playit.gg",
+            "playit_unlink": "Desvincular playit.gg",
+            "playit_unlink_confirm": "¿Desvincular playit.gg? Tu dirección permanente sigue en tu cuenta de playit, pero MLSG usará túneles temporales de Pinggy hasta que vuelvas a vincularlo."
         }
     },
     "library": {

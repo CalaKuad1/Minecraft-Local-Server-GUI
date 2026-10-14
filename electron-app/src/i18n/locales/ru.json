@@ -109,7 +109,16 @@
             "dns_failed": "Проверка DNS не удалась",
             "dns_cleanup_title": "Очистка DNS",
             "dns_cleanup_done": "Удалено устаревших записей:",
-            "dns_cleanup_failed": "Не удалось очистить DNS"
+            "dns_cleanup_failed": "Не удалось очистить DNS",
+            "playit_cta_title": "Постоянный адрес без ограничения по времени",
+            "playit_cta_desc": "Бесплатно через playit.gg. У друзей всегда один и тот же адрес. Один клик, один раз.",
+            "playit_activate": "Включить бесплатно",
+            "playit_waiting": "Подтвердите привязку в браузере…",
+            "playit_reopen": "Открыть снова",
+            "playit_linked": "playit.gg привязан. Следующий туннель будет использовать постоянный адрес.",
+            "playit_link_failed": "Не удалось привязать playit.gg",
+            "playit_unlink": "Отвязать playit.gg",
+            "playit_unlink_confirm": "Отвязать playit.gg? Постоянный адрес останется в вашем аккаунте playit, но MLSG будет использовать временные туннели Pinggy, пока вы не привяжете его снова."
         }
     },
     "library": {

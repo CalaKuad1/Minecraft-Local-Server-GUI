@@ -109,7 +109,16 @@
             "dns_failed": "Échec de la vérification DNS",
             "dns_cleanup_title": "Nettoyage du DNS",
             "dns_cleanup_done": "Enregistrements obsolètes supprimés :",
-            "dns_cleanup_failed": "Impossible de nettoyer le DNS"
+            "dns_cleanup_failed": "Impossible de nettoyer le DNS",
+            "playit_cta_title": "Adresse permanente, sans limite de temps",
+            "playit_cta_desc": "Gratuit avec playit.gg. Vos amis gardent toujours la même adresse. Un clic, une seule fois.",
+            "playit_activate": "Activer gratuitement",
+            "playit_waiting": "Approuvez la liaison dans votre navigateur…",
+            "playit_reopen": "Rouvrir",
+            "playit_linked": "playit.gg lié. Le prochain tunnel utilisera votre adresse permanente.",
+            "playit_link_failed": "Impossible de lier playit.gg",
+            "playit_unlink": "Délier playit.gg",
+            "playit_unlink_confirm": "Délier playit.gg ? Votre adresse permanente reste sur votre compte playit, mais MLSG utilisera des tunnels Pinggy temporaires jusqu'à une nouvelle liaison."
         }
     },
     "library": {
