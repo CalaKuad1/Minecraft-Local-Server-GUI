@@ -136,6 +136,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const [showShutdownModal, setShowShutdownModal] = useState(false);
     const [shutdownInfo, setShutdownInfo] = useState({ scheduled: false });
     const [tunnelAddress, setTunnelAddress] = useState(null);
+    const [runningProvider, setRunningProvider] = useState(null);
     const [tunnelConnecting, setTunnelConnecting] = useState(false);
     const [tunnelRegion, setTunnelRegion] = useState('eu');
     // playit.gg = permanent address once linked; Pinggy = temporary fallback.
@@ -248,6 +249,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             if (serverStatus?.tunnel) {
                 if (serverStatus.tunnel.active && serverStatus.tunnel.address) {
                     setTunnelAddress(serverStatus.tunnel.address);
+                    setRunningProvider(serverStatus.tunnel.provider || null);
                     setTunnelConnecting(false);
                 } else if (!tunnelConnecting && tunnelAddress) {
                     setTunnelAddress(null);
@@ -276,6 +278,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
     useEffect(() => { tunnelActiveRef.current = !!tunnelAddress; }, [tunnelAddress]);
     useEffect(() => { tunnelRegionRef.current = tunnelRegion; }, [tunnelRegion]);
+    const activeProviderRef = useRef(activeProvider);
+    useEffect(() => { activeProviderRef.current = activeProvider; }, [activeProvider]);
 
     // Load DNS subdomain
     useEffect(() => {
@@ -517,6 +521,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 const status = await api.getTunnelStatus();
                 if (status.active && status.address) {
                     setTunnelAddress(status.address);
+                    setRunningProvider(status.provider || null);
                     setTunnelConnecting(false);
                 } else if (!tunnelConnecting) {
                     setTunnelAddress(null);
@@ -556,7 +561,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 setTimeout(async () => {
                     try {
                         setTunnelConnecting(true);
-                        await api.startTunnel(tunnelRegion, activeProvider);
+                        await api.startTunnel(tunnelRegionRef.current, activeProviderRef.current);
                     } catch (e) { setTunnelConnecting(false); }
                 }, 5000);
             }
@@ -590,6 +595,35 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     };
 
     const shareAddress = tunnelAddress ? ((dnsAddress && dnsStatus !== 'error') ? dnsAddress : tunnelAddress) : null;
+    const shareVisible = isOnline || isStarting;
+
+    const stopPublicTunnel = async () => {
+        try {
+            await api.stopTunnel();
+            setTunnelAddress(null);
+            setTunnelConnecting(false);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.error_title') });
+        }
+    };
+
+    // Tunnel controls shown inside the share card while the server runs.
+    const tunnelToolbar = (
+        <div className="flex shrink-0 items-center gap-1">
+            <IconButton
+                label={t('dashboard.tunnel.options')}
+                icon={SettingsIcon}
+                size={16}
+                tone={showAdvanced ? 'active' : 'default'}
+                aria-expanded={showAdvanced}
+                onClick={() => setShowAdvanced(v => !v)}
+                className="h-9 w-9"
+            />
+            {tunnelAddress && (
+                <IconButton label={t('dashboard.tunnel.stop')} icon={Square} size={16} onClick={stopPublicTunnel} className="h-9 w-9" />
+            )}
+        </div>
+    );
     const serverVersion = status.version || status.minecraft_version || '';
 
     const copyShareAddress = async () => {
@@ -792,23 +826,26 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                 <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shareAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-panel/60 border-white/5'}`}>
                     {shareAddress ? (
                         <>
-                            <div className="flex items-center gap-3 mb-3">
-                                <Cubi mood="happy" size={34} />
-                                <h3 className="text-lg font-display font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
+                            <div className="flex items-start gap-4">
+                                <Cubi mood="happy" size={44} className="shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-base font-display font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
+                                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                                        <span className="text-2xl font-mono font-bold text-emerald-300 select-all break-all">{shareAddress}</span>
+                                        <Button variant="primary" size="sm" icon={shareCopied ? Check : Copy} onClick={copyShareAddress} aria-live="polite">
+                                            {shareCopied ? t('dashboard.share.copied') : t('dashboard.share.copy')}
+                                        </Button>
+                                    </div>
+                                    <p className="mt-2 text-sm text-ink-dim">
+                                        {t('dashboard.share.how_to')}
+                                        {serverVersion && <span className="text-ink-faint"> {t('dashboard.share.version_note').replace('{version}', serverVersion)}</span>}
+                                    </p>
+                                </div>
+                                {tunnelToolbar}
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-2xl font-mono font-bold text-emerald-300 select-all break-all">{shareAddress}</span>
-                                <Button variant="primary" icon={shareCopied ? Check : Copy} onClick={copyShareAddress} aria-live="polite">
-                                    {shareCopied ? t('dashboard.share.copied') : t('dashboard.share.copy')}
-                                </Button>
-                            </div>
-                            <p className="mt-3 text-sm text-ink-dim">
-                                {t('dashboard.share.how_to')}
-                                {serverVersion && <span className="text-ink-faint"> {t('dashboard.share.version_note').replace('{version}', serverVersion)}</span>}
-                            </p>
                             {switchingToPlayit ? (
                                 <p className="mt-3 text-xs text-gold">{t('dashboard.share.switching')}</p>
-                            ) : activeProvider === 'playit' ? (
+                            ) : (runningProvider || activeProvider) === 'playit' ? (
                                 <p className="mt-3 text-xs text-emerald-400/80">{t('dashboard.share.permanent')}</p>
                             ) : (
                                 <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-3">
@@ -848,13 +885,18 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                 <p className="text-sm text-ink-dim">{t('dashboard.share.private_desc')}</p>
                             </div>
                             <Button variant="primary" icon={Globe} onClick={startPublicTunnel}>{t('dashboard.tunnel.make_public')}</Button>
+                            {tunnelToolbar}
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Tunnel Section */}
+            {/* Tunnel Section: the address card while the server is off; once it
+                runs, the share card above takes over and only the options panel
+                (opened from its gear) shows here. */}
+            {(!shareVisible || showAdvanced) && (
             <div className="p-4 bg-panel/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
+                {!shareVisible && (
                 <div className="flex items-center gap-4">
                     <div className={`p-2 rounded-sm border ${tunnelAddress ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
                         <Terminal size={16} />
@@ -993,7 +1035,9 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                 </div>
 
-                {playit.supported && !playit.linked && !shareAddress && (
+                )}
+
+                {playit.supported && !playit.linked && !shareVisible && (
                     <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
                         <Zap size={16} className="shrink-0 text-gold" aria-hidden="true" />
                         <div className="flex-1 min-w-[12rem]">
@@ -1011,7 +1055,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </div>
                 )}
 
-                {showAdvanced && <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-white/5">
+                {showAdvanced && <div className={`flex flex-wrap items-center gap-3 ${shareVisible ? '' : 'mt-3 pt-3 border-t border-white/5'}`}>
                     <span className="text-sm text-ink-dim">{t('dashboard.tunnel.provider')}</span>
                         <div className="w-32 rounded-sm border border-white/10 bg-white/5">
                             <Select
@@ -1083,6 +1127,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                     </Button>
                 </div>}
             </div>
+
+            )}
 
             {/* Bedrock / GeyserMC Crossplay Section */}
             {geyserInfo.installed ? (
@@ -1237,7 +1283,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             </div>
 
             {/* Mini Console (Real-time via WS) */}
-            <div className="mt-3 flex-1 min-h-[140px] bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
+            <div className="mt-3 flex-1 min-h-[140px] basis-0 bg-black/40 backdrop-blur-2xl border border-white/5 rounded-sm overflow-hidden flex flex-col shadow-xl">
                 <div className="bg-black/40 px-4 py-2 border-b border-white/5 flex items-center justify-between">
                     <span className="text-[10px] font-bold text-ink-faint uppercase tracking-widest flex items-center gap-2 font-minecraft">
                         {t('dashboard.sys_event_log')}

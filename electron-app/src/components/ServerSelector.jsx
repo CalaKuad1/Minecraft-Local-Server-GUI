@@ -17,7 +17,7 @@ function StatusPill({ status }) {
     const isOnline = status === 'online';
     const isBusy = status && status !== 'offline' && !isOnline;
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border text-[9px] font-minecraft uppercase tracking-wider
+        <span className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium
             ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                 : isBusy ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                     : 'bg-white/5 border-white/10 text-ink-faint'}`}>
@@ -204,12 +204,12 @@ export default function ServerSelector({ onSelect, onAdd }) {
             || (statusFilter === 'online' && s.status === 'online')
             || (statusFilter === 'offline' && (!s.status || s.status === 'offline'));
         return matchesQuery && matchesStatus;
+    }).sort((a, b) => {
+        // Running servers first, then most recently opened.
+        const on = (x) => (x.status && x.status !== 'offline' ? 1 : 0);
+        if (on(a) !== on(b)) return on(b) - on(a);
+        return new Date(b.last_opened || 0) - new Date(a.last_opened || 0);
     }), [servers, searchQuery, statusFilter]);
-
-    const recentlyOpened = useMemo(() => [...servers]
-        .filter(s => s.last_opened)
-        .sort((a, b) => new Date(b.last_opened) - new Date(a.last_opened))
-        .slice(0, 3), [servers]);
 
     const onlineCount = servers.filter(s => s.status === 'online').length;
     const totalCount = servers.length;
@@ -286,9 +286,9 @@ export default function ServerSelector({ onSelect, onAdd }) {
 
                 {/* Main */}
                 <div className="flex-1 flex flex-col relative overflow-hidden bg-ground/70 backdrop-blur-md w-full">
-                    <div className="px-8 pt-8 pb-6 border-b border-white/5 flex items-center gap-4">
+                    <div className="px-8 pt-7 pb-5 border-b border-line flex items-center gap-4">
                         <div className="flex-1">
-                            <h2 className="text-3xl font-minecraft tracking-tight text-white">{t('library.title')}</h2>
+                            <h2 className="text-2xl font-display font-semibold tracking-tight text-white">{t('library.title')}</h2>
                             <p className="text-ink-faint text-sm mt-0.5">{totalCount} {t('library.stats.total').toLowerCase()}</p>
                         </div>
                         <div className="relative group w-72 max-w-full">
@@ -299,7 +299,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Escape') { setSearchQuery(''); e.target.blur(); } }}
-                                className="w-full bg-black/40 border border-white/5 rounded-sm pl-10 pr-9 py-2.5 text-sm text-white focus:outline-none focus:border-white/20 transition-colors font-minecraft tracking-wider"
+                                className="w-full bg-black/30 border border-white/10 rounded-md pl-10 pr-9 py-2.5 text-sm text-white placeholder-ink-faint focus:outline-none focus:border-grass/50 transition-colors"
                             />
                             {searchQuery && (
                                 <button
@@ -313,7 +313,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                         </div>
                         <button
                             onClick={async () => { if (await checkConflict(null)) return; onAdd(); }}
-                            className="px-5 py-2.5 bg-white text-black rounded-sm text-sm font-medium transition-colors hover:bg-zinc-200 flex items-center gap-2 font-minecraft uppercase tracking-wider shrink-0"
+                            className="px-4 py-2.5 bg-grass text-ground rounded-md text-sm font-semibold transition-colors hover:bg-mint flex items-center gap-2 shrink-0 shadow-glow"
                         >
                             <Plus size={16} /> {t('library.new_server')}
                         </button>
@@ -354,40 +354,12 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             </div>
                         ) : (
                             <>
-                                {recentlyOpened.length > 0 && !searchQuery && statusFilter === 'all' && (
-                                    <div className="mb-10">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <Clock size={16} className="text-emerald-400" />
-                                            <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-minecraft">{t('library.recently_opened')}</h3>
-                                        </div>
-                                        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10">
-                                            {recentlyOpened.map((server) => (
-                                                <button
-                                                    key={server.id}
-                                                    onClick={() => handleSelect(server.id)}
-                                                    className="shrink-0 w-56 text-left p-4 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors group"
-                                                >
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <div className={`p-2 rounded-sm border ${engineInfo(server.server_type || server.type).bg} ${engineInfo(server.server_type || server.type).border} ${engineInfo(server.server_type || server.type).color}`}>
-                                                            <EngineIcon type={server.server_type || server.type} size={14} />
-                                                        </div>
-                                                        <StatusPill status={server.status} />
-                                                    </div>
-                                                    <div className="text-sm font-minecraft tracking-wider text-zinc-200 truncate uppercase">{server.name}</div>
-                                                    <div className="text-[10px] text-ink-faint font-mono mt-1">{server.version || 'Latest'} • {formatRelative(server.last_opened)}</div>
-                                                </button>
-                                            ))}
-                                        </div>
+                                {searchQuery && (
+                                    <div className="flex items-center gap-2 mb-4 text-sm text-ink-dim">
+                                        {t('library.search_results')}
+                                        <span className="text-ink-faint">{filteredServers.length}</span>
                                     </div>
                                 )}
-
-                                <div className="flex items-center gap-2 mb-4">
-                                    <FolderOpen size={16} className="text-emerald-400" />
-                                    <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-minecraft">
-                                        {searchQuery ? t('library.search_results') : t('library.all_servers')}
-                                    </h3>
-                                    <span className="text-xs text-ink-faint ml-1">{filteredServers.length}</span>
-                                </div>
 
                                 {filteredServers.length === 0 ? (
                                     <div className="py-20 flex flex-col items-center justify-center text-ink-faint">
@@ -395,7 +367,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                         <p className="font-minecraft tracking-widest uppercase text-sm opacity-60">{t('library.no_matches')}</p>
                                     </div>
                                 ) : viewMode === 'grid' ? (
-                                    <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                                         {filteredServers.map((server) => (
                                             <ServerCard key={server.id} server={server} t={t}
                                                 onClick={() => handleSelect(server.id)}
@@ -405,7 +377,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-3 max-w-4xl">
+                                    <div className="flex flex-col gap-2 max-w-4xl">
                                         {filteredServers.map((server) => (
                                             <ServerRow key={server.id} server={server} t={t}
                                                 onClick={() => handleSelect(server.id)}
@@ -426,100 +398,86 @@ export default function ServerSelector({ onSelect, onAdd }) {
     );
 }
 
+// Engine logo on a soft tile; used by both the grid and the list view.
+function EngineTile({ type, size = 44 }) {
+    return (
+        <div className="grid place-items-center rounded-md bg-white/[0.04] border border-white/[0.06] shrink-0" style={{ width: size, height: size }}>
+            <EngineIcon type={type} size={Math.round(size * 0.64)} />
+        </div>
+    );
+}
+
+function serverMeta(server, engineType) {
+    const name = engineInfo(engineType).name;
+    return [name && `${name} ${server.version || ''}`.trim(), server.last_opened && formatRelative(server.last_opened)].filter(Boolean).join(' · ');
+}
+
+function BootButton({ onBoot, booting, t, compact = false }) {
+    return (
+        <button
+            onClick={onBoot}
+            title={t('library.boot')}
+            aria-label={t('library.boot')}
+            className={`shrink-0 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/5 text-ink-dim transition-colors hover:border-grass/50 hover:bg-grass hover:text-ground ${compact ? 'h-9 w-9' : 'h-9 px-3 text-sm font-medium'}`}
+        >
+            {booting ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Play size={14} />}
+            {!compact && t('library.boot')}
+        </button>
+    );
+}
+
 function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
     const isOnline = server.status === 'online';
-    const isStarting = server.status && server.status !== 'offline' && !isOnline;
+    const isBusy = server.status && server.status !== 'offline' && !isOnline;
     const engineType = (server.server_type || server.type || 'vanilla').toLowerCase();
-    const info = engineInfo(engineType);
 
     return (
         <div
             onClick={onClick}
-            className="group relative flex flex-col p-5 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-all duration-200 cursor-pointer overflow-hidden"
+            className={`group relative flex items-center gap-3 p-3 pr-3.5 rounded-lg border cursor-pointer transition-colors ${isOnline ? 'bg-grass/[0.06] border-grass/25 hover:border-grass/45' : 'bg-panel/70 border-white/[0.06] hover:border-white/15 hover:bg-raised/60'}`}
         >
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-3 rounded-sm border shrink-0 ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : `${info.bg} ${info.border} ${info.color}`}`}>
-                        <EngineIcon type={engineType} size={22} />
-                    </div>
-                    <div className="min-w-0">
-                        <h3 className="text-base font-minecraft tracking-wider uppercase text-white truncate">{server.name}</h3>
-                        <div className="mt-1"><StatusPill status={server.status} /></div>
-                    </div>
+            <EngineTile type={engineType} />
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                    <h3 className="truncate font-display text-[15px] font-semibold text-ink">{server.name}</h3>
+                    {(isOnline || isBusy) && <StatusPill status={server.status} />}
                 </div>
-                <button
-                    onClick={onDelete}
-                    className="p-1.5 text-ink-faint hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 shrink-0"
-                    title={t('library.delete')}
-                >
-                    <Trash2 size={14} />
-                </button>
+                <div className="mt-0.5 truncate text-xs text-ink-faint">{serverMeta(server, engineType)}</div>
             </div>
-
-            <div className="flex items-center gap-3 text-[10px] font-minecraft uppercase tracking-wider mb-4">
-                <span className={info.color}>{engineType}</span>
-                <span className="text-zinc-700">•</span>
-                <span className="text-ink-faint">{server.version || 'Latest'}</span>
-                {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-ink-faint">{formatRelative(server.last_opened)}</span></>}
-            </div>
-
-            <div className="mt-auto">
-                {!isOnline && !isStarting ? (
-                    <button
-                        onClick={onBoot}
-                        className="w-full py-2 rounded-sm bg-white/5 hover:bg-white text-zinc-300 hover:text-black border border-white/10 text-[10px] font-minecraft uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
-                    >
-                        {booting
-                            ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> {t('library.boot')}</>
-                            : <><Play size={12} /> {t('library.boot')}</>}
-                    </button>
-                ) : (
-                    <div className="w-full py-2 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-minecraft uppercase tracking-wider text-center">
-                        {t('library.manage')}
-                    </div>
-                )}
-            </div>
+            <button
+                onClick={onDelete}
+                className="p-1.5 text-ink-faint hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 shrink-0"
+                title={t('library.delete')}
+                aria-label={t('library.delete')}
+            >
+                <Trash2 size={14} />
+            </button>
+            {!isOnline && !isBusy && <BootButton onBoot={onBoot} booting={booting} t={t} compact />}
         </div>
     );
 }
 
 function ServerRow({ server, onClick, onBoot, onDelete, booting, t }) {
     const isOnline = server.status === 'online';
-    const isStarting = server.status && server.status !== 'offline' && !isOnline;
+    const isBusy = server.status && server.status !== 'offline' && !isOnline;
     const engineType = (server.server_type || server.type || 'vanilla').toLowerCase();
-    const info = engineInfo(engineType);
 
     return (
         <div
             onClick={onClick}
-            className="group flex items-center gap-4 p-4 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors cursor-pointer"
+            className={`group flex items-center gap-4 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${isOnline ? 'bg-grass/[0.06] border-grass/25' : 'bg-panel/70 border-white/[0.06] hover:border-white/15'}`}
         >
-            <div className={`p-3 rounded-sm border shrink-0 ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : `${info.bg} ${info.border} ${info.color}`}`}>
-                <EngineIcon type={engineType} size={20} />
-            </div>
+            <EngineTile type={engineType} size={38} />
             <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-minecraft tracking-wider uppercase text-white truncate">{server.name}</h3>
-                    <StatusPill status={server.status} />
-                </div>
-                <div className="flex items-center gap-3 text-[10px] font-minecraft uppercase tracking-wider mt-1">
-                    <span className={info.color}>{engineType}</span>
-                    <span className="text-zinc-700">•</span>
-                    <span className="text-ink-faint">{server.version || 'Latest'}</span>
-                    {server.last_opened && <><span className="text-zinc-700">•</span><span className="text-ink-faint">{formatRelative(server.last_opened)}</span></>}
-                </div>
+                <h3 className="truncate font-display text-[15px] font-semibold text-ink">{server.name}</h3>
+                <div className="truncate text-xs text-ink-faint">{serverMeta(server, engineType)}</div>
             </div>
+            <StatusPill status={server.status} />
             <div className="flex items-center gap-2 shrink-0">
-                {!isOnline && !isStarting && (
-                    <button onClick={onBoot} className="px-3 py-1.5 rounded-sm bg-white/5 hover:bg-white text-zinc-300 hover:text-black border border-white/10 text-[10px] font-minecraft uppercase tracking-wider flex items-center gap-1.5 transition-colors">
-                        {booting ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Play size={11} />}
-                        {t('library.boot')}
-                    </button>
-                )}
-                <button onClick={onDelete} className="p-2 text-ink-faint hover:text-red-400 rounded-sm hover:bg-red-500/10 transition-colors" title={t('library.delete')}>
+                <button onClick={onDelete} className="p-2 text-ink-faint hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors" title={t('library.delete')} aria-label={t('library.delete')}>
                     <Trash2 size={15} />
                 </button>
+                {!isOnline && !isBusy && <BootButton onBoot={onBoot} booting={booting} t={t} />}
             </div>
         </div>
     );

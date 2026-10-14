@@ -288,9 +288,9 @@ function App() {
         
         <main className="flex-1 overflow-hidden relative flex flex-col bg-ground/70 backdrop-blur-md w-full">
           <div className="flex-1 overflow-y-auto px-6 py-5 relative z-10 flex flex-col [scrollbar-gutter:stable] w-full">
-          <div className="mx-auto w-full flex-1 flex flex-col">
+          <div className="mx-auto w-full flex-1 min-h-0 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
-            <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 flex flex-col' : ''}>
+            <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 min-h-0 flex flex-col' : ''}>
               <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} autoStart={autoStartServer} onAutoStartHandled={() => setAutoStartServer(false)} />
             </div>
 

@@ -1067,6 +1067,7 @@ def get_status():
             and state.tunnel_process.poll() is None,
             "address": state.tunnel_address,
             "dns_address": state.dns_address,
+            "provider": state.tunnel_provider,
         },
         "bedrock_tunnel": {
             "active": state.bedrock_tunnel_process is not None
@@ -2721,6 +2722,7 @@ def get_tunnel_status():
         and state.tunnel_process.poll() is None,
         "address": state.tunnel_address,
         "dns_address": state.dns_address,
+        "provider": state.tunnel_provider,
     }
 
 
