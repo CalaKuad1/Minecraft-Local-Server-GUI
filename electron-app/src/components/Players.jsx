@@ -8,7 +8,7 @@ const PlayerCard = ({ player, type, onAction, t }) => {
     const [imgSrc, setImgSrc] = useState(`https://minotar.net/helm/${player.name}/64`);
 
     return (
-        <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 p-4 rounded-sm flex items-center justify-between group hover:border-white/10 transition-colors">
+        <div className="bg-panel/60 backdrop-blur-xl border border-white/5 p-4 rounded-sm flex items-center justify-between group hover:border-white/10 transition-colors">
             <div className="flex items-center gap-4">
                 <img
                     src={imgSrc}
@@ -57,7 +57,7 @@ const PlayerCard = ({ player, type, onAction, t }) => {
 };
 
 const StatCard = ({ icon: Icon, label, value }) => (
-    <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 rounded-sm p-5 flex flex-col justify-between hover:border-white/10 transition-colors">
+    <div className="bg-panel/60 backdrop-blur-xl border border-white/5 rounded-sm p-5 flex flex-col justify-between hover:border-white/10 transition-colors">
         <div className="flex items-center gap-2 mb-2 text-ink-faint">
             <Icon size={14} className="opacity-70" />
             <h3 className="text-xs font-bold uppercase tracking-widest">{label}</h3>
@@ -196,7 +196,7 @@ export default function Players() {
             )}
 
             <div className="flex items-center justify-between">
-                <div className="flex bg-[#030303]/60 backdrop-blur-xl border border-white/5 p-1 rounded-sm mb-4 relative max-w-fit shadow-md">
+                <div className="flex bg-ground/60 backdrop-blur-xl border border-white/5 p-1 rounded-sm mb-4 relative max-w-fit shadow-md">
                     {['online', 'ops', 'whitelist', 'banned'].map(tab => (
                         <button
                             key={tab}
@@ -234,7 +234,7 @@ export default function Players() {
                         />
                     ))
                 ) : (
-                    <div className="col-span-2 text-center py-20 bg-[#18181b]/40 rounded-sm border border-white/5 border-dashed">
+                    <div className="col-span-2 text-center py-20 bg-panel/40 rounded-sm border border-white/5 border-dashed">
                         <User size={48} className="mx-auto text-ink-faint mb-4 opacity-50" />
                         <p className="text-ink-faint">{t('players.empty')}</p>
                         {activeTab === 'online' && <p className="text-ink-faint text-sm mt-1">{t('players.empty_online')}</p>}
@@ -244,7 +244,7 @@ export default function Players() {
 
             {showAddModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-[#18181b] p-6 rounded-sm border border-white/10 w-96 shadow-2xl">
+                    <div className="bg-panel p-6 rounded-sm border border-white/10 w-96 shadow-2xl">
                         <h3 className="text-xl font-minecraft tracking-wider text-white mb-4 uppercase">
                             {t('players.add_to').replace('{list}', t(`players.tabs.${activeTab}`))}
                         </h3>

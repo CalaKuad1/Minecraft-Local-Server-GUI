@@ -2,57 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Pixelify Sans draws "5" like an "S" at every size (reads "Sm" for "5m") and its
-   small "c" reads as "o". Numbers carry information, so wherever the pixel font
-   is used, digits and number punctuation come from Inter instead. The family is
-   listed first in `font-minecraft` (tailwind.config.js); the browser only falls
-   through to Pixelify Sans for characters outside this unicode-range. */
-@font-face {
-  font-family: 'Pixel Digits';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
-  unicode-range: U+0025, U+002C-002F, U+0030-0039, U+003A;
-}
-
+/* Cubi visual style: green-tinted darks taken from the logo, rounded corners,
+   Fredoka for display text and Figtree for everything else. */
 :root {
-  font-family: 'Inter Variable', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Figtree Variable', Figtree, system-ui, 'Segoe UI', sans-serif;
   background-color: rgb(var(--ground));
   color-scheme: dark;
   color: rgb(var(--ink) / 0.92);
 
   /* Design tokens, as "R G B" channels (see tailwind.config.js). */
-  --ground: 9 9 11;
-  --panel: 18 18 21;
-  --raised: 30 30 35;
-  --ink: 244 244 245;
-  --ink-dim: 190 190 198;    /* secondary text, ~10:1 on ground */
-  --ink-faint: 138 138 147;  /* hints and captions, ~5.8:1 on ground */
-  --grass: 16 185 129;
-  --grass-lit: 52 211 153;
-  --gold: 234 179 8;
-  --redstone: 239 68 68;
-  --diamond: 56 189 248;
+  --ground: 10 14 13;
+  --panel: 17 23 21;
+  --raised: 27 35 32;
+  --line: 36 47 43;          /* hairline borders (solid, so /opacity works) */
+  --ink: 236 243 240;
+  --ink-dim: 170 186 179;    /* secondary text, ~9:1 on ground */
+  --ink-faint: 124 142 135;  /* hints and captions, ~5.4:1 on ground */
+  --grass: 16 185 129;       /* logo left face: primary action, online */
+  --grass-lit: 110 231 183;  /* logo top face: grass as text on dark */
+  --deep: 4 120 87;          /* logo right face */
+  --gold: 245 190 70;
+  --redstone: 244 96 96;
+  --diamond: 96 200 250;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  background-color: transparent; /* Permitir ver lo que hay debajo del body si es necesario */
+  background-color: rgb(var(--ground));
+  -webkit-font-smoothing: antialiased;
 }
 
+/* Quiet backdrop: two soft emerald glows instead of the old dirt texture. */
 body::before {
   content: '';
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: url('./assets/Dirt_background_BE1.webp');
-  background-repeat: repeat;
-  background-size: 512px auto;
+  inset: 0;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, rgb(var(--grass) / 0.10), transparent 60%),
+    radial-gradient(50rem 36rem at 110% 110%, rgb(var(--deep) / 0.12), transparent 60%),
+    rgb(var(--ground));
   z-index: -10;
   pointer-events: none;
 }
@@ -61,13 +51,18 @@ body::before {
   border-radius: inherit;
 }
 
-/* Cubic styling overrides */
-.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-lg, .rounded-md {
-  border-radius: 2px !important;
+/* Legacy pixel labels. Screens were written for an all-caps, widely tracked
+   pixel font (`font-minecraft uppercase tracking-widest`). With the rounded
+   display face that reads shouty, so those labels render in sentence case with
+   natural spacing; translations are already stored in sentence case. */
+.font-minecraft {
+  font-weight: 500;
 }
-
-.rounded-full:not(.thumb-logo) {
-  border-radius: 2px !important;
+.font-minecraft.uppercase {
+  text-transform: none;
+}
+.font-minecraft[class*="tracking-"] {
+  letter-spacing: 0.005em;
 }
 
 /* Keyboard focus. Inputs show focus through their own border, so only
@@ -147,9 +142,9 @@ input[type=range].ram-slider::-moz-range-thumb {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-[#3f3f46] rounded-sm;
+  @apply bg-white/10 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-[#52525b];
+  @apply bg-white/20;
 }

@@ -180,7 +180,7 @@ export default function Mods({ status, onOpenWizard }) {
             )}
 
             <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center bg-[#0a0a0a] border border-white/5 p-1 rounded-sm max-w-fit shadow-inner">
+                <div className="flex items-center bg-ground border border-white/5 p-1 rounded-sm max-w-fit shadow-inner">
                     {[
                         { id: 'browse', label: t('mods.browse') },
                         { id: 'modpacks', label: t('mods.modpacks') },

@@ -7,6 +7,7 @@ import { Select } from './ui/Select';
 import { Modal } from './ui/Modal';
 import { Button, IconButton } from './ui/Button';
 import { Badge } from './ui/Badge';
+import Cubi from './ui/Cubi';
 import { useToast } from './ui/toastContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -14,7 +15,7 @@ import { useDialog } from './ui/DialogContext';
 
 const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true }) => {
     return (
-        <div className="bg-[#050505]/40 border border-white/5 rounded-sm p-5 flex flex-col transition-all group cursor-default hover:border-white/10 hover:bg-[#070707]/60 relative overflow-hidden h-[120px] min-w-0">
+        <div className="bg-ground/40 border border-white/5 rounded-sm p-5 flex flex-col transition-all group cursor-default hover:border-white/10 hover:bg-ground/60 relative overflow-hidden h-[120px] min-w-0">
             <div className="flex items-center gap-2 mb-3 relative z-10">
                 <Icon size={14} className="text-ink-faint group-hover:text-gray-300 transition-colors" />
                 <h3 className="text-ink-faint text-xs font-bold uppercase tracking-widest">{label}</h3>
@@ -656,7 +657,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
         <div className="flex flex-col h-full animate-in fade-in zoom-in duration-500">
             <div className="space-y-4 flex-none">
                 {/* Header & Controls */}
-                <div className="flex items-center justify-between px-6 py-5 bg-[#18181b]/60 border border-white/5 shadow-sm relative overflow-hidden backdrop-blur-2xl rounded-sm">
+                <div className="flex items-center justify-between px-6 py-5 bg-panel/60 border border-white/5 shadow-sm relative overflow-hidden backdrop-blur-2xl rounded-sm">
                     <div className="relative z-10 flex items-center gap-4">
                         <div className={`w-3 h-3 rounded-sm ${isOnline ? 'bg-grass' : (isStarting || isStopping) ? 'bg-gold animate-pulse' : 'bg-ink-faint'}`} aria-hidden="true"></div>
                         <div>
@@ -788,12 +789,12 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
             {/* Share card: the one thing a new user needs once the server runs */}
             {(isOnline || isStarting) && (
-                <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shareAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-[#18181b]/60 border-white/5'}`}>
+                <div className={`p-5 rounded-sm border backdrop-blur-2xl ${shareAddress ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-panel/60 border-white/5'}`}>
                     {shareAddress ? (
                         <>
-                            <div className="flex items-center gap-2 mb-3">
-                                <Users size={16} className="text-emerald-400" />
-                                <h3 className="text-base font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
+                            <div className="flex items-center gap-3 mb-3">
+                                <Cubi mood="happy" size={34} />
+                                <h3 className="text-lg font-display font-semibold text-white">{t('dashboard.share.ready_title')}</h3>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                                 <span className="text-2xl font-mono font-bold text-emerald-300 select-all break-all">{shareAddress}</span>
@@ -853,7 +854,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             )}
 
             {/* Tunnel Section */}
-            <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
+            <div className="p-4 bg-panel/60 border border-white/5 rounded-sm relative z-50 backdrop-blur-2xl">
                 <div className="flex items-center gap-4">
                     <div className={`p-2 rounded-sm border ${tunnelAddress ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
                         <Terminal size={16} />
@@ -1085,7 +1086,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
 
             {/* Bedrock / GeyserMC Crossplay Section */}
             {geyserInfo.installed ? (
-                <div className="p-4 bg-[#18181b]/60 border border-white/5 rounded-sm relative z-40 backdrop-blur-2xl">
+                <div className="p-4 bg-panel/60 border border-white/5 rounded-sm relative z-40 backdrop-blur-2xl">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-4 min-w-0">
                             <div className={`p-2 rounded-sm border ${bedrockAddress ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-white/5 border-white/10 text-zinc-300'}`}>

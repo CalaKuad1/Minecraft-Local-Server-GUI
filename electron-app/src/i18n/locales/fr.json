@@ -621,6 +621,8 @@
     },
     "app": {
         "saving_world": "Sauvegarde du monde et fermeture en toute sécurité...",
-        "update": "Mise à jour"
+        "update": "Mise à jour",
+        "starting": "Démarrage...",
+        "starting_slow": "C'est un peu plus long que d'habitude. Un instant..."
     }
 }

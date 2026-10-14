@@ -176,7 +176,7 @@ export default function Plugins({ status }) {
     if (!isPaper) {
         return (
             <div className="h-full flex flex-col justify-center items-center text-center p-8 animate-in fade-in zoom-in duration-500">
-                <div className="p-6 rounded-sm bg-[#18181b]/60 border border-white/10 max-w-md">
+                <div className="p-6 rounded-sm bg-panel/60 border border-white/10 max-w-md">
                     <h2 className="text-xl font-minecraft text-emerald-400 uppercase tracking-widest mb-2">{t('plugins.unsupported_title')}</h2>
                     <p className="text-zinc-400 mb-4 text-sm">
                         {t('plugins.unsupported_desc')}<br />
@@ -192,7 +192,7 @@ export default function Plugins({ status }) {
             {error && <div className="mb-4 p-3 rounded-sm border border-red-500/20 bg-red-500/10 text-red-200 text-sm">{error}</div>}
 
             <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center bg-[#0a0a0a] border border-white/5 p-1 rounded-sm max-w-fit shadow-inner">
+                <div className="flex items-center bg-ground border border-white/5 p-1 rounded-sm max-w-fit shadow-inner">
                     {[
                         { id: 'browse', label: t('plugins.browse') },
                         { id: 'installed', label: t('plugins.installed_tab').replace('{count}', plugins.length) }

@@ -7,7 +7,7 @@ import { cn } from '../../utils/cn';
 // for titles and navigation.
 const VARIANTS = {
     primary: 'bg-grass text-black shadow-bevel hover:brightness-110 active:shadow-bevel-press',
-    secondary: 'bg-raised text-ink shadow-bevel-panel hover:bg-[#2a2a31] active:shadow-bevel-press',
+    secondary: 'bg-raised text-ink shadow-bevel-panel hover:bg-raised active:shadow-bevel-press',
     danger: 'bg-redstone/15 text-redstone border border-redstone/50 hover:bg-redstone/25',
     ghost: 'bg-transparent text-ink-dim hover:text-ink hover:bg-white/5',
 };

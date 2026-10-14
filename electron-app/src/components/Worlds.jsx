@@ -196,7 +196,7 @@ export default function Worlds() {
                 <p className="text-ink-faint text-sm">{t('worlds.subtitle')}</p>
             </div>
 
-            <div className="mb-8 bg-[#18181b]/60 backdrop-blur-xl border border-white/5 rounded-sm p-6">
+            <div className="mb-8 bg-panel/60 backdrop-blur-xl border border-white/5 rounded-sm p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
                     <div className="flex items-center gap-3">
                         <Archive size={18} className="text-emerald-400" />
@@ -289,7 +289,7 @@ export default function Worlds() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {worlds.map((world) => (
                     <div key={world.name}
-                        className={`bg-[#18181b]/60 backdrop-blur-xl border rounded-sm p-5 transition-colors ${activeWorld === world.name ? 'border-emerald-500/30' : 'border-white/5 hover:border-white/10'}`}>
+                        className={`bg-panel/60 backdrop-blur-xl border rounded-sm p-5 transition-colors ${activeWorld === world.name ? 'border-emerald-500/30' : 'border-white/5 hover:border-white/10'}`}>
                         <div className="flex items-start justify-between mb-4">
                             <div className={`p-3 rounded-sm border ${activeWorld === world.name ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-black/30 border-white/5 text-zinc-400'}`}>
                                 <Globe size={22} />

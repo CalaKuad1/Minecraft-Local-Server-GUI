@@ -621,6 +621,8 @@
     },
     "app": {
         "saving_world": "Guardando el mundo y cerrando con seguridad...",
-        "update": "Actualización"
+        "update": "Actualización",
+        "starting": "Arrancando...",
+        "starting_slow": "Está tardando un poco más de lo normal. Un momento..."
     }
 }

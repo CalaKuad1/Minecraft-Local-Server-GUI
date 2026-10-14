@@ -201,7 +201,7 @@ export default function Settings() {
 
                 {/* Right Content Pane */}
                 <div className="flex-1 w-full min-w-0">
-                    <div className="bg-[#18181b]/60 backdrop-blur-xl border border-white/5 p-8 rounded-md min-h-[600px] shadow-2xl relative overflow-hidden">
+                    <div className="bg-panel/60 backdrop-blur-xl border border-white/5 p-8 rounded-md min-h-[600px] shadow-2xl relative overflow-hidden">
                         
                         {/* Removed background glow per user feedback */}
 

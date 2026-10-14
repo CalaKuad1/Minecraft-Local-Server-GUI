@@ -54,7 +54,7 @@ export function Select({ value, onChange, options = [], placeholder = "Select op
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute z-[200] w-full mt-1 bg-[#121212] border border-white/10 rounded-sm shadow-2xl overflow-hidden max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-white/10"
+                        className="absolute z-[200] w-full mt-1 bg-panel border border-white/10 rounded-sm shadow-2xl overflow-hidden max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-white/10"
                     >
                         {normalizedOptions.map((option) => (
                             <button

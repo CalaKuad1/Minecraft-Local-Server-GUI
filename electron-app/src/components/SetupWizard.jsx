@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, API_TOKEN, WS_BASE } from '../api';
 import { useTranslation } from '../contexts/LanguageContext';
 import { Select } from './ui/Select';
+import Cubi from './ui/Cubi';
 import { Check, Folder, Download, Server, Loader2, ArrowLeft, ArrowRight, Box, HardDrive, Terminal, AlertTriangle, Info, Plus, Play } from './ui/PixelIcons';
 import fabricLogo from '../assets/engines/fabric.png';
 import forgeLogo from '../assets/engines/forge.png';
@@ -303,7 +304,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
             <div className="w-full flex-1 flex overflow-hidden">
 
                 {/* Sidebar */}
-                <div className="w-64 bg-[#0a0a0a]/80 border-r border-white/10 flex flex-col backdrop-blur-xl shadow-2xl z-10 flex-shrink-0">
+                <div className="w-64 bg-ground/80 border-r border-white/10 flex flex-col backdrop-blur-xl shadow-2xl z-10 flex-shrink-0">
                     <div className="p-8">
                         <div className="flex items-center gap-3 text-emerald-400 mb-10">
                             <Plus size={18} />
@@ -328,7 +329,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]/70 backdrop-blur-md">
+                <div className="flex-1 flex flex-col relative overflow-hidden bg-ground/70 backdrop-blur-md">
                     <AnimatePresence mode="wait">
 
                         {/* STEP 1: NEW OR EXISTING */}
@@ -634,9 +635,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                             >
                                 {installError ? (
                                     <>
-                                        <div className="w-12 h-12 rounded-sm bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-6">
-                                            <AlertTriangle size={22} className="text-red-400" />
-                                        </div>
+                                        <Cubi mood="sad" size={96} className="mb-5" />
                                         <h3 className="text-lg font-minecraft tracking-wide text-white mb-2">{t('wizard.install.failed_title')}</h3>
                                         <p className="text-sm text-gray-400 max-w-md mb-4">{t('wizard.install.failed_hint')}</p>
                                         <pre className="text-[11px] text-red-300/80 bg-black/40 border border-white/5 rounded-sm px-3 py-2 max-w-lg w-full whitespace-pre-wrap break-words text-left max-h-32 overflow-y-auto mb-8">{installError}</pre>
@@ -649,10 +648,7 @@ export default function SetupWizard({ onComplete, onCancel }) {
                                     </>
                                 ) : (
                                     <>
-                                        <div className="w-12 h-12 rounded-sm bg-black border border-white/10 flex items-center justify-center mb-6 shadow-xl relative overflow-hidden">
-                                            <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />
-                                            {done ? <Check size={20} className="text-emerald-400 relative z-10" /> : <Terminal size={20} className="text-emerald-400 relative z-10" />}
-                                        </div>
+                                        <Cubi mood={done ? 'happy' : 'busy'} size={104} className="mb-5" />
                                         <h3 className="text-lg font-minecraft tracking-wide text-white mb-2">
                                             {done ? t('wizard.install.done') : t('wizard.install.title')}
                                         </h3>

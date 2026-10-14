@@ -16,6 +16,10 @@ export default {
                 ground: token('ground'),
                 panel: token('panel'),
                 raised: token('raised'),
+                line: token('line'),             // hairline borders
+                // Cubi's three faces: top (mint), left (grass), right (deep).
+                mint: token('grass-lit'),
+                deep: token('deep'),
                 // Text. ink-dim and ink-faint both clear WCAG AA (4.5:1) on ground/panel;
                 // the old zinc-500/600 used for hints did not.
                 ink: token('ink'),
@@ -29,9 +33,9 @@ export default {
                 diamond: token('diamond'),      // info, focus ring
 
                 // Legacy names, kept so existing screens keep rendering.
-                background: "#09090b",
-                surface: "#18181b",
-                "surface-hover": "#27272a",
+                background: token('ground'),
+                surface: token('panel'),
+                "surface-hover": token('raised'),
                 primary: token('grass'),
                 "primary-hover": "#059669",
                 secondary: "#64748b",
@@ -41,16 +45,31 @@ export default {
                 error: "#ef4444",
             },
             fontFamily: {
-                sans: ['"Inter Variable"', 'Inter', 'system-ui', 'sans-serif'],
-                // "Pixel Digits" is Inter limited to digits (see index.css): the pixel font's 5 looks like an S.
-                minecraft: ['"Pixel Digits"', '"Pixelify Sans Variable"', '"Pixelify Sans"', 'system-ui', 'sans-serif'],
+                sans: ['"Figtree Variable"', 'Figtree', 'system-ui', 'sans-serif'],
+                // Display face. The class keeps its historical name (`font-minecraft`,
+                // ~150 uses); it now maps to Fredoka, whose rounded strokes match the
+                // logo's soft corners.
+                display: ['"Fredoka Variable"', 'Fredoka', '"Figtree Variable"', 'system-ui', 'sans-serif'],
+                minecraft: ['"Fredoka Variable"', 'Fredoka', '"Figtree Variable"', 'system-ui', 'sans-serif'],
+                mono: ['ui-monospace', '"Cascadia Code"', 'Consolas', 'monospace'],
             },
-            // Pixel bevel: light edge on top, shade on the bottom, 1px dark outline.
-            // The one recurring gesture of the UI, borrowed from the game's own widgets.
+            // Soft, rounded corners like the logo. `rounded-sm` is the codebase's
+            // default radius, so it carries the main value.
+            borderRadius: {
+                sm: '0.5rem',
+                DEFAULT: '0.5rem',
+                md: '0.625rem',
+                lg: '0.75rem',
+                xl: '1rem',
+                '2xl': '1.25rem',
+            },
+            // Names kept from the old pixel-bevel style; values are now a soft
+            // top highlight plus a quiet drop shadow.
             boxShadow: {
-                bevel: 'inset 0 2px 0 rgb(255 255 255 / 0.22), inset 0 -3px 0 rgb(0 0 0 / 0.32), 0 0 0 1px rgb(0 0 0 / 0.7)',
-                "bevel-press": 'inset 0 3px 0 rgb(0 0 0 / 0.32), inset 0 -1px 0 rgb(255 255 255 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.7)',
-                "bevel-panel": 'inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 -2px 0 rgb(0 0 0 / 0.35), 0 0 0 1px rgb(0 0 0 / 0.55)',
+                bevel: 'inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.35)',
+                "bevel-press": 'inset 0 1px 2px rgb(0 0 0 / 0.35)',
+                "bevel-panel": 'inset 0 1px 0 rgb(255 255 255 / 0.04), 0 0 0 1px rgb(var(--line)), 0 12px 32px -12px rgb(0 0 0 / 0.6)',
+                glow: '0 0 0 1px rgb(var(--grass) / 0.35), 0 8px 24px -8px rgb(var(--grass) / 0.45)',
             },
             animation: {
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

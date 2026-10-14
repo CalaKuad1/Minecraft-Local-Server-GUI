@@ -113,11 +113,11 @@ export default function AppSettings({ isOpen, onClose }) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.98, y: 20 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="bg-[#0a0a0a] border border-white/10 rounded-sm w-[700px] max-h-[520px] flex overflow-hidden shadow-2xl"
+                    className="bg-ground border border-white/10 rounded-sm w-[700px] max-h-[520px] flex overflow-hidden shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Left Navigation */}
-                    <div className="w-48 bg-[#070707] border-r border-white/5 py-6 px-3 flex flex-col shrink-0">
+                    <div className="w-48 bg-ground border-r border-white/5 py-6 px-3 flex flex-col shrink-0">
                         <div className="flex items-center gap-2 px-3 mb-6">
                             <Settings size={14} className="text-emerald-400" />
                             <span className="font-minecraft text-xs tracking-widest uppercase text-zinc-300">{t('settings.title')}</span>

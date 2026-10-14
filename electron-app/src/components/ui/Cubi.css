@@ -1,0 +1,86 @@
+/* Cubi mascot animations. Parts default to the "idle" look; each mood only
+   changes what differs. */
+.cubi { overflow: visible; }
+.cubi-shadow { fill: rgb(0 0 0 / 0.35); transform-box: fill-box; transform-origin: center; }
+.cubi-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.cubi-eye { transform-box: fill-box; transform-origin: center; }
+.cubi-eyes-closed,
+.cubi-mouth--grin,
+.cubi-mouth--flat,
+.cubi-zs { display: none; }
+
+/* idle: gentle float + blink */
+.cubi--idle .cubi-body { animation: cubi-float 3.2s ease-in-out infinite; }
+.cubi--idle .cubi-shadow { animation: cubi-shadow-float 3.2s ease-in-out infinite; }
+.cubi--idle .cubi-eye,
+.cubi--happy .cubi-eye { animation: cubi-blink 4.6s infinite; }
+
+/* sleep: eyes closed, breathing, floating z's */
+.cubi--sleep .cubi-eyes { display: none; }
+.cubi--sleep .cubi-eyes-closed { display: inline; }
+.cubi--sleep .cubi-mouth--smile { opacity: 0.55; }
+.cubi--sleep .cubi-body { animation: cubi-breathe 4s ease-in-out infinite; }
+.cubi--sleep .cubi-zs { display: inline; }
+.cubi--sleep .cubi-z { opacity: 0; animation: cubi-z 3.2s ease-out infinite; transform-box: fill-box; }
+.cubi--sleep .cubi-z--2 { animation-delay: 1.6s; }
+
+/* busy: hop with squash & stretch, eyes wide */
+.cubi--busy .cubi-body { animation: cubi-hop 0.9s cubic-bezier(.3,.7,.4,1) infinite; }
+.cubi--busy .cubi-shadow { animation: cubi-shadow-hop 0.9s cubic-bezier(.3,.7,.4,1) infinite; }
+
+/* happy: grin + a celebration hop every few seconds */
+.cubi--happy .cubi-mouth--smile { display: none; }
+.cubi--happy .cubi-mouth--grin { display: inline; }
+.cubi--happy .cubi-body { animation: cubi-cheer 3.4s cubic-bezier(.3,.7,.4,1) infinite; }
+.cubi--happy .cubi-shadow { animation: cubi-shadow-cheer 3.4s cubic-bezier(.3,.7,.4,1) infinite; }
+
+/* sad: flat mouth, droop */
+.cubi--sad .cubi-mouth--smile { display: none; }
+.cubi--sad .cubi-mouth--flat { display: inline; }
+.cubi--sad .cubi-body { transform: scale(1.03, 0.95); }
+.cubi--sad .cubi-eye { transform: scaleY(0.7); }
+
+@keyframes cubi-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes cubi-shadow-float {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.9); opacity: 0.8; }
+}
+@keyframes cubi-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  95.5% { transform: scaleY(0.1); }
+}
+@keyframes cubi-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.02, 0.97); }
+}
+@keyframes cubi-z {
+  0% { opacity: 0; transform: translate(0, 4px) scale(0.7); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(8px, -14px) scale(1.1); }
+}
+@keyframes cubi-hop {
+  0%   { transform: translateY(0) scale(1.08, 0.92); }
+  35%  { transform: translateY(-14px) scale(0.95, 1.06); }
+  55%  { transform: translateY(-15px) scale(1, 1); }
+  85%  { transform: translateY(0) scale(1.1, 0.9); }
+  100% { transform: translateY(0) scale(1.08, 0.92); }
+}
+@keyframes cubi-shadow-hop {
+  0%, 85%, 100% { transform: scale(1.05); opacity: 1; }
+  45% { transform: scale(0.6); opacity: 0.45; }
+}
+@keyframes cubi-cheer {
+  0%, 62%, 100% { transform: translateY(0) scale(1, 1); }
+  66% { transform: translateY(0) scale(1.08, 0.92); }
+  74% { transform: translateY(-16px) scale(0.95, 1.06) rotate(-4deg); }
+  80% { transform: translateY(-17px) scale(1, 1) rotate(3deg); }
+  88% { transform: translateY(0) scale(1.1, 0.9); }
+  94% { transform: translateY(0) scale(0.98, 1.02); }
+}
+@keyframes cubi-shadow-cheer {
+  0%, 62%, 100% { transform: scale(1); opacity: 1; }
+  77% { transform: scale(0.6); opacity: 0.45; }
+}

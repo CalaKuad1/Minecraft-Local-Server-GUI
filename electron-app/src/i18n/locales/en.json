@@ -623,6 +623,8 @@
     },
     "app": {
         "saving_world": "Saving the world and closing safely...",
-        "update": "Update"
+        "update": "Update",
+        "starting": "Starting up...",
+        "starting_slow": "Taking a bit longer than usual. Hang on..."
     }
 }

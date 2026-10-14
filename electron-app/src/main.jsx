@@ -1,10 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MotionConfig } from 'framer-motion'
-import '@fontsource-variable/inter'
-import '@fontsource-variable/pixelify-sans'
+import '@fontsource-variable/figtree'
+import '@fontsource-variable/fredoka'
 import './index.css'
 import App from './App.jsx'
+import StartupSplash from './components/StartupSplash'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import { DialogProvider } from './components/ui/DialogContext'
 import { ToastProvider } from './components/ui/Toast'
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')).render(
             <ToastProvider>
               <DialogProvider>
                 <App />
+                <StartupSplash />
               </DialogProvider>
             </ToastProvider>
           </WebSocketProvider>

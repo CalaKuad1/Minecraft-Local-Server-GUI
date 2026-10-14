@@ -252,8 +252,8 @@ export default function Console({ serverId }) {
     }, [inputObj, isConnected, send]);
 
     return (
-        <div className="bg-[#030303] rounded-2xl border border-white/10 flex flex-col h-[calc(100vh-140px)] shadow-2xl overflow-hidden font-mono text-sm">
-            <div className="flex items-center justify-between px-4 py-2 bg-[#0a0a0a] border-b border-white/5 text-gray-400 text-xs uppercase tracking-widest font-bold">
+        <div className="bg-ground rounded-2xl border border-white/10 flex flex-col h-[calc(100vh-140px)] shadow-2xl overflow-hidden font-mono text-sm">
+            <div className="flex items-center justify-between px-4 py-2 bg-ground border-b border-white/5 text-gray-400 text-xs uppercase tracking-widest font-bold">
                 <div className="flex items-center gap-4">
                     <div className="flex gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50"></div>
@@ -280,13 +280,13 @@ export default function Console({ serverId }) {
             </div>
 
             {/* Filter bar */}
-            <div className="flex items-center gap-2 px-4 py-1.5 bg-[#080808] border-b border-white/5">
+            <div className="flex items-center gap-2 px-4 py-1.5 bg-ground border-b border-white/5">
                 <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('console.search')}
-                    className="flex-1 bg-[#050505] border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-ink-faint font-mono outline-none focus:border-white/20 transition-colors"
+                    className="flex-1 bg-ground border border-white/5 rounded px-2 py-1 text-[11px] text-white placeholder-ink-faint font-mono outline-none focus:border-white/20 transition-colors"
                 />
                 <div className="flex gap-1">
                     {['all', 'normal', 'input', 'warning', 'error'].map(lvl => (
@@ -338,14 +338,14 @@ export default function Console({ serverId }) {
                     <div className="absolute bottom-full left-2 mb-1 flex flex-wrap items-center gap-1 max-w-[calc(100%-1rem)]">
                         {suggestions.map(s => (
                             <button key={s} type="button" onClick={() => setInputObj(s + ' ')}
-                                className="px-2 py-0.5 bg-[#0f0f0f] border border-white/10 rounded-sm text-[10px] font-mono text-zinc-400 hover:text-white hover:border-white/30 transition-colors">
+                                className="px-2 py-0.5 bg-panel border border-white/10 rounded-sm text-[10px] font-mono text-zinc-400 hover:text-white hover:border-white/30 transition-colors">
                                 {s}
                             </button>
                         ))}
                         <span className="px-1.5 py-0.5 text-[10px] font-mono text-ink-faint">Tab</span>
                     </div>
                 )}
-                <form onSubmit={sendCommand} className="p-2 bg-[#050505] border-t border-white/5 flex gap-2">
+                <form onSubmit={sendCommand} className="p-2 bg-ground border-t border-white/5 flex gap-2">
                     <span className="text-white/30 flex items-center justify-center pl-4 font-bold pointer-events-none">~/minecraft $</span>
                         <input
                             type="text"

@@ -11,6 +11,8 @@ import { useDialog } from './ui/DialogContext';
 import { motion } from 'framer-motion';
 import AppSettings from './AppSettings';
 import { useTranslation } from '../contexts/LanguageContext';
+import Cubi from './ui/Cubi';
+import { APP_NAME } from '../brand';
 
 function engineInfo(type) {
     const t = (type || '').toLowerCase();
@@ -244,11 +246,14 @@ export default function ServerSelector({ onSelect, onAdd }) {
                 className="w-full flex-1 flex overflow-hidden"
             >
                 {/* Sidebar */}
-                <div className="w-64 bg-[#0a0a0a]/80 backdrop-blur-xl border-r border-white/10 flex flex-col shadow-2xl z-10 flex-shrink-0">
+                <div className="w-64 bg-ground/80 backdrop-blur-xl border-r border-white/10 flex flex-col shadow-2xl z-10 flex-shrink-0">
                     <div className="p-6">
                         <div className="flex items-center gap-3 text-white mb-8">
-                            <Terminal size={22} className="text-emerald-400" />
-                            <span className="font-minecraft text-xl tracking-wide">{t('library.title')}</span>
+                            <Cubi mood={onlineCount > 0 ? 'happy' : 'idle'} size={44} />
+                            <div className="min-w-0">
+                                <div className="font-display text-2xl font-semibold leading-none">{APP_NAME}</div>
+                                <div className="mt-1 text-xs text-ink-faint truncate">{t('library.title')}</div>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mb-8">
@@ -305,7 +310,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                 </div>
 
                 {/* Main */}
-                <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]/70 backdrop-blur-md w-full">
+                <div className="flex-1 flex flex-col relative overflow-hidden bg-ground/70 backdrop-blur-md w-full">
                     <div className="px-8 pt-8 pb-6 border-b border-white/5 flex items-center gap-4">
                         <div className="flex-1">
                             <h2 className="text-3xl font-minecraft tracking-tight text-white">{t('library.title')}</h2>
@@ -362,9 +367,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                             </div>
                         ) : totalCount === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center py-24">
-                                <div className="p-5 rounded-sm bg-emerald-500/5 border border-emerald-500/15 mb-6">
-                                    <Server size={48} className="text-emerald-400/60" />
-                                </div>
+                                <Cubi mood="idle" size={112} className="mb-6" />
                                 <h3 className="text-2xl font-minecraft text-white tracking-wide mb-2">{t('library.empty_infrastructure')}</h3>
                                 <p className="text-ink-faint text-sm mb-6 max-w-sm">{t('library.empty_desc')}</p>
                                 <button
@@ -387,7 +390,7 @@ export default function ServerSelector({ onSelect, onAdd }) {
                                                 <button
                                                     key={server.id}
                                                     onClick={() => handleSelect(server.id)}
-                                                    className="shrink-0 w-56 text-left p-4 bg-[#0a0a0a]/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors group"
+                                                    className="shrink-0 w-56 text-left p-4 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors group"
                                                 >
                                                     <div className="flex items-center justify-between mb-3">
                                                         <div className={`p-2 rounded-sm border ${engineInfo(server.server_type || server.type).bg} ${engineInfo(server.server_type || server.type).border} ${engineInfo(server.server_type || server.type).color}`}>
@@ -457,7 +460,7 @@ function ServerCard({ server, onClick, onBoot, onDelete, booting, t }) {
     return (
         <div
             onClick={onClick}
-            className="group relative flex flex-col p-5 bg-[#0a0a0a]/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-all duration-200 cursor-pointer overflow-hidden"
+            className="group relative flex flex-col p-5 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-all duration-200 cursor-pointer overflow-hidden"
         >
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="flex items-start justify-between mb-4">
@@ -515,7 +518,7 @@ function ServerRow({ server, onClick, onBoot, onDelete, booting, t }) {
     return (
         <div
             onClick={onClick}
-            className="group flex items-center gap-4 p-4 bg-[#0a0a0a]/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors cursor-pointer"
+            className="group flex items-center gap-4 p-4 bg-ground/60 backdrop-blur-md border border-white/5 hover:border-white/15 rounded-sm transition-colors cursor-pointer"
         >
             <div className={`p-3 rounded-sm border shrink-0 ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : `${info.bg} ${info.border} ${info.color}`}`}>
                 <EngineIcon type={engineType} size={20} />

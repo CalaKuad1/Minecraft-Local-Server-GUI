@@ -1,74 +1,90 @@
-// Auto-generated from pixel-icon-library-by-hackernoon
-// Do not edit manually
+// App icon set. The file keeps its old name so the ~20 components importing
+// from './ui/PixelIcons' did not need touching when the pixel-art icons were
+// replaced by Lucide's rounded line icons (they match the Cubi logo's soft
+// corners). Export names are the ones the components already use.
 import React from 'react';
+import {
+    LayoutDashboard as LLayoutDashboard, SquareTerminal, Settings as LSettings, Users as LUsers,
+    Activity as LActivity, Globe as LGlobe, Package as LPackage, Plug as LPlug, Play as LPlay,
+    Square as LSquare, Cpu as LCpu, HardDrive as LHardDrive, X as LX, ExternalLink as LExternalLink,
+    FolderOpen as LFolderOpen, Clock as LClock, User as LUser, Shield as LShield, ShieldOff as LShieldOff,
+    Ban as LBan, CircleCheck, Search as LSearch, Plus as LPlus, Trash2 as LTrash2, EllipsisVertical,
+    Check as LCheck, FolderPlus as LFolderPlus, Archive as LArchive, RefreshCw as LRefreshCw, Save as LSave,
+    Server as LServer, Monitor as LMonitor, Zap as LZap, CircuitBoard as LCircuitBoard, Palette as LPalette,
+    Upload as LUpload, Send as LSend, Download as LDownload, ChevronRight as LChevronRight,
+    ChevronDown as LChevronDown, ChevronUp as LChevronUp, Folder as LFolder, LoaderCircle, ArrowLeft as LArrowLeft,
+    ArrowRight as LArrowRight, Box as LBox, TriangleAlert, Info as LInfo, Minus as LMinus, CircleAlert,
+    Copy as LCopy, Pencil as LPencil, Star as LStar,
+} from 'lucide-react';
 
-const Px = ({ children, size, className = '', strokeWidth: _strokeWidth, ...props }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={size || 20}
-    height={size || 20}
-    fill="currentColor"
-    style={{ shapeRendering: 'crispEdges' }}
-    className={className}
-    {...props}
-  >
-    {children}
-  </svg>
+// Shared defaults: 20px like the old set, a slightly lighter stroke so icons
+// sit quietly next to text. Callers may still pass size/className/strokeWidth.
+const wrap = (Icon) => {
+    const Wrapped = ({ size = 20, strokeWidth = 1.9, ...props }) => (
+        <Icon size={size} strokeWidth={strokeWidth} absoluteStrokeWidth={false} aria-hidden={props['aria-label'] ? undefined : true} {...props} />
+    );
+    Wrapped.displayName = Icon.displayName || 'Icon';
+    return Wrapped;
+};
+
+export const LayoutDashboard = wrap(LLayoutDashboard);
+export const Terminal = wrap(SquareTerminal);
+export const SettingsIcon = wrap(LSettings);
+export const Settings = wrap(LSettings);
+export const Users = wrap(LUsers);
+export const Activity = wrap(LActivity);
+export const Globe = wrap(LGlobe);
+export const Package = wrap(LPackage);
+export const Plug = wrap(LPlug);
+export const Play = wrap(LPlay);
+export const Square = wrap(LSquare);
+export const Cpu = wrap(LCpu);
+export const HardDrive = wrap(LHardDrive);
+export const X = wrap(LX);
+export const ExternalLink = wrap(LExternalLink);
+export const FolderOpen = wrap(LFolderOpen);
+export const Clock = wrap(LClock);
+export const User = wrap(LUser);
+export const Shield = wrap(LShield);
+export const ShieldOff = wrap(LShieldOff);
+export const Ban = wrap(LBan);
+export const CheckCircle = wrap(CircleCheck);
+export const Search = wrap(LSearch);
+export const Plus = wrap(LPlus);
+export const Trash2 = wrap(LTrash2);
+export const MoreVertical = wrap(EllipsisVertical);
+export const Check = wrap(LCheck);
+export const FolderPlus = wrap(LFolderPlus);
+export const Archive = wrap(LArchive);
+export const RefreshCw = wrap(LRefreshCw);
+export const Save = wrap(LSave);
+export const Server = wrap(LServer);
+export const Monitor = wrap(LMonitor);
+export const Zap = wrap(LZap);
+export const CircuitBoard = wrap(LCircuitBoard);
+export const Palette = wrap(LPalette);
+export const Upload = wrap(LUpload);
+export const Send = wrap(LSend);
+export const Download = wrap(LDownload);
+export const ChevronRight = wrap(LChevronRight);
+export const ChevronDown = wrap(LChevronDown);
+export const ChevronUp = wrap(LChevronUp);
+export const Folder = wrap(LFolder);
+export const Loader2 = wrap(LoaderCircle);
+export const ArrowLeft = wrap(LArrowLeft);
+export const ArrowRight = wrap(LArrowRight);
+export const Box = wrap(LBox);
+export const AlertTriangle = wrap(TriangleAlert);
+export const Info = wrap(LInfo);
+export const Minus = wrap(LMinus);
+export const AlertCircle = wrap(CircleAlert);
+export const Copy = wrap(LCopy);
+export const Pencil = wrap(LPencil);
+export const Star = wrap(LStar);
+
+// Lucide dropped brand marks, so GitHub is drawn here (Simple Icons path).
+export const Github = ({ size = 20, className = '', ...props }) => (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true" {...props}>
+        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+    </svg>
 );
-
-export const LayoutDashboard = (props) => <Px {...props}><polygon points="10 14 11 14 11 22 10 22 10 23 2 23 2 22 1 22 1 14 2 14 2 13 10 13 10 14" /><polygon points="10 2 11 2 11 10 10 10 10 11 2 11 2 10 1 10 1 2 2 2 2 1 10 1 10 2" /><polygon points="22 14 23 14 23 22 22 22 22 23 14 23 14 22 13 22 13 14 14 14 14 13 22 13 22 14" /><polygon points="23 2 23 10 22 10 22 11 14 11 14 10 13 10 13 2 14 2 14 1 22 1 22 2 23 2" /></Px>;
-export const Terminal = (props) => <Px {...props}><polygon points="15 4 16 4 16 6 15 6 15 9 14 9 14 12 13 12 13 14 12 14 12 17 11 17 11 20 10 20 10 21 9 21 9 20 8 20 8 18 9 18 9 15 10 15 10 12 11 12 11 10 12 10 12 7 13 7 13 4 14 4 14 3 15 3 15 4" /><polygon points="23 11 23 13 22 13 22 14 21 14 21 15 20 15 20 16 19 16 19 17 17 17 17 15 18 15 18 14 19 14 19 13 20 13 20 11 19 11 19 10 18 10 18 9 17 9 17 7 19 7 19 8 20 8 20 9 21 9 21 10 22 10 22 11 23 11" /><polygon points="7 7 7 9 6 9 6 10 5 10 5 11 4 11 4 13 5 13 5 14 6 14 6 15 7 15 7 17 5 17 5 16 4 16 4 15 3 15 3 14 2 14 2 13 1 13 1 11 2 11 2 10 3 10 3 9 4 9 4 8 5 8 5 7 7 7" /></Px>;
-export const SettingsIcon = (props) => <Px {...props}><path d="m21,10v-1h-1v-2h1v-2h-1v-1h-1v-1h-2v1h-2v-1h-1V1h-4v2h-1v1h-2v-1h-2v1h-1v1h-1v2h1v2h-1v1H1v4h2v1h1v2h-1v2h1v1h1v1h2v-1h2v1h1v2h4v-2h1v-1h2v1h2v-1h1v-1h1v-2h-1v-2h1v-1h2v-4h-2Zm-11,0v-1h4v1h1v4h-1v1h-4v-1h-1v-4h1Z" /></Px>;
-export const Users = (props) => <Px {...props}><polygon points="2 13 2 12 1 12 1 10 2 10 2 9 7 9 7 12 8 12 8 13 2 13" /><polygon points="5 7 4 7 4 5 5 5 5 4 7 4 7 5 8 5 8 6 7 6 7 8 5 8 5 7" /><polygon points="8 7 9 7 9 6 10 6 10 5 14 5 14 6 15 6 15 7 16 7 16 11 15 11 15 12 14 12 14 13 10 13 10 12 9 12 9 11 8 11 8 7" /><polygon points="19 18 20 18 20 21 19 21 19 22 5 22 5 21 4 21 4 18 5 18 5 17 6 17 6 16 8 16 8 15 16 15 16 16 18 16 18 17 19 17 19 18" /><polygon points="23 10 23 12 22 12 22 13 16 13 16 12 17 12 17 9 22 9 22 10 23 10" /><polygon points="17 6 16 6 16 5 17 5 17 4 19 4 19 5 20 5 20 7 19 7 19 8 17 8 17 6" /></Px>;
-export const Activity = (props) => <Px {...props}><polygon points="6 13 6 11 7 11 7 10 8 10 8 9 9 9 9 8 10 8 10 9 11 9 11 10 12 10 12 11 13 11 13 12 14 12 14 11 15 11 15 10 16 10 16 9 17 9 17 7 16 7 16 6 15 6 15 5 22 5 22 12 21 12 21 11 20 11 20 10 18 10 18 11 17 11 17 12 16 12 16 13 15 13 15 14 14 14 14 15 13 15 13 14 12 14 12 13 11 13 11 12 10 12 10 11 9 11 9 12 8 12 8 13 6 13" /><polygon points="23 17 23 20 2 20 2 19 1 19 1 4 4 4 4 17 23 17" /></Px>;
-export const Globe = (props) => <Px {...props}><rect x="9" y="1" width="1" height="1" /><polygon points="9 2 9 3 8 3 8 5 7 5 7 8 2 8 2 7 3 7 3 5 4 5 4 4 5 4 5 3 7 3 7 2 9 2" /><polygon points="13 2 14 2 14 4 15 4 15 6 16 6 16 8 8 8 8 6 9 6 9 4 10 4 10 2 11 2 11 1 13 1 13 2" /><rect x="14" y="1" width="1" height="1" /><polygon points="22 7 22 8 17 8 17 5 16 5 16 3 15 3 15 2 17 2 17 3 19 3 19 4 20 4 20 5 21 5 21 7 22 7" /><polygon points="17 10 17 14 16 14 16 15 8 15 8 14 7 14 7 10 8 10 8 9 16 9 16 10 17 10" /><polygon points="1 9 7 9 7 10 6 10 6 14 7 14 7 15 1 15 1 9" /><polygon points="23 9 23 15 17 15 17 14 18 14 18 10 17 10 17 9 23 9" /><polygon points="22 16 22 17 21 17 21 19 20 19 20 20 19 20 19 21 17 21 17 22 15 22 15 21 16 21 16 19 17 19 17 16 22 16" /><rect x="9" y="22" width="1" height="1" /><polygon points="9 21 9 22 7 22 7 21 5 21 5 20 4 20 4 19 3 19 3 17 2 17 2 16 7 16 7 19 8 19 8 21 9 21" /><rect x="14" y="22" width="1" height="1" /><polygon points="14 22 13 22 13 23 11 23 11 22 10 22 10 20 9 20 9 18 8 18 8 16 16 16 16 18 15 18 15 20 14 20 14 22" /></Px>;
-export const Github = (props) => <Px {...props}><polygon points="18 4 18 7 17 7 17 8 16 8 16 9 15 9 15 10 13 10 13 8 14 8 14 7 15 7 15 6 16 6 16 5 15 5 15 4 14 4 14 3 13 3 13 1 15 1 15 2 16 2 16 3 17 3 17 4 18 4" /><polygon points="12 1 12 3 11 3 11 5 10 5 10 8 9 8 9 10 7 10 7 8 8 8 8 6 9 6 9 3 10 3 10 1 12 1" /><polygon points="2 7 1 7 1 4 2 4 2 3 3 3 3 2 4 2 4 1 6 1 6 3 5 3 5 4 4 4 4 5 3 5 3 6 4 6 4 7 5 7 5 8 6 8 6 10 4 10 4 9 3 9 3 8 2 8 2 7" /><polygon points="23 5 23 22 22 22 22 23 2 23 2 22 1 22 1 9 2 9 2 10 3 10 3 11 4 11 4 20 20 20 20 7 19 7 19 4 22 4 22 5 23 5" /></Px>;
-export const Package = (props) => <Px {...props}><path d="m1,9v13h1v1h20v-1h1v-13H1Zm12,11v2h-2v-2h-2v-2h4v-1h-3v-1h-1v-4h2v-2h2v2h2v2h-4v1h3v1h1v4h-2Z" /><polygon points="11 1 11 7 1 7 1 6 2 6 2 4 3 4 3 3 4 3 4 2 5 2 5 1 11 1" /><polygon points="23 6 23 7 13 7 13 1 19 1 19 2 20 2 20 3 21 3 21 4 22 4 22 6 23 6" /></Px>;
-export const Plug = (props) => <Px {...props}><polygon points="21 10 21 11 20 11 20 12 19 12 19 13 18 13 18 14 17 14 17 15 16 15 16 16 15 16 15 17 14 17 14 18 13 18 13 19 12 19 12 20 11 20 11 21 10 21 10 22 9 22 9 23 8 23 8 21 9 21 9 18 10 18 10 14 3 14 3 13 4 13 4 12 5 12 5 11 6 11 6 10 7 10 7 9 8 9 8 8 9 8 9 7 10 7 10 6 11 6 11 5 12 5 12 4 13 4 13 3 14 3 14 2 15 2 15 1 16 1 16 3 15 3 15 6 14 6 14 10 21 10" /></Px>;
-export const Play = (props) => <Px {...props}><polygon points="22 11 22 13 21 13 21 14 20 14 20 15 18 15 18 16 16 16 16 17 15 17 15 18 13 18 13 19 11 19 11 20 10 20 10 21 8 21 8 22 6 22 6 23 3 23 3 22 2 22 2 2 3 2 3 1 6 1 6 2 8 2 8 3 10 3 10 4 11 4 11 5 13 5 13 6 15 6 15 7 16 7 16 8 18 8 18 9 20 9 20 10 21 10 21 11 22 11" /></Px>;
-export const Square = (props) => <Px {...props}><polygon points="23 2 23 22 22 22 22 23 15 23 15 22 14 22 14 2 15 2 15 1 22 1 22 2 23 2" /><polygon points="9 2 10 2 10 22 9 22 9 23 2 23 2 22 1 22 1 2 2 2 2 1 9 1 9 2" /></Px>;
-export const Cpu = (props) => <Px {...props}><polygon points="10 11 11 11 11 21 10 21 10 22 8 22 8 21 7 21 7 11 8 11 8 10 10 10 10 11" /><rect x="11" y="5" width="1" height="1" /><rect x="12" y="6" width="1" height="1" /><polygon points="16 8 17 8 17 10 16 10 16 11 14 11 14 10 13 10 13 8 14 8 14 7 16 7 16 8" /><polygon points="16 15 17 15 17 21 16 21 16 22 14 22 14 21 13 21 13 15 14 15 14 14 16 14 16 15" /><rect x="17" y="6" width="1" height="1" /><rect x="18" y="5" width="1" height="1" /><polygon points="23 2 23 4 22 4 22 5 20 5 20 4 19 4 19 2 20 2 20 1 22 1 22 2 23 2" /><polygon points="22 11 23 11 23 21 22 21 22 22 20 22 20 21 19 21 19 11 20 11 20 10 22 10 22 11" /><rect x="5" y="7" width="1" height="1" /><polygon points="4 9 5 9 5 11 4 11 4 12 2 12 2 11 1 11 1 9 2 9 2 8 4 8 4 9" /><polygon points="4 16 5 16 5 21 4 21 4 22 2 22 2 21 1 21 1 16 2 16 2 15 4 15 4 16" /><rect x="6" y="6" width="1" height="1" /><polygon points="8 4 7 4 7 2 8 2 8 1 10 1 10 2 11 2 11 4 10 4 10 5 8 5 8 4" /></Px>;
-export const HardDrive = (props) => <Px {...props}><path d="m22,7v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1H2v1h-1v20h1v1h20v-1h1V7h-1Zm-13,12v-4h1v-1h4v1h1v4h-1v1h-4v-1h-1Zm7-9H4v-6h12v6Z" /></Px>;
-export const X = (props) => <Px {...props}><polygon points="15 13 16 13 16 14 17 14 17 15 18 15 18 16 19 16 19 17 20 17 20 18 21 18 21 19 22 19 22 20 21 20 21 21 20 21 20 22 19 22 19 21 18 21 18 20 17 20 17 19 16 19 16 18 15 18 15 17 14 17 14 16 13 16 13 15 11 15 11 16 10 16 10 17 9 17 9 18 8 18 8 19 7 19 7 20 6 20 6 21 5 21 5 22 4 22 4 21 3 21 3 20 2 20 2 19 3 19 3 18 4 18 4 17 5 17 5 16 6 16 6 15 7 15 7 14 8 14 8 13 9 13 9 11 8 11 8 10 7 10 7 9 6 9 6 8 5 8 5 7 4 7 4 6 3 6 3 5 2 5 2 4 3 4 3 3 4 3 4 2 5 2 5 3 6 3 6 4 7 4 7 5 8 5 8 6 9 6 9 7 10 7 10 8 11 8 11 9 13 9 13 8 14 8 14 7 15 7 15 6 16 6 16 5 17 5 17 4 18 4 18 3 19 3 19 2 20 2 20 3 21 3 21 4 22 4 22 5 21 5 21 6 20 6 20 7 19 7 19 8 18 8 18 9 17 9 17 10 16 10 16 11 15 11 15 13" /></Px>;
-export const ExternalLink = (props) => <Px {...props}><polygon points="23 1 23 9 21 9 21 8 20 8 20 7 19 7 19 8 18 8 18 9 17 9 17 10 16 10 16 11 15 11 15 12 14 12 14 13 13 13 13 14 12 14 12 15 11 15 11 16 10 16 10 17 9 17 9 18 8 18 8 17 7 17 7 16 6 16 6 15 7 15 7 14 8 14 8 13 9 13 9 12 10 12 10 11 11 11 11 10 12 10 12 9 13 9 13 8 14 8 14 7 15 7 15 6 16 6 16 5 17 5 17 4 16 4 16 3 15 3 15 1 23 1" /><polygon points="20 15 20 22 19 22 19 23 2 23 2 22 1 22 1 5 2 5 2 4 11 4 11 7 4 7 4 20 17 20 17 15 20 15" /></Px>;
-export const FolderOpen = (props) => <Px {...props}><polygon points="2 16 1 16 1 3 2 3 2 2 9 2 9 3 10 3 10 4 19 4 19 5 20 5 20 9 5 9 5 10 4 10 4 12 3 12 3 14 2 14 2 16" /><polygon points="23 10 23 12 22 12 22 14 21 14 21 16 20 16 20 18 19 18 19 21 18 21 18 22 3 22 3 21 2 21 2 18 3 18 3 16 4 16 4 14 5 14 5 12 6 12 6 10 23 10" /></Px>;
-export const Clock = (props) => <Px {...props}><path d="m22,9v-2h-1v-2h-1v-1h-1v-1h-2v-1h-2v-1h-6v1h-2v1h-2v1h-1v1h-1v2h-1v2h-1v6h1v2h1v2h1v1h1v1h2v1h2v1h6v-1h2v-1h2v-1h1v-1h1v-2h1v-2h1v-6h-1Zm-9,7v-1h-1v-1h-1V5h2v8h1v1h1v1h1v1h-1v1h-1v-1h-1Z" /></Px>;
-export const User = (props) => <Px {...props}><polygon points="7 9 6 9 6 5 7 5 7 3 8 3 8 2 10 2 10 1 14 1 14 2 16 2 16 3 17 3 17 5 18 5 18 9 17 9 17 11 16 11 16 12 14 12 14 13 10 13 10 12 8 12 8 11 7 11 7 9" /><polygon points="22 19 22 22 21 22 21 23 3 23 3 22 2 22 2 19 3 19 3 18 4 18 4 17 5 17 5 16 7 16 7 15 17 15 17 16 19 16 19 17 20 17 20 18 21 18 21 19 22 19" /></Px>;
-export const Shield = (props) => <Px {...props}><path d="m20,12v-1h-1v-5h-1v-2h-1v-1h-1v-1h-2v-1h-4v1h-2v1h-1v1h-1v2h-1v5h-1v1h-1v10h1v1h16v-1h1v-10h-1Zm-12-6h1v-1h1v-1h4v1h1v1h1v5h-8v-5Z" /></Px>;
-export const ShieldOff = (props) => <Px {...props}><polygon points="23 6 23 11 20 11 20 6 19 6 19 5 15 5 15 6 14 6 14 11 17 11 17 12 18 12 18 21 17 21 17 22 2 22 2 21 1 21 1 12 2 12 2 11 11 11 11 6 12 6 12 4 13 4 13 3 15 3 15 2 19 2 19 3 21 3 21 4 22 4 22 6 23 6" /></Px>;
-export const Ban = (props) => <Px {...props}><path d="m22,9v-2h-1v-2h-1v-1h-1v-1h-2v-1h-2v-1h-6v1h-2v1h-2v1h-1v1h-1v2h-1v2h-1v6h1v2h1v2h1v1h1v1h2v1h2v1h6v-1h2v-1h2v-1h1v-1h1v-2h1v-2h1v-6h-1Zm-8,7v-1h-1v-1h-2v1h-1v1h-1v1h-1v-1h-1v-1h1v-1h1v-1h1v-2h-1v-1h-1v-1h-1v-1h1v-1h1v1h1v1h1v1h2v-1h1v-1h1v-1h1v1h1v1h-1v1h-1v1h-1v2h1v1h1v1h1v1h-1v1h-1v-1h-1Z" /></Px>;
-export const CheckCircle = (props) => <Px {...props}><path d="m22,9v-2h-1v-2h-1v-1h-1v-1h-2v-1h-2v-1h-6v1h-2v1h-2v1h-1v1h-1v2h-1v2h-1v6h1v2h1v2h1v1h1v1h2v1h2v1h6v-1h2v-1h2v-1h1v-1h1v-2h1v-2h1v-6h-1Zm-4,3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h1v-1h2v1h1v1h2v-1h1v-1h1v-1h1v-1h1v-1h2v1h1v2h-1v1Z" /></Px>;
-export const Search = (props) => <Px {...props}><polygon points="16 17 15 17 15 18 13 18 13 19 7 19 7 18 5 18 5 17 4 17 4 16 3 16 3 15 2 15 2 13 1 13 1 7 2 7 2 5 3 5 3 4 4 4 4 3 5 3 5 2 7 2 7 1 13 1 13 2 15 2 15 3 16 3 16 4 17 4 17 5 18 5 18 7 19 7 19 13 18 13 18 15 17 15 17 16 16 16 16 17" /><polygon points="23 20 23 22 22 22 22 23 20 23 20 22 19 22 19 21 18 21 18 20 17 20 17 19 16 19 16 18 17 18 17 17 18 17 18 16 19 16 19 17 20 17 20 18 21 18 21 19 22 19 22 20 23 20" /></Px>;
-export const Plus = (props) => <Px {...props}><polygon points="23 11 23 13 22 13 22 14 14 14 14 22 13 22 13 23 11 23 11 22 10 22 10 14 2 14 2 13 1 13 1 11 2 11 2 10 10 10 10 2 11 2 11 1 13 1 13 2 14 2 14 10 22 10 22 11 23 11" /></Px>;
-export const Trash2 = (props) => <Px {...props}><polygon points="22 3 22 5 2 5 2 3 8 3 8 2 9 2 9 1 15 1 15 2 16 2 16 3 22 3" /><path d="m4,7v15h1v1h14v-2h1V7H4Zm12,12h-2v-10h2v10Zm-6,0h-2v-10h2v10Z" /></Px>;
-export const MoreVertical = (props) => <Px {...props}><polygon points="15 3 15 5 14 5 14 6 13 6 13 7 11 7 11 6 10 6 10 5 9 5 9 3 10 3 10 2 11 2 11 1 13 1 13 2 14 2 14 3 15 3" /><polygon points="14 11 15 11 15 13 14 13 14 14 13 14 13 15 11 15 11 14 10 14 10 13 9 13 9 11 10 11 10 10 11 10 11 9 13 9 13 10 14 10 14 11" /><polygon points="14 19 15 19 15 21 14 21 14 22 13 22 13 23 11 23 11 22 10 22 10 21 9 21 9 19 10 19 10 18 11 18 11 17 13 17 13 18 14 18 14 19" /></Px>;
-export const Check = (props) => <Px {...props}><polygon points="23 5 23 6 22 6 22 7 21 7 21 8 20 8 20 9 19 9 19 10 18 10 18 11 17 11 17 12 16 12 16 13 15 13 15 14 14 14 14 15 13 15 13 16 12 16 12 17 11 17 11 18 10 18 10 19 8 19 8 18 7 18 7 17 6 17 6 16 5 16 5 15 4 15 4 14 3 14 3 13 2 13 2 12 1 12 1 11 2 11 2 10 3 10 3 9 4 9 4 10 5 10 5 11 6 11 6 12 7 12 7 13 8 13 8 14 10 14 10 13 11 13 11 12 12 12 12 11 13 11 13 10 14 10 14 9 15 9 15 8 16 8 16 7 17 7 17 6 18 6 18 5 19 5 19 4 20 4 20 3 21 3 21 4 22 4 22 5 23 5" /></Px>;
-export const FolderPlus = (props) => <Px {...props}><polygon points="23 6 23 21 22 21 22 22 2 22 2 21 1 21 1 3 2 3 2 2 11 2 11 3 12 3 12 4 13 4 13 5 22 5 22 6 23 6" /></Px>;
-export const Archive = (props) => <Px {...props}><path d="m15,3v-1h-1v-1h-4v1h-1v1h-1v3h1v1h6v-1h1v-3h-1Zm-4,3v-1h-1v-2h1v-1h2v1h1v2h-1v1h-2Z" /><polygon points="20 5 20 22 19 22 19 23 5 23 5 22 4 22 4 5 5 5 5 4 7 4 7 7 8 7 8 8 16 8 16 7 17 7 17 4 19 4 19 5 20 5" /></Px>;
-export const RefreshCw = (props) => <Px {...props}><polygon points="23 14 23 15 22 15 22 17 21 17 21 19 20 19 20 20 19 20 19 21 17 21 17 22 15 22 15 23 9 23 9 22 7 22 7 21 5 21 5 20 3 20 3 21 2 21 2 22 1 22 1 14 9 14 9 15 8 15 8 16 7 16 7 18 8 18 8 19 10 19 10 20 14 20 14 19 16 19 16 18 17 18 17 17 18 17 18 15 19 15 19 14 23 14" /><polygon points="23 2 23 10 15 10 15 9 16 9 16 8 17 8 17 6 16 6 16 5 14 5 14 4 10 4 10 5 8 5 8 6 7 6 7 7 6 7 6 9 5 9 5 10 1 10 1 9 2 9 2 7 3 7 3 5 4 5 4 4 5 4 5 3 7 3 7 2 9 2 9 1 15 1 15 2 17 2 17 3 19 3 19 4 21 4 21 3 22 3 22 2 23 2" /></Px>;
-export const Save = (props) => <Px {...props}><path d="m22,7v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1H2v1h-1v20h1v1h20v-1h1V7h-1Zm-13,12v-4h1v-1h4v1h1v4h-1v1h-4v-1h-1Zm7-9H4v-6h12v6Z" /></Px>;
-export const Server = (props) => <Px {...props}><polygon points="23 11 23 12 20 12 20 22 19 22 19 23 15 23 15 16 9 16 9 23 5 23 5 22 4 22 4 12 1 12 1 11 2 11 2 10 3 10 3 9 4 9 4 8 5 8 5 7 6 7 6 6 7 6 7 5 8 5 8 4 9 4 9 3 10 3 10 2 11 2 11 1 13 1 13 2 14 2 14 3 15 3 15 4 16 4 16 5 17 5 17 6 18 6 18 7 19 7 19 8 20 8 20 9 21 9 21 10 22 10 22 11 23 11" /></Px>;
-export const Monitor = (props) => <Px {...props}><polygon points="23 20 23 22 22 22 22 23 2 23 2 22 1 22 1 15 2 15 2 16 3 16 3 17 4 17 4 18 5 18 5 19 6 19 6 20 7 20 7 21 8 21 8 20 9 20 9 19 10 19 10 18 11 18 11 17 12 17 12 16 13 16 13 15 14 15 14 14 15 14 15 13 16 13 16 14 17 14 17 15 18 15 18 16 19 16 19 17 20 17 20 18 21 18 21 19 22 19 22 20 23 20" /><path d="m22,2v-1H2v1h-1v10h1v1h1v1h1v1h1v1h1v1h1v1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1V2h-1Zm-13,4v3h-1v1h-3v-1h-1v-3h1v-1h3v1h1Z" /></Px>;
-export const Zap = (props) => <Px {...props}><polygon points="21 10 21 11 20 11 20 12 19 12 19 13 18 13 18 14 17 14 17 15 16 15 16 16 15 16 15 17 14 17 14 18 13 18 13 19 12 19 12 20 11 20 11 21 10 21 10 22 9 22 9 23 8 23 8 21 9 21 9 18 10 18 10 14 3 14 3 13 4 13 4 12 5 12 5 11 6 11 6 10 7 10 7 9 8 9 8 8 9 8 9 7 10 7 10 6 11 6 11 5 12 5 12 4 13 4 13 3 14 3 14 2 15 2 15 1 16 1 16 3 15 3 15 6 14 6 14 10 21 10" /></Px>;
-export const CircuitBoard = (props) => <Px {...props}><polygon points="18 4 18 7 17 7 17 8 16 8 16 9 15 9 15 10 13 10 13 8 14 8 14 7 15 7 15 6 16 6 16 5 15 5 15 4 14 4 14 3 13 3 13 1 15 1 15 2 16 2 16 3 17 3 17 4 18 4" /><polygon points="12 1 12 3 11 3 11 5 10 5 10 8 9 8 9 10 7 10 7 8 8 8 8 6 9 6 9 3 10 3 10 1 12 1" /><polygon points="2 7 1 7 1 4 2 4 2 3 3 3 3 2 4 2 4 1 6 1 6 3 5 3 5 4 4 4 4 5 3 5 3 6 4 6 4 7 5 7 5 8 6 8 6 10 4 10 4 9 3 9 3 8 2 8 2 7" /><polygon points="23 5 23 22 22 22 22 23 2 23 2 22 1 22 1 9 2 9 2 10 3 10 3 11 4 11 4 20 20 20 20 7 19 7 19 4 22 4 22 5 23 5" /></Px>;
-export const Palette = (props) => <Px {...props}><polygon points="23 18 23 20 21 20 21 21 20 21 20 23 18 23 18 21 17 21 17 20 15 20 15 18 17 18 17 17 18 17 18 15 20 15 20 17 21 17 21 18 23 18" /><polygon points="23 4 23 6 21 6 21 7 20 7 20 9 18 9 18 7 17 7 17 6 15 6 15 4 17 4 17 3 18 3 18 1 20 1 20 3 21 3 21 4 23 4" /><polygon points="17 11 17 13 15 13 15 14 13 14 13 15 12 15 12 16 11 16 11 18 10 18 10 20 8 20 8 18 7 18 7 16 6 16 6 15 5 15 5 14 3 14 3 13 1 13 1 11 3 11 3 10 5 10 5 9 6 9 6 8 7 8 7 6 8 6 8 4 10 4 10 6 11 6 11 8 12 8 12 9 13 9 13 10 15 10 15 11 17 11" /></Px>;
-export const Upload = (props) => <Px {...props}><polygon points="5 10 4 10 4 8 5 8 5 7 6 7 6 6 7 6 7 5 8 5 8 4 9 4 9 3 10 3 10 2 11 2 11 1 13 1 13 2 14 2 14 3 15 3 15 4 16 4 16 5 17 5 17 6 18 6 18 7 19 7 19 8 20 8 20 10 19 10 19 11 17 11 17 10 16 10 16 9 15 9 15 8 14 8 14 17 10 17 10 8 9 8 9 9 8 9 8 10 7 10 7 11 5 11 5 10" /><rect x="2" y="20" width="20" height="3" /></Px>;
-export const Send = (props) => <Px {...props}><polygon points="23 11 23 13 22 13 22 14 21 14 21 15 20 15 20 16 19 16 19 17 18 17 18 18 17 18 17 19 16 19 16 20 15 20 15 21 14 21 14 22 13 22 13 23 12 23 12 22 11 22 11 21 10 21 10 20 11 20 11 19 12 19 12 18 13 18 13 17 14 17 14 16 15 16 15 15 16 15 16 14 1 14 1 10 16 10 16 9 15 9 15 8 14 8 14 7 13 7 13 6 12 6 12 5 11 5 11 4 10 4 10 3 11 3 11 2 12 2 12 1 13 1 13 2 14 2 14 3 15 3 15 4 16 4 16 5 17 5 17 6 18 6 18 7 19 7 19 8 20 8 20 9 21 9 21 10 22 10 22 11 23 11" /></Px>;
-export const Download = (props) => <Px {...props}><rect x="2" y="20" width="20" height="3" /><polygon points="20 8 20 10 19 10 19 11 18 11 18 12 17 12 17 13 16 13 16 14 15 14 15 15 14 15 14 16 13 16 13 17 11 17 11 16 10 16 10 15 9 15 9 14 8 14 8 13 7 13 7 12 6 12 6 11 5 11 5 10 4 10 4 8 5 8 5 7 7 7 7 8 8 8 8 9 9 9 9 10 10 10 10 1 14 1 14 10 15 10 15 9 16 9 16 8 17 8 17 7 19 7 19 8 20 8" /></Px>;
-export const ChevronRight = (props) => <Px {...props}><polygon points="7 19 7 17 8 17 8 16 9 16 9 15 10 15 10 14 11 14 11 13 12 13 12 11 11 11 11 10 10 10 10 9 9 9 9 8 8 8 8 7 7 7 7 5 8 5 8 4 10 4 10 5 11 5 11 6 12 6 12 7 13 7 13 8 14 8 14 9 15 9 15 10 16 10 16 11 17 11 17 13 16 13 16 14 15 14 15 15 14 15 14 16 13 16 13 17 12 17 12 18 11 18 11 19 10 19 10 20 8 20 8 19 7 19" /></Px>;
-export const ChevronDown = (props) => <Px {...props}><polygon points="23 8 23 9 22 9 22 10 21 10 21 11 20 11 20 12 19 12 19 13 18 13 18 14 17 14 17 15 16 15 16 16 15 16 15 17 14 17 14 18 13 18 13 19 11 19 11 18 10 18 10 17 9 17 9 16 8 16 8 15 7 15 7 14 6 14 6 13 5 13 5 12 4 12 4 11 3 11 3 10 2 10 2 9 1 9 1 8 2 8 2 7 3 7 3 6 4 6 4 7 5 7 5 8 6 8 6 9 7 9 7 10 8 10 8 11 9 11 9 12 10 12 10 13 11 13 11 14 13 14 13 13 14 13 14 12 15 12 15 11 16 11 16 10 17 10 17 9 18 9 18 8 19 8 19 7 20 7 20 6 21 6 21 7 22 7 22 8 23 8" /></Px>;
-export const Folder = (props) => <Px {...props}><polygon points="23 6 23 21 22 21 22 22 2 22 2 21 1 21 1 3 2 3 2 2 11 2 11 3 12 3 12 4 13 4 13 5 22 5 22 6 23 6" /></Px>;
-export const Loader2 = (props) => <Px {...props}><polygon points="23 14 23 15 22 15 22 17 21 17 21 19 20 19 20 20 19 20 19 21 17 21 17 22 15 22 15 23 9 23 9 22 7 22 7 21 5 21 5 20 3 20 3 21 2 21 2 22 1 22 1 14 9 14 9 15 8 15 8 16 7 16 7 18 8 18 8 19 10 19 10 20 14 20 14 19 16 19 16 18 17 18 17 17 18 17 18 15 19 15 19 14 23 14" /><polygon points="23 2 23 10 15 10 15 9 16 9 16 8 17 8 17 6 16 6 16 5 14 5 14 4 10 4 10 5 8 5 8 6 7 6 7 7 6 7 6 9 5 9 5 10 1 10 1 9 2 9 2 7 3 7 3 5 4 5 4 4 5 4 5 3 7 3 7 2 9 2 9 1 15 1 15 2 17 2 17 3 19 3 19 4 21 4 21 3 22 3 22 2 23 2" /></Px>;
-export const ArrowLeft = (props) => <Px {...props}><polygon points="1 13 1 11 2 11 2 10 3 10 3 9 4 9 4 8 5 8 5 7 6 7 6 6 7 6 7 5 8 5 8 4 9 4 9 3 10 3 10 2 11 2 11 1 12 1 12 2 13 2 13 3 14 3 14 4 13 4 13 5 12 5 12 6 11 6 11 7 10 7 10 8 9 8 9 9 8 9 8 10 23 10 23 14 8 14 8 15 9 15 9 16 10 16 10 17 11 17 11 18 12 18 12 19 13 19 13 20 14 20 14 21 13 21 13 22 12 22 12 23 11 23 11 22 10 22 10 21 9 21 9 20 8 20 8 19 7 19 7 18 6 18 6 17 5 17 5 16 4 16 4 15 3 15 3 14 2 14 2 13 1 13" /></Px>;
-export const ArrowRight = (props) => <Px {...props}><polygon points="23 11 23 13 22 13 22 14 21 14 21 15 20 15 20 16 19 16 19 17 18 17 18 18 17 18 17 19 16 19 16 20 15 20 15 21 14 21 14 22 13 22 13 23 12 23 12 22 11 22 11 21 10 21 10 20 11 20 11 19 12 19 12 18 13 18 13 17 14 17 14 16 15 16 15 15 16 15 16 14 1 14 1 10 16 10 16 9 15 9 15 8 14 8 14 7 13 7 13 6 12 6 12 5 11 5 11 4 10 4 10 3 11 3 11 2 12 2 12 1 13 1 13 2 14 2 14 3 15 3 15 4 16 4 16 5 17 5 17 6 18 6 18 7 19 7 19 8 20 8 20 9 21 9 21 10 22 10 22 11 23 11" /></Px>;
-export const Box = (props) => <Px {...props}><path d="m1,9v13h1v1h20v-1h1v-13H1Zm12,11v2h-2v-2h-2v-2h4v-1h-3v-1h-1v-4h2v-2h2v2h2v2h-4v1h3v1h1v4h-2Z" /><polygon points="11 1 11 7 1 7 1 6 2 6 2 4 3 4 3 3 4 3 4 2 5 2 5 1 11 1" /><polygon points="23 6 23 7 13 7 13 1 19 1 19 2 20 2 20 3 21 3 21 4 22 4 22 6 23 6" /></Px>;
-export const AlertTriangle = (props) => <Px {...props}><path d="m22,20v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-2v1h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h1v1h20v-1h1v-2h-1Zm-12-9h4v3h-1v3h-2v-3h-1v-3Zm1,7h2v2h-2v-2Z" /></Px>;
-export const Info = (props) => <Px {...props}><path d="m22,9v-2h-1v-2h-1v-1h-1v-1h-2v-1h-2v-1h-6v1h-2v1h-2v1h-1v1h-1v2h-1v2h-1v6h1v2h1v2h1v1h1v1h2v1h2v1h6v-1h2v-1h2v-1h1v-1h1v-2h1v-2h1v-6h-1Zm-11-3h2v2h-2v-2Zm-1,9h1v-5h-1v-1h3v6h1v2h-4v-2Z" /></Px>;
-export const Minus = (props) => <Px {...props}><polygon points="23 11 23 13 22 13 22 14 2 14 2 13 1 13 1 11 2 11 2 10 22 10 22 11 23 11" /></Px>;
-export const AlertCircle = (props) => <Px {...props}><path d="m22,20v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-2v1h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h1v1h20v-1h1v-2h-1Zm-12-9h4v3h-1v3h-2v-3h-1v-3Zm1,7h2v2h-2v-2Z" /></Px>;
-export const Settings = (props) => <Px {...props}><path d="m21,10v-1h-1v-2h1v-2h-1v-1h-1v-1h-2v1h-2v-1h-1V1h-4v2h-1v1h-2v-1h-2v1h-1v1h-1v2h1v2h-1v1H1v4h2v1h1v2h-1v2h1v1h1v1h2v-1h2v1h1v2h4v-2h1v-1h2v1h2v-1h1v-1h1v-2h-1v-2h1v-1h2v-4h-2Zm-11,0v-1h4v1h1v4h-1v1h-4v-1h-1v-4h1Z" /></Px>;
-export const ChevronUp = (props) => <Px {...props}><polygon points="23 16 23 17 22 17 22 18 21 18 21 19 20 19 20 18 19 18 19 17 18 17 18 16 17 16 17 15 16 15 16 14 15 14 15 13 14 13 14 12 13 12 13 11 11 11 11 12 10 12 10 13 9 13 9 14 8 14 8 15 7 15 7 16 6 16 6 17 5 17 5 18 4 18 4 19 3 19 3 18 2 18 2 17 1 17 1 16 2 16 2 15 3 15 3 14 4 14 4 13 5 13 5 12 6 12 6 11 7 11 7 10 8 10 8 9 9 9 9 8 10 8 10 7 11 7 11 6 13 6 13 7 14 7 14 8 15 8 15 9 16 9 16 10 17 10 17 11 18 11 18 12 19 12 19 13 20 13 20 14 21 14 21 15 22 15 22 16 23 16" /></Px>;
-// Hand-drawn additions (not part of the generated set above).
-export const Copy = (props) => <Px {...props}><path d="M2 8h14v14H2V8zm2 2v10h10V10H4z" /><path d="M8 2h14v14h-6v-2h4V4H10v4H8V2z" /></Px>;
-export const Pencil = (props) => <Px {...props}><polygon points="3 21 3 16 15 4 20 9 8 21 3 21" /><polygon points="17 2 22 7 20 9 15 4 17 2" /></Px>;
-export const Star = (props) => <Px {...props}><polygon points="23 8 23 10 22 10 22 11 21 11 21 12 20 12 20 13 19 13 19 14 18 14 18 19 19 19 19 23 17 23 17 22 15 22 15 21 13 21 13 20 11 20 11 21 9 21 9 22 7 22 7 23 5 23 5 19 6 19 6 14 5 14 5 13 4 13 4 12 3 12 3 11 2 11 2 10 1 10 1 8 8 8 8 6 9 6 9 4 10 4 10 2 11 2 11 1 13 1 13 2 14 2 14 4 15 4 15 6 16 6 16 8 23 8" /></Px>;
