@@ -40,17 +40,17 @@
 
 | | |
 |---|---|
-| 🌍 **Play with friends from anywhere** | Public address in one click, a **free permanent address** with playit.gg, or a fixed `name.play.ariser.app` address. No port forwarding. |
-| 🧑‍🤝‍🧑 **Players** | Everyone who joined, with a **3D skin wearing their armor**, stats, inventory and ender chest with real item icons (vanilla *and* modded). Op, whitelist, kick and ban in one click. |
-| 🧩 **Mods & plugins** | Search and install from Modrinth, modpacks included. Installed list with readable names. |
-| 💾 **Worlds & backups** | Automatic backups on a schedule, restore, download or import in one click. |
-| ⚙️ **Simple settings** | Every option explained in plain words, RAM presets, live MOTD preview. |
-| ☕ **Automatic Java** | The correct Java for each Minecraft version is downloaded and kept separate from your system. |
-| 📱 **Bedrock crossplay** | With GeyserMC, phone and console players can join your Java server. |
-| 🌐 **4 languages** | English, Spanish, French and Russian. |
+| **Play with friends from anywhere** | Public address in one click, a **free permanent address** with playit.gg, or a fixed `name.play.ariser.app` address. No port forwarding. |
+| **Players** | Everyone who joined, with a **3D skin wearing their armor**, stats, inventory and ender chest with real item icons (vanilla *and* modded). Op, whitelist, kick and ban in one click. |
+| **Mods & plugins** | Search and install from Modrinth, modpacks included. Installed list with readable names. |
+| **Worlds & backups** | Automatic backups on a schedule, restore, download or import in one click. |
+| **Simple settings** | Every option explained in plain words, RAM presets, live MOTD preview. |
+| **Automatic Java** | The correct Java for each Minecraft version is downloaded and kept separate from your system. |
+| **Bedrock crossplay** | With GeyserMC, phone and console players can join your Java server. |
+| **4 languages** | English, Spanish, French and Russian. |
 
 <details>
-<summary><strong>📸 More screenshots</strong></summary>
+<summary><strong>More screenshots</strong></summary>
 <br>
 
 | | |
@@ -133,6 +133,6 @@ npm run dev
 
 ## License
 
-[MIT](LICENSE). Made by [CalaKuad1](https://github.com/CalaKuad1). If Cubi helps you, a ⭐ helps others find it.
+[MIT](LICENSE). Made by [CalaKuad1](https://github.com/CalaKuad1). If Cubi helps you, starring the repo helps others find it.
 
 <sub>Cubi is not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</sub>
