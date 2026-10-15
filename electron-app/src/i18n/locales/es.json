@@ -378,7 +378,11 @@
             "online_mode": "Verificar usuarios con Mojang",
             "whitelist": "Solo entran jugadores en la lista",
             "enforce_whitelist": "Expulsa a no listados incluso si ya están",
-            "force_gamemode": "Forzar modo por defecto al entrar"
+            "force_gamemode": "Forzar modo por defecto al entrar",
+            "level_type": "Solo afecta a mundos nuevos.",
+            "max_players": "Cuántas personas pueden estar conectadas a la vez.",
+            "server_port": "Por defecto 25565. Cámbialo solo si otro programa lo usa.",
+            "world_seed": "Déjalo vacío para un mundo aleatorio. Solo afecta a mundos nuevos."
         },
         "raw_config": {
             "title": "Configuración Raw",
@@ -387,7 +391,11 @@
         },
         "appearance": {
             "upload_icon": "Subir Icono",
-            "motd_label": "Mensaje del Día (MOTD)"
+            "motd_label": "Mensaje del Día (MOTD)",
+            "icon": "Icono del servidor",
+            "icon_desc": "Imagen de 64×64 que sale en la lista de multijugador.",
+            "preview": "Así se ve en Minecraft",
+            "upload_failed": "No se pudo subir el icono:"
         },
         "system": {
             "host_ram": "Host: {ram} GB RAM",
@@ -395,9 +403,29 @@
             "min_ram": "RAM Inicial (Mín)",
             "java_path": "Ruta del Ejecutable Java",
             "java_path_desc": "Ruta explícita o variables de entorno.",
-            "browse": "Explorar"
+            "browse": "Explorar",
+            "max_ram_desc": "Memoria que puede usar el servidor.",
+            "min_ram_desc": "Memoria reservada al arrancar.",
+            "ram_critical": "Demasiado: tu PC podría quedarse sin memoria. Deja al menos una cuarta parte para el sistema.",
+            "ram_warn": "Usa el {pct}% de la memoria de tu PC. Bien si no tienes nada pesado abierto a la vez."
         },
-        "appearance_icon": "Apariencia e icono"
+        "appearance_icon": "Apariencia e icono",
+        "subtitle_new": "Cómo se juega en tu mundo y quién puede entrar. Los cambios se aplican la próxima vez que arranque el servidor.",
+        "chunks": "chunks",
+        "discard": "Descartar",
+        "groups": {
+            "world_rules": "Reglas del mundo"
+        },
+        "restart_hint": "Los ajustes guardados se aplican la próxima vez que arranque el servidor.",
+        "unsaved_title": "Cambios sin guardar",
+        "tabs": {
+            "general": "General",
+            "gameplay": "Juego",
+            "network": "Rendimiento",
+            "security": "Acceso",
+            "appearance": "Apariencia",
+            "system": "Recursos"
+        }
     },
     "players": {
         "title": "Jugadores",
@@ -482,7 +510,13 @@
         "switch_error": "No se pudo cambiar el mundo",
         "backup_error": "Error de copia",
         "import": "Importar",
-        "download": "Descargar"
+        "download": "Descargar",
+        "auto_backup_desc": "Hace copias del mundo solo mientras el servidor está encendido.",
+        "import_backup": "Importar copia",
+        "keep_desc": "Las copias automáticas más antiguas se borran.",
+        "no_backups_title": "Aún no hay copias",
+        "use_world": "Usar",
+        "worlds_list": "Mundos"
     },
     "mods": {
         "browse": "Explorar",
@@ -525,7 +559,12 @@
             "decoration": "Decoración",
             "optimization": "Optimización",
             "library": "Librería"
-        }
+        },
+        "page_title": "Mods",
+        "page_subtitle": "Busca e instala mods de Modrinth con un clic. Tus amigos necesitan los mismos mods en su juego.",
+        "search_placeholder": "Buscar mods...",
+        "installed_empty_title": "Aún no hay mods",
+        "installed_empty_desc": "Instálalos desde Explorar o importa un .jar que ya tengas."
     },
     "plugins": {
         "browse": "Explorar",
@@ -556,7 +595,12 @@
             "utility": "Utilidad",
             "management": "Gestión",
             "social": "Social"
-        }
+        },
+        "page_title": "Plugins",
+        "page_subtitle": "Añade funciones a tu servidor desde Modrinth. Los jugadores no tienen que instalar nada.",
+        "search_placeholder": "Buscar plugins...",
+        "installed_empty_title": "Aún no hay plugins",
+        "installed_empty_desc": "Instálalos desde Explorar o importa un .jar que ya tengas."
     },
     "wizard": {
         "title": "Nuevo servidor",
@@ -688,5 +732,18 @@
         "health": "Vida",
         "food": "Hambre",
         "mode": "Modo de juego"
+    },
+    "content": {
+        "by": "por",
+        "import_jar": "Importar .jar",
+        "installing": "Instalando",
+        "no_results": "No hay resultados",
+        "search_installed": "Buscar en instalados...",
+        "tabs": {
+            "browse": "Explorar",
+            "installed": "Instalados",
+            "modpacks": "Modpacks"
+        },
+        "updated": "actualizado"
     }
 }

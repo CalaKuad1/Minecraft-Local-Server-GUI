@@ -378,7 +378,11 @@
             "online_mode": "Verify users with Mojang",
             "whitelist": "Only listed players can join",
             "enforce_whitelist": "Kick unlisted even if already on",
-            "force_gamemode": "Force default gamemode on join"
+            "force_gamemode": "Force default gamemode on join",
+            "level_type": "Only affects new worlds.",
+            "max_players": "How many people can be online at once.",
+            "server_port": "Default 25565. Change it only if another program uses it.",
+            "world_seed": "Leave empty for a random world. Only affects new worlds."
         },
         "raw_config": {
             "title": "Raw Configuration",
@@ -387,7 +391,11 @@
         },
         "appearance": {
             "upload_icon": "Upload Icon",
-            "motd_label": "Message of the Day (MOTD)"
+            "motd_label": "Message of the Day (MOTD)",
+            "icon": "Server icon",
+            "icon_desc": "64×64 image shown in the multiplayer list.",
+            "preview": "How it looks in Minecraft",
+            "upload_failed": "Couldn't upload the icon:"
         },
         "system": {
             "host_ram": "Host: {ram} GB RAM",
@@ -395,9 +403,29 @@
             "min_ram": "Initial RAM Setup (Min)",
             "java_path": "Java Executable Path",
             "java_path_desc": "Explicit path or system environment variables.",
-            "browse": "Browse"
+            "browse": "Browse",
+            "max_ram_desc": "Memory the server may use.",
+            "min_ram_desc": "Memory reserved at start.",
+            "ram_critical": "Too much: your PC may run out of memory. Leave at least a quarter for the system.",
+            "ram_warn": "Using {pct}% of your PC's memory. Fine if nothing heavy runs alongside."
         },
-        "appearance_icon": "Appearance and icon"
+        "appearance_icon": "Appearance and icon",
+        "subtitle_new": "How your world plays and who can join. Changes apply the next time the server starts.",
+        "chunks": "chunks",
+        "discard": "Discard",
+        "groups": {
+            "world_rules": "World rules"
+        },
+        "restart_hint": "Saved settings apply the next time the server starts.",
+        "unsaved_title": "Unsaved changes",
+        "tabs": {
+            "general": "General",
+            "gameplay": "Gameplay",
+            "network": "Performance",
+            "security": "Access",
+            "appearance": "Appearance",
+            "system": "Resources"
+        }
     },
     "players": {
         "title": "Players",
@@ -482,7 +510,13 @@
         "switch_error": "Failed to switch world",
         "backup_error": "Backup error",
         "import": "Import",
-        "download": "Download"
+        "download": "Download",
+        "auto_backup_desc": "Back up the world automatically while the server runs.",
+        "import_backup": "Import backup",
+        "keep_desc": "Older automatic backups are deleted.",
+        "no_backups_title": "No backups yet",
+        "use_world": "Use",
+        "worlds_list": "Worlds"
     },
     "mods": {
         "browse": "Browse",
@@ -526,7 +560,12 @@
             "decoration": "Decor",
             "optimization": "Optim",
             "library": "Lib"
-        }
+        },
+        "page_title": "Mods",
+        "page_subtitle": "Find and install mods from Modrinth in one click. Friends need the same mods in their game.",
+        "search_placeholder": "Search mods...",
+        "installed_empty_title": "No mods yet",
+        "installed_empty_desc": "Install them from Browse, or import a .jar you already have."
     },
     "plugins": {
         "browse": "Browse",
@@ -558,7 +597,12 @@
             "utility": "Utility",
             "management": "Management",
             "social": "Social"
-        }
+        },
+        "page_title": "Plugins",
+        "page_subtitle": "Add features to your server from Modrinth. Players don't need to install anything.",
+        "search_placeholder": "Search plugins...",
+        "installed_empty_title": "No plugins yet",
+        "installed_empty_desc": "Install them from Browse, or import a .jar you already have."
     },
     "wizard": {
         "title": "New server",
@@ -690,5 +734,18 @@
         "health": "Health",
         "food": "Hunger",
         "mode": "Game mode"
+    },
+    "content": {
+        "by": "by",
+        "import_jar": "Import .jar",
+        "installing": "Installing",
+        "no_results": "Nothing found",
+        "search_installed": "Search installed...",
+        "tabs": {
+            "browse": "Browse",
+            "installed": "Installed",
+            "modpacks": "Modpacks"
+        },
+        "updated": "updated"
     }
 }

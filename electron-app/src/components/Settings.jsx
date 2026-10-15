@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api, API_TOKEN, API_URL } from '../api';
-import { Save, Server, Monitor, Shield, Zap, Globe, FolderOpen, CircuitBoard, Cpu, HardDrive, Settings as SettingsIcon } from './ui/PixelIcons';
+import { Save, Server, Shield, Zap, Globe, FolderOpen, Cpu, Palette, Upload, Settings as SettingsIcon, AlertTriangle } from './ui/PixelIcons';
 import { Select } from './ui/Select';
+import { Toggle } from './ui/Toggle';
 import AdvancedSettingsModal from './AdvancedSettingsModal';
 import MotdPreview from './MotdPreview';
-import { Palette, Upload } from './ui/PixelIcons';
 import { useTranslation } from '../contexts/LanguageContext';
+import { PageHeader, Segmented, SettingGroup, SettingRow, EmptyState } from './ui/Page';
+import { inputClass } from '../utils/format';
+import Cubi from './ui/Cubi';
 
 // Newer servers write `level-type=minecraft\:normal` (namespaced, escaped);
 // older ones use `default`. Show both as the same option and write back in
@@ -21,504 +24,340 @@ const levelTypeValue = (key, previousRaw) => {
     return `minecraft\\:${key === 'default' ? 'normal' : key}`;
 };
 
+const MOTD_COLORS = [
+    ['0', '#000000'], ['1', '#0000AA'], ['2', '#00AA00'], ['3', '#00AAAA'], ['4', '#AA0000'], ['5', '#AA00AA'],
+    ['6', '#FFAA00'], ['7', '#AAAAAA'], ['8', '#555555'], ['9', '#5555FF'], ['a', '#55FF55'], ['b', '#55FFFF'],
+    ['c', '#FF5555'], ['d', '#FF55FF'], ['e', '#FFFF55'], ['f', '#FFFFFF'],
+];
+const MOTD_STYLES = [['l', 'B', 'font-bold'], ['o', 'I', 'italic'], ['n', 'U', 'underline'], ['m', 'S', 'line-through']];
+
 export default function Settings() {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState('general');
-    const [loading, setLoading] = useState(false);
+    const [tab, setTab] = useState('general');
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [error, setError] = useState(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [systemInfo, setSystemInfo] = useState(null);
-
-    const [serverProps, setServerProps] = useState({});
-    const [appSettings, setAppSettings] = useState({
-        ram_min: "2",
-        ram_max: "4",
-        ram_unit: "G",
-        java_path: "java"
-    });
-
+    const [props, setProps] = useState({});
+    const [app, setApp] = useState({ ram_min: '2', ram_max: '4', ram_unit: 'G', java_path: 'java' });
     const [iconTs, setIconTs] = useState(Date.now());
     const [iconExists, setIconExists] = useState(false);
-    const API_BASE = API_URL;
-    const FALLBACK_ICON = '/images/Dirt_background_BE1.webp';
 
-    useEffect(() => {
-        loadSettings();
-    }, []);
-
-    const loadSettings = async () => {
+    const load = async () => {
         setLoading(true);
         setError(null);
         try {
-            const props = await api.getServerProperties();
-            const app = await api.getAppSettings();
-            setServerProps(props);
-            setAppSettings(app);
+            const [p, a] = await Promise.all([api.getServerProperties(), api.getAppSettings()]);
+            setProps(p);
+            setApp(a);
             setDirty(false);
             try {
-                const res = await fetch(`${API_URL}/system/info`, {
-                    headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {}
-                });
+                const res = await fetch(`${API_URL}/system/info`, { headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {} });
                 if (res.ok) setSystemInfo(await res.json());
-            } catch (_) {}
+            } catch { /* optional */ }
             try {
-                const iconStatus = await api.getServerIconStatus();
-                setIconExists(!!(iconStatus && iconStatus.exists));
-            } catch (_) {}
+                const s = await api.getServerIconStatus();
+                setIconExists(!!s?.exists);
+            } catch { /* optional */ }
         } catch (e) {
             setError(e?.message || t('server_settings.error_loading'));
         }
         setLoading(false);
     };
 
-    const handleSave = async () => {
+    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const save = async () => {
         setSaving(true);
         setError(null);
         try {
-            await api.updateServerProperties(serverProps);
-            await api.updateAppSettings(appSettings);
+            await api.updateServerProperties(props);
+            await api.updateAppSettings(app);
             setDirty(false);
             setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
+            setTimeout(() => setSaved(false), 2200);
         } catch (e) {
             setError(e?.message || t('server_settings.error_saving'));
         }
         setSaving(false);
-        setTimeout(loadSettings, 500);
     };
 
-    const handlePropChange = (key, value) => {
-        setDirty(true);
-        setServerProps(prev => ({ ...prev, [key]: value }));
-    };
-
-    const handleAppChange = (key, value) => {
-        setDirty(true);
-        setAppSettings(prev => ({ ...prev, [key]: value }));
-    };
+    const setProp = (key, value) => { setDirty(true); setProps((p) => ({ ...p, [key]: value })); };
+    const setAppKey = (key, value) => { setDirty(true); setApp((a) => ({ ...a, [key]: value })); };
+    const bool = (key, dflt = false) => (props[key] === undefined ? dflt : props[key] === 'true');
+    const toggle = (key, dflt = false) => (
+        <Toggle checked={bool(key, dflt)} onChange={(v) => setProp(key, v.toString())} label={key} />
+    );
+    const num = (key, dflt, w = 'w-24', extra = {}) => (
+        <input type="number" value={props[key] ?? dflt} onChange={(e) => setProp(key, e.target.value)} className={`${inputClass} ${w} text-right tabular-nums`} {...extra} />
+    );
 
     const handleIconUpload = async (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files?.[0];
+        e.target.value = '';
         if (!file) return;
         try {
             await api.uploadServerIcon(file);
             setIconExists(true);
             setIconTs(Date.now());
         } catch (err) {
-            setError("Failed to upload icon: " + err.message);
+            setError(`${t('server_settings.appearance.upload_failed')} ${err.message}`);
         }
     };
 
-    const insertColorCode = (code) => {
-        const textarea = document.getElementById('motd-input');
-        if (!textarea) return;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = serverProps['motd'] || '';
-        const newText = text.substring(0, start) + '&' + code + text.substring(end);
-        handlePropChange('motd', newText);
-        setTimeout(() => {
-            textarea.focus();
-            textarea.setSelectionRange(start + 2, start + 2);
-        }, 0);
+    const insertMotdCode = (code) => {
+        const ta = document.getElementById('motd-input');
+        if (!ta) return;
+        const { selectionStart: a, selectionEnd: b } = ta;
+        const text = props.motd || '';
+        setProp('motd', `${text.slice(0, a)}&${code}${text.slice(b)}`);
+        setTimeout(() => { ta.focus(); ta.setSelectionRange(a + 2, a + 2); }, 0);
     };
 
-    if (loading) return <div className="p-8 text-center text-ink-faint font-minecraft tracking-widest uppercase">{t('server_settings.loading')}</div>;
-
-    if (error) {
+    if (loading) return <div className="p-8 text-center text-ink-faint">{t('server_settings.loading')}</div>;
+    if (error && !Object.keys(props).length) {
         return (
-            <div className="p-8 text-center">
-                <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('server_settings.error_title')}</div>
-                <div className="text-ink-faint text-sm mb-4">{error}</div>
-                <button onClick={loadSettings} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-md transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
-            </div>
+            <EmptyState icon={<Cubi mood="sad" size={64} />} title={t('server_settings.error_title')}>
+                <p>{error}</p>
+                <button onClick={load} className="mt-3 rounded-md border border-white/10 px-4 py-2 text-sm text-ink hover:bg-white/5">{t('common.retry')}</button>
+            </EmptyState>
         );
     }
 
+    const iconUrl = iconExists ? `${API_URL}/server/icon/image?t=${iconTs}` : undefined;
+    const ramMax = Number(app.ram_max) || 4;
+    const totalRam = systemInfo?.total_ram_gb;
+    const ramShare = totalRam ? ramMax / totalRam : 0;
+    const unit = app.ram_unit === 'M' ? 'MB' : 'GB';
+
+    const tabs = [
+        { value: 'general', label: t('server_settings.tabs.general'), icon: Server },
+        { value: 'gameplay', label: t('server_settings.tabs.gameplay'), icon: Zap },
+        { value: 'network', label: t('server_settings.tabs.network'), icon: Globe },
+        { value: 'security', label: t('server_settings.tabs.security'), icon: Shield },
+        { value: 'appearance', label: t('server_settings.tabs.appearance'), icon: Palette },
+        { value: 'system', label: t('server_settings.tabs.system'), icon: Cpu },
+    ];
+
     return (
-        <div className="animate-in fade-in duration-200 w-full h-full">
-            <div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto items-start h-full pb-10">
-                
-                {/* Left Navigation Rails */}
-                <div className="w-full md:w-64 shrink-0 flex flex-col gap-2 sticky top-0">
-                    <div className="mb-6">
-                        <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('server_settings.title')}</h2>
-                        <p className="text-ink-faint text-sm font-medium">{t('server_settings.subtitle')}</p>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                        {[
-                            { id: 'general', label: t('server_settings.sections.general') },
-                            { id: 'gameplay', label: t('server_settings.sections.gameplay') },
-                            { id: 'network', label: t('server_settings.sections.network') },
-                            { id: 'security', label: t('server_settings.sections.security') },
-                            { id: 'appearance', label: t('server_settings.sections.appearance') },
-                            { id: 'system', label: t('server_settings.sections.system') },
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`w-full text-left px-4 py-3 rounded-md font-minecraft tracking-wider uppercase text-sm transition-all duration-200 border-l-2 ${
-                                    activeTab === tab.id
-                                        ? 'bg-white/10 text-emerald-400 border-emerald-400 shadow-sm'
-                                        : 'border-transparent text-ink-faint hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="mt-8 pt-6 border-t border-white/5 space-y-3">
-                        <button
-                            onClick={() => api.openServerFolder()}
-                            className="w-full bg-transparent hover:bg-white/5 text-zinc-400 hover:text-white px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-colors border border-white/10 font-minecraft uppercase tracking-wider text-xs"
-                        >
-                            <FolderOpen size={16} /> {t('server_settings.open_directory')}
+        <div className="relative flex min-h-full flex-col gap-4 pb-20 animate-in fade-in duration-200">
+            <PageHeader
+                title={t('server_settings.title')}
+                subtitle={t('server_settings.subtitle_new')}
+                actions={(
+                    <>
+                        <button onClick={() => api.openServerFolder()} className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">
+                            <FolderOpen size={15} /> {t('server_settings.open_directory')}
                         </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className={`w-full px-4 py-3 rounded-md flex items-center justify-center gap-3 transition-all border font-minecraft uppercase tracking-wider text-xs group ${
-                                saved
-                                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_20px_max(0px,rgba(16,185,129,0.3))]'
-                                    : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black border-emerald-500/30 shadow-[0_0_15px_max(0px,rgba(16,185,129,0.1))] hover:shadow-[0_0_20px_max(0px,rgba(16,185,129,0.4))]'
-                            }`}
-                        >
-                            <span className="relative flex items-center gap-3">
-                                <Save size={16} className="group-hover:animate-bounce" />
-                                {saving ? t('server_settings.saving') : saved ? t('settings.saved') : t('server_settings.save_config')}
-                                {dirty && !saving && !saved && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.8)]" title={t('server_settings.unsaved')} />
-                                )}
-                            </span>
+                        <button onClick={() => setShowAdvanced(true)} className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">
+                            <SettingsIcon size={15} /> {t('server_settings.raw_config.button')}
                         </button>
-                    </div>
-                </div>
+                    </>
+                )}
+            />
 
-                {/* Right Content Pane */}
-                <div className="flex-1 w-full min-w-0">
-                    <div className="bg-panel/60 backdrop-blur-xl border border-white/5 p-8 rounded-md min-h-[600px] shadow-2xl relative overflow-hidden">
-                        
-                        {/* Removed background glow per user feedback */}
+            <div className="overflow-x-auto"><Segmented value={tab} onChange={setTab} options={tabs} layoutId="settings-tabs" /></div>
+            {error && <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-300">{error}</div>}
 
-                        {activeTab === 'general' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.general')}</h3>
-                                
-                                <div className="grid grid-cols-1 gap-6">
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <SettingInput label={t('server_settings.props.server_port')} value={serverProps['server-port'] || '25565'} onChange={(v) => handlePropChange('server-port', v)} type="number" />
-                                        <div className="flex flex-col">
-                                            <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.level_type')}</label>
-                                            <Select
-                                                value={levelTypeKey(serverProps['level-type'])}
-                                                onChange={(val) => handlePropChange('level-type', levelTypeValue(val, serverProps['level-type']))}
-                                                options={[
-                                                    { value: 'default', label: t('server_settings.props.level_types.default') },
-                                                    { value: 'flat', label: t('server_settings.props.level_types.flat') },
-                                                    { value: 'large_biomes', label: t('server_settings.props.level_types.large_biomes') },
-                                                    { value: 'amplified', label: t('server_settings.props.level_types.amplified') }
-                                                ]}
-                                            />
-                                        </div>
-                                    </div>
-                                    <SettingInput label={t('server_settings.props.world_seed')} placeholder={t('server_settings.props.world_seed_placeholder')} value={serverProps['level-seed'] || ''} onChange={(v) => handlePropChange('level-seed', v)} />
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'gameplay' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.gameplay')}</h3>
-                                
-                                <div className="grid grid-cols-2 gap-6 mb-6">
-                                    <div className="flex flex-col">
-                                        <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.difficulty')}</label>
-                                        <Select
-                                            value={serverProps['difficulty'] || 'easy'}
-                                            onChange={(val) => handlePropChange('difficulty', val)}
-                                            options={[
-                                                { value: 'peaceful', label: t('server_settings.props.difficulties.peaceful') },
-                                                { value: 'easy', label: t('server_settings.props.difficulties.easy') },
-                                                { value: 'normal', label: t('server_settings.props.difficulties.normal') },
-                                                { value: 'hard', label: t('server_settings.props.difficulties.hard') }
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.props.gamemode')}</label>
-                                        <Select
-                                            value={serverProps['gamemode'] || 'survival'}
-                                            onChange={(val) => handlePropChange('gamemode', val)}
-                                            options={[
-                                                { value: 'survival', label: t('server_settings.props.gamemodes.survival') },
-                                                { value: 'creative', label: t('server_settings.props.gamemodes.creative') },
-                                                { value: 'adventure', label: t('server_settings.props.gamemodes.adventure') },
-                                                { value: 'spectator', label: t('server_settings.props.gamemodes.spectator') }
-                                            ]}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <LabelToggle label={t('server_settings.props.pvp')} desc={t('server_settings.props_desc.pvp')} checked={serverProps['pvp'] === 'true'} onChange={(v) => handlePropChange('pvp', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.hardcore')} desc={t('server_settings.props_desc.hardcore')} color="text-red-400" checked={serverProps['hardcore'] === 'true'} onChange={(v) => handlePropChange('hardcore', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.allow_nether')} desc={t('server_settings.props_desc.allow_nether')} checked={serverProps['allow-nether'] !== 'false'} onChange={(v) => handlePropChange('allow-nether', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.allow_flight')} desc={t('server_settings.props_desc.allow_flight')} checked={serverProps['allow-flight'] === 'true'} onChange={(v) => handlePropChange('allow-flight', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.enable_command_block')} desc={t('server_settings.props_desc.enable_command_block')} checked={serverProps['enable-command-block'] === 'true'} onChange={(v) => handlePropChange('enable-command-block', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.spawn_animals')} desc={t('server_settings.props_desc.spawn_animals')} checked={serverProps['spawn-animals'] !== 'false'} onChange={(v) => handlePropChange('spawn-animals', v.toString())} />
-                                    <LabelToggle label={t('server_settings.props.spawn_monsters')} desc={t('server_settings.props_desc.spawn_monsters')} checked={serverProps['spawn-monsters'] !== 'false'} onChange={(v) => handlePropChange('spawn-monsters', v.toString())} />
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'network' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.network')}</h3>
-                                <div className="space-y-6 max-w-lg">
-                                    <SettingInput label={t('server_settings.props.max_players')} value={serverProps['max-players'] || '20'} onChange={(v) => handlePropChange('max-players', v)} type="number" />
-                                    <SettingInput label={t('server_settings.props.view_distance')} value={serverProps['view-distance'] || '10'} onChange={(v) => handlePropChange('view-distance', v)} type="number" min="2" max="32" />
-                                    <SettingInput label={t('server_settings.props.simulation_distance')} value={serverProps['simulation-distance'] || '10'} onChange={(v) => handlePropChange('simulation-distance', v)} type="number" min="2" max="32" />
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'security' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.sections.security')}</h3>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                        <LabelToggle label={t('server_settings.props.online_mode')} desc={t('server_settings.props_desc.online_mode')} checked={serverProps['online-mode'] === 'true'} onChange={(v) => handlePropChange('online-mode', v.toString())} />
-                                        <LabelToggle label={t('server_settings.props.whitelist')} desc={t('server_settings.props_desc.whitelist')} checked={serverProps['white-list'] === 'true'} onChange={(v) => handlePropChange('white-list', v.toString())} />
-                                        <LabelToggle label={t('server_settings.props.enforce_whitelist')} desc={t('server_settings.props_desc.enforce_whitelist')} checked={serverProps['enforce-whitelist'] === 'true'} onChange={(v) => handlePropChange('enforce-whitelist', v.toString())} />
-                                        <LabelToggle label={t('server_settings.props.force_gamemode')} desc={t('server_settings.props_desc.force_gamemode')} checked={serverProps['force-gamemode'] === 'true'} onChange={(v) => handlePropChange('force-gamemode', v.toString())} />
-                                    </div>
-
-                                    <div className="p-6 border border-white/5 bg-black/20 rounded-md">
-                                        <div className="mb-4">
-                                            <h4 className="text-white font-minecraft uppercase tracking-wider mb-1">{t('server_settings.raw_config.title')}</h4>
-                                            <p className="text-xs text-ink-faint">{t('server_settings.raw_config.desc')}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setShowAdvanced(true)}
-                                            className="w-full md:w-auto px-6 py-3 bg-transparent border border-white/20 hover:border-white/40 text-white rounded-md font-minecraft uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 group"
-                                        >
-                                            <SettingsIcon size={16} className="group-hover:rotate-90 transition-transform duration-500" />
-                                            {t('server_settings.raw_config.button')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'appearance' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 relative z-10">
-                                <h3 className="text-xl font-minecraft text-white uppercase tracking-wider mb-6 border-b border-white/5 pb-4">{t('server_settings.appearance_icon')}</h3>
-                                
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    <div className="space-y-4">
-                                        <div className="flex flex-col items-center justify-center p-6 bg-black/30 rounded-md border border-white/5 border-dashed hover:border-emerald-500/50 transition-colors group">
-                                            <div className="w-[64px] h-[64px] mb-6 relative drop-shadow-2xl">
-                                                <img
-                                                    src={iconExists ? `${API_BASE}/server/icon/image?t=${iconTs}` : FALLBACK_ICON}
-                                                    onError={() => { if (iconExists) setIconExists(false); }}
-                                                    className="w-full h-full object-contain pixelated rounded-sm"
-                                                    alt="Server Icon"
-                                                />
-                                            </div>
-                                            <label className="cursor-pointer bg-transparent border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors font-minecraft uppercase tracking-wider text-xs">
-                                                <Upload size={14} />
-                                                <span>{t('server_settings.appearance.upload_icon')}</span>
-                                                <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={handleIconUpload} />
-                                            </label>
-                                        </div>
-                                        
-                                        <div className="bg-black/80 p-4 rounded-sm flex items-center justify-center min-h-[140px] border border-white/5 relative overflow-hidden">
-                                            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/images/Dirt_background_BE1.webp')", backgroundSize: '64px' }} />
-                                            <div className="relative z-10 w-full flex justify-center">
-                                                <MotdPreview motd={serverProps['motd']} iconUrl={iconExists ? `${API_BASE}/server/icon/image?t=${iconTs}` : undefined} />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.appearance.motd_label')}</label>
-                                        
-                        <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-sm border border-white/5">
-                            {[
-                                { c: '0', bg: '#000000', n: 'Black' }, { c: '1', bg: '#0000AA', n: 'Dark Blue' },
-                                { c: '2', bg: '#00AA00', n: 'Dark Green' }, { c: '3', bg: '#00AAAA', n: 'Dark Aqua' },
-                                { c: '4', bg: '#AA0000', n: 'Dark Red' }, { c: '5', bg: '#AA00AA', n: 'Dark Purple' },
-                                { c: '6', bg: '#FFAA00', n: 'Gold' }, { c: '7', bg: '#AAAAAA', n: 'Gray' },
-                                { c: '8', bg: '#555555', n: 'Dark Gray' }, { c: '9', bg: '#5555FF', n: 'Blue' },
-                                { c: 'a', bg: '#55FF55', n: 'Green' }, { c: 'b', bg: '#55FFFF', n: 'Aqua' },
-                                { c: 'c', bg: '#FF5555', n: 'Red' }, { c: 'd', bg: '#FF55FF', n: 'Light Purple' },
-                                { c: 'e', bg: '#FFFF55', n: 'Yellow' }, { c: 'f', bg: '#FFFFFF', n: 'White' }
-                            ].map(col => (
-                                <button
-                                    key={col.c} onClick={() => insertColorCode(col.c)}
-                                    className="w-5 h-5 rounded-sm hover:scale-110 transition-transform shadow-sm border border-white/20"
-                                    style={{ backgroundColor: col.bg }} title={`&${col.c} - ${col.n}`}
+            <div className="max-w-3xl space-y-5">
+                {tab === 'general' && (
+                    <SettingGroup>
+                        <SettingRow label={t('server_settings.props.server_port')} description={t('server_settings.props_desc.server_port')}>
+                            {num('server-port', '25565', 'w-28')}
+                        </SettingRow>
+                        <SettingRow label={t('server_settings.props.max_players')} description={t('server_settings.props_desc.max_players')}>
+                            {num('max-players', '20')}
+                        </SettingRow>
+                        <SettingRow label={t('server_settings.props.level_type')} description={t('server_settings.props_desc.level_type')}>
+                            <div className="w-48">
+                                <Select
+                                    value={levelTypeKey(props['level-type'])}
+                                    onChange={(v) => setProp('level-type', levelTypeValue(v, props['level-type']))}
+                                    options={['default', 'flat', 'large_biomes', 'amplified'].map((v) => ({ value: v, label: t(`server_settings.props.level_types.${v}`) }))}
                                 />
-                            ))}
-                            <div className="w-px h-5 bg-white/10 mx-2"></div>
-                            {[
-                                { c: 'l', l: 'B', s: 'font-bold' }, { c: 'o', l: 'I', s: 'italic' },
-                                { c: 'n', l: 'U', s: 'underline' }, { c: 'm', l: 'S', s: 'line-through' }
-                            ].map(style => (
-                                <button
-                                    key={style.c} onClick={() => insertColorCode(style.c)}
-                                    className={`w-5 h-5 rounded-sm bg-transparent text-gray-400 hover:text-white hover:bg-white/10 transition-colors text-xs font-serif ${style.s} border border-transparent`}
-                                    title={`&${style.c}`}
-                                >
-                                    {style.l}
-                                </button>
-                            ))}
+                            </div>
+                        </SettingRow>
+                        <SettingRow label={t('server_settings.props.world_seed')} description={t('server_settings.props_desc.world_seed')}>
+                            <input value={props['level-seed'] || ''} onChange={(e) => setProp('level-seed', e.target.value)} placeholder={t('server_settings.props.world_seed_placeholder')} className={`${inputClass} w-56`} />
+                        </SettingRow>
+                    </SettingGroup>
+                )}
+
+                {tab === 'gameplay' && (
+                    <>
+                        <SettingGroup>
+                            <SettingRow label={t('server_settings.props.difficulty')}>
+                                <div className="w-44">
+                                    <Select value={props.difficulty || 'easy'} onChange={(v) => setProp('difficulty', v)} options={['peaceful', 'easy', 'normal', 'hard'].map((v) => ({ value: v, label: t(`server_settings.props.difficulties.${v}`) }))} />
+                                </div>
+                            </SettingRow>
+                            <SettingRow label={t('server_settings.props.gamemode')}>
+                                <div className="w-44">
+                                    <Select value={props.gamemode || 'survival'} onChange={(v) => setProp('gamemode', v)} options={['survival', 'creative', 'adventure', 'spectator'].map((v) => ({ value: v, label: t(`server_settings.props.gamemodes.${v}`) }))} />
+                                </div>
+                            </SettingRow>
+                            <SettingRow label={t('server_settings.props.hardcore')} description={t('server_settings.props_desc.hardcore')} tone="text-red-300">{toggle('hardcore')}</SettingRow>
+                        </SettingGroup>
+                        <SettingGroup title={t('server_settings.groups.world_rules')}>
+                            <SettingRow label={t('server_settings.props.pvp')} description={t('server_settings.props_desc.pvp')}>{toggle('pvp', true)}</SettingRow>
+                            <SettingRow label={t('server_settings.props.allow_nether')} description={t('server_settings.props_desc.allow_nether')}>{toggle('allow-nether', true)}</SettingRow>
+                            <SettingRow label={t('server_settings.props.allow_flight')} description={t('server_settings.props_desc.allow_flight')}>{toggle('allow-flight')}</SettingRow>
+                            <SettingRow label={t('server_settings.props.spawn_animals')} description={t('server_settings.props_desc.spawn_animals')}>{toggle('spawn-animals', true)}</SettingRow>
+                            <SettingRow label={t('server_settings.props.spawn_monsters')} description={t('server_settings.props_desc.spawn_monsters')}>{toggle('spawn-monsters', true)}</SettingRow>
+                            <SettingRow label={t('server_settings.props.enable_command_block')} description={t('server_settings.props_desc.enable_command_block')}>{toggle('enable-command-block')}</SettingRow>
+                        </SettingGroup>
+                    </>
+                )}
+
+                {tab === 'network' && (
+                    <SettingGroup>
+                        {[['view-distance', 'view_distance'], ['simulation-distance', 'simulation_distance']].map(([key, label]) => {
+                            const v = Number(props[key] || 10);
+                            return (
+                                <SettingRow key={key} label={t(`server_settings.props.${label}`)} description={t(`server_settings.props_desc.${label}`)}>
+                                    <input type="range" min="2" max="32" value={v} onChange={(e) => setProp(key, e.target.value)} className="w-40 accent-emerald-500" />
+                                    <span className="w-16 text-right text-sm tabular-nums text-ink">{v} {t('server_settings.chunks')}</span>
+                                </SettingRow>
+                            );
+                        })}
+                    </SettingGroup>
+                )}
+
+                {tab === 'security' && (
+                    <SettingGroup>
+                        <SettingRow label={t('server_settings.props.online_mode')} description={t('server_settings.props_desc.online_mode')}>{toggle('online-mode', true)}</SettingRow>
+                        <SettingRow label={t('server_settings.props.whitelist')} description={t('server_settings.props_desc.whitelist')}>{toggle('white-list')}</SettingRow>
+                        <SettingRow label={t('server_settings.props.enforce_whitelist')} description={t('server_settings.props_desc.enforce_whitelist')}>{toggle('enforce-whitelist')}</SettingRow>
+                        <SettingRow label={t('server_settings.props.force_gamemode')} description={t('server_settings.props_desc.force_gamemode')}>{toggle('force-gamemode')}</SettingRow>
+                    </SettingGroup>
+                )}
+
+                {tab === 'appearance' && (
+                    <div className="space-y-5">
+                        <div className="rounded-lg border border-white/[0.06] bg-black/60 p-4">
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">{t('server_settings.appearance.preview')}</div>
+                            <MotdPreview motd={props.motd} iconUrl={iconUrl} />
                         </div>
-
-                                        <textarea
-                                            id="motd-input"
-                                            value={serverProps['motd'] || ''}
-                                            onChange={(e) => handlePropChange('motd', e.target.value)}
-                                            className="w-full bg-black/50 border border-white/10 rounded-md px-4 py-3 text-emerald-400 focus:border-emerald-500 outline-none transition-colors font-minecraft text-lg h-32 resize-none"
-                                            placeholder="A Minecraft Server"
-                                        />
-                                    </div>
+                        <SettingGroup>
+                            <SettingRow label={t('server_settings.appearance.icon')} description={t('server_settings.appearance.icon_desc')}>
+                                {iconUrl && <img src={iconUrl} alt="" className="h-10 w-10 rounded" style={{ imageRendering: 'pixelated' }} onError={() => setIconExists(false)} />}
+                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-white/10 px-3 py-1.5 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">
+                                    <Upload size={14} /> {t('server_settings.appearance.upload_icon')}
+                                    <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={handleIconUpload} />
+                                </label>
+                            </SettingRow>
+                            <div className="space-y-2 px-4 py-3.5">
+                                <div className="text-sm font-semibold text-ink">{t('server_settings.appearance.motd_label')}</div>
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {MOTD_COLORS.map(([c, bg]) => (
+                                        <button key={c} onClick={() => insertMotdCode(c)} className="h-5 w-5 rounded border border-white/20 transition-transform hover:scale-110" style={{ backgroundColor: bg }} title={`&${c}`} aria-label={`&${c}`} />
+                                    ))}
+                                    <span className="mx-1.5 h-5 w-px bg-white/10" />
+                                    {MOTD_STYLES.map(([c, l, cls]) => (
+                                        <button key={c} onClick={() => insertMotdCode(c)} className={`h-6 w-6 rounded text-xs text-ink-dim hover:bg-white/10 hover:text-ink ${cls}`} title={`&${c}`}>{l}</button>
+                                    ))}
                                 </div>
+                                <textarea
+                                    id="motd-input"
+                                    value={props.motd || ''}
+                                    onChange={(e) => setProp('motd', e.target.value)}
+                                    rows={2}
+                                    className="w-full resize-none rounded-md border border-white/10 bg-ground/70 px-3 py-2 font-mono text-sm text-ink outline-none focus:border-grass/60"
+                                    placeholder="A Minecraft Server"
+                                />
                             </div>
-                        )}
-
-                        {activeTab === 'system' && (
-                            <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 relative z-10 w-full max-w-xl">
-                                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                                    <h3 className="text-xl font-minecraft text-white uppercase tracking-wider">{t('server_settings.sections.system')}</h3>
-                                    {systemInfo && (
-                                        <span className="text-xs font-minecraft text-ink-faint uppercase tracking-widest">
-                                            {t('server_settings.system.host_ram').replace('{ram}', systemInfo.total_ram_gb)}
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between items-end mb-4">
-                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.system.max_ram')}</label>
-                                        <span className="text-3xl font-minecraft text-emerald-400 tracking-wider shadow-emerald-500 drop-shadow-md">{appSettings.ram_max} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max={systemInfo ? Math.floor(systemInfo.max_recommended_ram_gb) : 32}
-                                        step="1"
-                                        value={appSettings.ram_max || 4}
-                                        onChange={(e) => handleAppChange('ram_max', e.target.value)}
-                                        className="w-full h-2 bg-black/60 rounded-sm appearance-none cursor-pointer ram-slider border border-white/10"
-                                    />
-                                    
-                                    {systemInfo && Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.5 && (
-                                        <div className={`mt-4 px-4 py-3 rounded-md text-sm font-medium flex items-center gap-3 border ${
-                                            Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
-                                                ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                                                : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                                        }`}>
-                                            <span>{Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75 ? '⚠️' : '⚡'}</span>
-                                            <span className="font-mono text-xs">
-                                                {Number(appSettings.ram_max) > systemInfo.total_ram_gb * 0.75
-                                                    ? `CRITICAL OVERALLOCATION: Leaves insufficient RAM for host OS.`
-                                                    : `Warning: Using ${Math.round(Number(appSettings.ram_max) / systemInfo.total_ram_gb * 100)}% memory.`
-                                                }
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between items-end mb-4">
-                                        <label className="text-xs font-medium text-ink-faint uppercase tracking-wider">{t('server_settings.system.min_ram')}</label>
-                                        <span className="text-xl font-minecraft text-zinc-300 tracking-wider">{appSettings.ram_min} {appSettings.ram_unit === 'M' ? 'MB' : 'GB'}</span>
-                                    </div>
-                                    <input
-                                        type="range" min="1" max={appSettings.ram_max || 16} step="1"
-                                        value={appSettings.ram_min || 2}
-                                        onChange={(e) => handleAppChange('ram_min', e.target.value)}
-                                        className="w-full h-2 bg-black/60 rounded-sm appearance-none cursor-pointer ram-slider border border-white/10"
-                                    />
-                                </div>
-
-                                <div className="pt-6 border-t border-white/5">
-                                    <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{t('server_settings.system.java_path')}</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={appSettings.java_path}
-                                            placeholder="java"
-                                            onChange={(e) => handleAppChange('java_path', e.target.value)}
-                                            className="flex-1 bg-black/40 border border-white/10 rounded-md px-4 py-2 text-white focus:border-emerald-500 focus:bg-black/60 outline-none transition-all font-mono text-sm"
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                const p = await api.openFilePicker();
-                                                if (p) handleAppChange('java_path', p);
-                                            }}
-                                            className="px-4 py-2 bg-white/5 border border-white/10 rounded-md text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-all font-minecraft"
-                                        >
-                                            {t('server_settings.system.browse')}
-                                        </button>
-                                    </div>
-                                    <p className="text-[10px] text-ink-faint uppercase tracking-widest mt-2">{t('server_settings.system.java_path_desc')}</p>
-                                </div>
-                            </div>
-                        )}
-                        
+                        </SettingGroup>
                     </div>
-                </div>
+                )}
 
+                {tab === 'system' && (
+                    <SettingGroup>
+                        <div className="space-y-3 px-4 py-4">
+                            <div className="flex items-end justify-between gap-4">
+                                <div>
+                                    <div className="text-sm font-semibold text-ink">{t('server_settings.system.max_ram')}</div>
+                                    <div className="text-xs text-ink-faint">
+                                        {totalRam ? t('server_settings.system.host_ram').replace('{ram}', totalRam) : t('server_settings.system.max_ram_desc')}
+                                    </div>
+                                </div>
+                                <div className="font-display text-2xl font-semibold tabular-nums text-mint">{ramMax} {unit}</div>
+                            </div>
+                            <input
+                                type="range" min="1" step="1"
+                                max={systemInfo ? Math.max(2, Math.floor(systemInfo.max_recommended_ram_gb)) : 32}
+                                value={ramMax}
+                                onChange={(e) => setAppKey('ram_max', e.target.value)}
+                                className="w-full accent-emerald-500"
+                            />
+                            <div className="flex flex-wrap gap-1.5">
+                                {[2, 4, 6, 8, 12].filter((g) => !totalRam || g <= totalRam * 0.75).map((g) => (
+                                    <button key={g} onClick={() => setAppKey('ram_max', String(g))} className={`rounded-full px-2.5 py-1 text-xs font-medium ${ramMax === g ? 'bg-grass/15 text-mint' : 'bg-white/5 text-ink-faint hover:text-ink'}`}>
+                                        {g} GB
+                                    </button>
+                                ))}
+                            </div>
+                            {ramShare > 0.5 && (
+                                <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${ramShare > 0.75 ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-amber-400/30 bg-amber-400/10 text-amber-200'}`}>
+                                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                                    {ramShare > 0.75 ? t('server_settings.system.ram_critical') : t('server_settings.system.ram_warn').replace('{pct}', Math.round(ramShare * 100))}
+                                </div>
+                            )}
+                        </div>
+                        <SettingRow label={t('server_settings.system.min_ram')} description={t('server_settings.system.min_ram_desc')}>
+                            <input type="number" min="1" max={ramMax} value={app.ram_min || 2} onChange={(e) => setAppKey('ram_min', e.target.value)} className={`${inputClass} w-20 text-right tabular-nums`} />
+                            <span className="text-sm text-ink-faint">{unit}</span>
+                        </SettingRow>
+                        <div className="space-y-2 px-4 py-3.5">
+                            <div className="text-sm font-semibold text-ink">{t('server_settings.system.java_path')}</div>
+                            <div className="text-xs text-ink-faint">{t('server_settings.system.java_path_desc')}</div>
+                            <div className="flex gap-2">
+                                <input value={app.java_path || ''} placeholder="java" onChange={(e) => setAppKey('java_path', e.target.value)} className={`${inputClass} flex-1 font-mono`} />
+                                <button onClick={async () => { const p = await api.openFilePicker(); if (p) setAppKey('java_path', p); }} className="rounded-md border border-white/10 px-3 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">
+                                    {t('server_settings.system.browse')}
+                                </button>
+                            </div>
+                        </div>
+                    </SettingGroup>
+                )}
             </div>
+
+            {/* Appears only with unsaved changes; server.properties applies on restart. */}
+            <AnimatePresence>
+                {(dirty || saved) && (
+                    <motion.div
+                        initial={{ y: 24, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 24, opacity: 0 }}
+                        className="sticky bottom-0 z-20 mt-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-raised/95 px-4 py-3 shadow-2xl backdrop-blur"
+                    >
+                        <div className="min-w-[12rem] flex-1">
+                            <div className="text-sm font-semibold text-ink">{saved ? t('settings.saved') : t('server_settings.unsaved_title')}</div>
+                            <div className="text-xs text-ink-faint">{t('server_settings.restart_hint')}</div>
+                        </div>
+                        {!saved && (
+                            <>
+                                <button onClick={load} className="rounded-md px-3 py-2 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">{t('server_settings.discard')}</button>
+                                <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-grass px-4 py-2 text-sm font-semibold text-ground hover:bg-mint disabled:opacity-60">
+                                    <Save size={15} /> {saving ? t('server_settings.saving') : t('server_settings.save_config')}
+                                </button>
+                            </>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {showAdvanced && (
                     <AdvancedSettingsModal
                         onClose={() => setShowAdvanced(false)}
-                        properties={serverProps}
-                        onSave={(newProps) => setServerProps(newProps)}
+                        properties={props}
+                        onSave={(newProps) => { setProps(newProps); setDirty(true); }}
                     />
                 )}
             </AnimatePresence>
-        </div>
-    );
-}
-
-// Utility Components
-function SettingInput({ label, value, onChange, type = "text", placeholder, min, max }) {
-    return (
-        <div className="flex flex-col">
-            <label className="text-xs font-medium text-ink-faint mb-1 uppercase tracking-wider">{label}</label>
-            <input
-                type={type}
-                min={min} max={max}
-                value={value}
-                placeholder={placeholder}
-                onChange={(e) => onChange(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-md px-4 py-2 text-white focus:border-emerald-500 focus:bg-black/60 outline-none transition-all font-mono text-sm"
-            />
-        </div>
-    );
-}
-
-function LabelToggle({ label, desc, checked, onChange, color = "text-zinc-200" }) {
-    return (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/20 rounded-md border border-white/5 hover:border-white/10 transition-colors gap-4">
-            <div className="flex flex-col">
-                <span className={`font-minecraft uppercase tracking-wider text-sm ${color}`}>{label}</span>
-                {desc && <span className="text-xs text-ink-faint font-medium">{desc}</span>}
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-                <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-sm peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-sm after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 drop-shadow-sm"></div>
-            </label>
         </div>
     );
 }

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Globe, HardDrive, Check, Clock, Archive, RefreshCw, Download, Trash2, Upload, Save } from './ui/PixelIcons';
+import { Globe, Check, Archive, RefreshCw, Download, Trash2, Upload, Plus, AlertTriangle } from './ui/PixelIcons';
+import { Card, EmptyState, PageHeader, SettingRow } from './ui/Page';
+import { Toggle } from './ui/Toggle';
+import { inputClass, relativeTime } from '../utils/format';
+import Cubi from './ui/Cubi';
 import { api } from '../api';
 import { useDialog } from './ui/DialogContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -9,7 +13,7 @@ const parseWorldFromBackup = (name) =>
     name.replace(/-\d{8}-\d{6}(-\d+)?\.zip$/i, '') || name.replace(/\.zip$/i, '');
 
 export default function Worlds() {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
     const dialog = useDialog();
     const { subscribe } = useWebSocket();
 
@@ -173,149 +177,127 @@ export default function Worlds() {
         setSwitching(false);
     };
 
-    const formatDate = (timestamp) => new Date(timestamp * 1000).toLocaleString();
+    const formatDate = (timestamp) => new Date(timestamp * 1000).toLocaleString(locale);
 
     if (loading) {
-        return <div className="p-8 text-center text-ink-faint font-minecraft tracking-widest uppercase">{t('worlds.loading')}</div>;
+        return <div className="p-8 text-center text-ink-faint">{t('worlds.loading')}</div>;
     }
 
     if (error) {
         return (
-            <div className="p-8 text-center">
-                <div className="text-red-400 font-minecraft uppercase tracking-wider mb-2">{t('worlds.error')}</div>
-                <div className="text-ink-faint text-sm mb-4">{error}</div>
-                <button onClick={loadData} className="bg-transparent border border-white/10 hover:bg-white/5 text-white px-4 py-2 rounded-sm transition-colors font-minecraft uppercase text-xs">{t('common.retry')}</button>
-            </div>
+            <EmptyState icon={<Cubi mood="sad" size={64} />} title={t('worlds.error')}>
+                <p>{error}</p>
+                <button onClick={loadData} className="mt-3 rounded-md border border-white/10 px-4 py-2 text-sm text-ink hover:bg-white/5">{t('common.retry')}</button>
+            </EmptyState>
         );
     }
 
     return (
-        <div className="animate-in fade-in duration-200 max-w-5xl mx-auto w-full">
-            <div className="mb-8">
-                <h2 className="text-4xl font-minecraft tracking-tight text-emerald-400 mb-1">{t('worlds.title')}</h2>
-                <p className="text-ink-faint text-sm">{t('worlds.subtitle')}</p>
-            </div>
-
-            <div className="mb-8 bg-panel/60 backdrop-blur-xl border border-white/5 rounded-sm p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-                    <div className="flex items-center gap-3">
-                        <Archive size={18} className="text-emerald-400" />
-                        <div>
-                            <div className="text-lg font-minecraft text-white tracking-wider uppercase">{t('worlds.backups')}</div>
-                            <div className="text-xs text-ink-faint">{backups.length}</div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={loadBackups} disabled={backupsLoading}
-                            className="px-3 py-2 rounded-sm bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs font-minecraft uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">
-                            <RefreshCw size={14} className={backupsLoading ? 'animate-spin' : ''} /> {t('common.refresh')}
-                        </button>
-                        <button onClick={() => uploadInputRef.current?.click()}
-                            className="px-3 py-2 rounded-sm bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs font-minecraft uppercase tracking-wider flex items-center gap-2">
-                            <Upload size={14} /> {t('common.import')}
+        <div className="flex flex-col gap-5 animate-in fade-in duration-200">
+            <PageHeader
+                title={t('worlds.title')}
+                subtitle={t('worlds.subtitle')}
+                actions={(
+                    <>
+                        <button onClick={() => uploadInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-ink-dim hover:bg-white/5 hover:text-ink">
+                            <Upload size={15} /> {t('worlds.import_backup')}
                         </button>
                         <input ref={uploadInputRef} type="file" accept=".zip" className="hidden" onChange={handleUpload} />
-                        <button onClick={handleCreateBackup} disabled={creatingBackup}
-                            className="px-4 py-2 rounded-sm bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 text-xs font-minecraft uppercase tracking-wider disabled:opacity-50">
+                        <button onClick={handleCreateBackup} disabled={creatingBackup} className="inline-flex items-center gap-2 rounded-md bg-grass px-4 py-2 text-sm font-semibold text-ground hover:bg-mint disabled:opacity-60">
+                            {creatingBackup ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={15} />}
                             {creatingBackup ? t('worlds.creating') : t('worlds.create_backup')}
                         </button>
-                    </div>
-                </div>
+                    </>
+                )}
+            />
 
-                {backupsLoading ? (
-                    <div className="text-sm text-ink-faint">{t('common.loading')}</div>
-                ) : backups.length === 0 ? (
-                    <div className="text-sm text-ink-faint">{t('worlds.no_backups')}</div>
-                ) : (
-                    <div className="space-y-2 max-h-72 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-1">
-                        {backups.map((b) => (
-                            <div key={b.name} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-sm bg-black/20 border border-white/5">
-                                <div className="min-w-0">
-                                    <div className="text-sm text-white font-mono truncate">{b.name}</div>
-                                    <div className="text-xs text-ink-faint">
-                                        <span className="text-emerald-400/80">{parseWorldFromBackup(b.name)}</span> • {b.size} • {formatDate(b.created)}
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <section className="min-w-0 space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{t('worlds.backups')} · {backups.length}</h3>
+                        <button onClick={loadBackups} disabled={backupsLoading} className="rounded-md p-1.5 text-ink-faint hover:bg-white/5 hover:text-ink" title={t('common.refresh')} aria-label={t('common.refresh')}>
+                            <RefreshCw size={14} className={backupsLoading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                    {backups.length === 0 && !backupsLoading ? (
+                        <EmptyState icon={<Archive size={36} className="text-ink-faint" />} title={t('worlds.no_backups_title')}>{t('worlds.no_backups')}</EmptyState>
+                    ) : (
+                        <Card className="divide-y divide-white/[0.06]">
+                            {backups.map((b) => (
+                                <div key={b.name} className="group flex items-center gap-3 px-4 py-3">
+                                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-white/5 text-mint"><Archive size={17} /></div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-semibold text-ink" title={formatDate(b.created)}>{relativeTime(b.created, locale)}</span>
+                                            <span className="rounded-full bg-grass/10 px-2 py-0.5 text-[11px] font-medium text-mint">{parseWorldFromBackup(b.name)}</span>
+                                        </div>
+                                        <div className="truncate text-xs text-ink-faint">{formatDate(b.created)} · {b.size}</div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        <button onClick={() => handleRestore(b.name)} disabled={busyBackup === b.name} className="rounded-md border border-white/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim hover:bg-white/5 hover:text-ink disabled:opacity-40">
+                                            {t('worlds.restore')}
+                                        </button>
+                                        <button onClick={() => handleDownload(b.name)} disabled={busyBackup === b.name} title={t('worlds.download')} aria-label={t('worlds.download')} className="rounded-md p-2 text-ink-faint hover:bg-white/5 hover:text-ink disabled:opacity-40">
+                                            <Download size={15} />
+                                        </button>
+                                        <button onClick={() => handleDelete(b.name)} disabled={busyBackup === b.name} title={t('common.delete')} aria-label={t('common.delete')} className="rounded-md p-2 text-ink-faint hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40">
+                                            <Trash2 size={15} />
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                    <button onClick={() => handleRestore(b.name)} disabled={busyBackup === b.name}
-                                        title={t('worlds.restore')} className="p-2 rounded-sm text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40">
-                                        <RefreshCw size={15} />
-                                    </button>
-                                    <button onClick={() => handleDownload(b.name)} disabled={busyBackup === b.name}
-                                        title={t('worlds.download')} className="p-2 rounded-sm text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40">
-                                        <Download size={15} />
-                                    </button>
-                                    <button onClick={() => handleDelete(b.name)} disabled={busyBackup === b.name}
-                                        title={t('common.delete')} className="p-2 rounded-sm text-ink-faint hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40">
-                                        <Trash2 size={15} />
-                                    </button>
-                                </div>
+                            ))}
+                        </Card>
+                    )}
+                </section>
+
+                <aside className="space-y-5">
+                    <section className="space-y-2">
+                        <h3 className="px-1 text-xs font-semibold uppercase tracking-wider text-ink-faint">{t('worlds.auto_backup')}</h3>
+                        <Card className="divide-y divide-white/[0.06]">
+                            <SettingRow label={t('worlds.auto_backup')} description={t('worlds.auto_backup_desc')}>
+                                <Toggle checked={!!backupSettings.enabled} onChange={(v) => setBackupSettings((s) => ({ ...s, enabled: v }))} label={t('worlds.auto_backup')} />
+                            </SettingRow>
+                            <SettingRow label={t('worlds.every_minutes')}>
+                                <input type="number" min="5" value={backupSettings.interval_minutes} onChange={(e) => setBackupSettings((s) => ({ ...s, interval_minutes: e.target.value }))} className={`${inputClass} w-20 text-right tabular-nums`} />
+                            </SettingRow>
+                            <SettingRow label={t('worlds.keep')} description={t('worlds.keep_desc')}>
+                                <input type="number" min="1" value={backupSettings.keep} onChange={(e) => setBackupSettings((s) => ({ ...s, keep: e.target.value }))} className={`${inputClass} w-20 text-right tabular-nums`} />
+                            </SettingRow>
+                            <div className="flex justify-end px-4 py-3">
+                                <button onClick={handleSaveSettings} disabled={savingSettings} className={`inline-flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${settingsSaved ? 'bg-grass/15 text-mint' : 'bg-white/10 text-ink hover:bg-white/15'}`}>
+                                    {settingsSaved && <Check size={14} />}
+                                    {savingSettings ? t('common.saving') : settingsSaved ? t('settings.saved') : t('common.save')}
+                                </button>
                             </div>
-                        ))}
-                    </div>
-                )}
+                        </Card>
+                    </section>
 
-                <div className="mt-5 pt-5 border-t border-white/5">
-                    <div className="flex flex-wrap items-end gap-4">
-                        <label className="flex items-center gap-3 cursor-pointer select-none">
-                            <input type="checkbox" className="sr-only peer"
-                                checked={backupSettings.enabled}
-                                onChange={(e) => setBackupSettings(s => ({ ...s, enabled: e.target.checked }))} />
-                            <div className="w-11 h-6 bg-white/10 rounded-sm relative peer-checked:bg-emerald-500 transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-sm after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                            <span className="text-xs font-minecraft uppercase tracking-wider text-zinc-300">{t('worlds.auto_backup')}</span>
-                        </label>
-                        <div className="flex flex-col">
-                            <label className="text-[10px] text-ink-faint uppercase tracking-wider mb-1">{t('worlds.every_minutes')}</label>
-                            <input type="number" min="5" value={backupSettings.interval_minutes}
-                                onChange={(e) => setBackupSettings(s => ({ ...s, interval_minutes: e.target.value }))}
-                                className="w-28 bg-black/40 border border-white/10 rounded-sm px-3 py-1.5 text-white text-sm font-mono focus:border-emerald-500 outline-none" />
-                        </div>
-                        <div className="flex flex-col">
-                            <label className="text-[10px] text-ink-faint uppercase tracking-wider mb-1">{t('worlds.keep')}</label>
-                            <input type="number" min="1" value={backupSettings.keep}
-                                onChange={(e) => setBackupSettings(s => ({ ...s, keep: e.target.value }))}
-                                className="w-20 bg-black/40 border border-white/10 rounded-sm px-3 py-1.5 text-white text-sm font-mono focus:border-emerald-500 outline-none" />
-                        </div>
-                        <button onClick={handleSaveSettings} disabled={savingSettings}
-                            className={`px-4 py-2 rounded-sm text-xs font-minecraft uppercase tracking-wider flex items-center gap-2 disabled:opacity-50 transition-all ${settingsSaved
-                                ? 'bg-emerald-500 text-black border-emerald-400'
-                                : 'bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300'}`}>
-                            <Save size={14} /> {savingSettings ? t('common.saving') : settingsSaved ? t('settings.saved') : t('common.save')}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {worlds.map((world) => (
-                    <div key={world.name}
-                        className={`bg-panel/60 backdrop-blur-xl border rounded-sm p-5 transition-colors ${activeWorld === world.name ? 'border-emerald-500/30' : 'border-white/5 hover:border-white/10'}`}>
-                        <div className="flex items-start justify-between mb-4">
-                            <div className={`p-3 rounded-sm border ${activeWorld === world.name ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-black/30 border-white/5 text-zinc-400'}`}>
-                                <Globe size={22} />
-                            </div>
-                            {activeWorld === world.name && (
-                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-sm border border-emerald-500/20 font-minecraft uppercase tracking-wider">
-                                    <Check size={12} /> {t('worlds.active')}
-                                </span>
-                            )}
-                        </div>
-                        <h3 className="text-lg font-minecraft text-white tracking-wider mb-3">{world.name}</h3>
-                        <div className="space-y-1.5 mb-4">
-                            <div className="flex items-center text-xs text-ink-faint gap-2"><HardDrive size={13} /> {world.size}</div>
-                            <div className="flex items-center text-xs text-ink-faint gap-2"><Clock size={13} /> {formatDate(world.last_modified)}</div>
-                        </div>
-                        <button onClick={() => handleSwitchWorld(world.name)} disabled={switching || activeWorld === world.name}
-                            className={`w-full py-2 rounded-sm text-xs font-minecraft uppercase tracking-wider transition-colors ${activeWorld === world.name ? 'bg-transparent text-ink-faint cursor-default' : 'bg-white/5 hover:bg-white/10 text-white'}`}>
-                            {activeWorld === world.name ? t('worlds.selected') : t('worlds.load_world')}
-                        </button>
-                    </div>
-                ))}
-            </div>
-
-            <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-sm flex gap-3 text-yellow-200/80 text-xs">
-                <div className="shrink-0">⚠️</div>
-                <p>{t('worlds.restart_note')}</p>
+                    <section className="space-y-2">
+                        <h3 className="px-1 text-xs font-semibold uppercase tracking-wider text-ink-faint">{t('worlds.worlds_list')}</h3>
+                        <Card className="divide-y divide-white/[0.06]">
+                            {worlds.map((world) => {
+                                const active = activeWorld === world.name;
+                                return (
+                                    <div key={world.name} className="flex items-center gap-3 px-4 py-3">
+                                        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${active ? 'bg-grass/15 text-mint' : 'bg-white/5 text-ink-faint'}`}><Globe size={17} /></div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-semibold text-ink">{world.name}</div>
+                                            <div className="truncate text-xs text-ink-faint">{world.size} · {relativeTime(world.last_modified, locale)}</div>
+                                        </div>
+                                        {active ? (
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-grass/15 px-2 py-0.5 text-[11px] font-medium text-mint"><Check size={11} /> {t('worlds.active')}</span>
+                                        ) : (
+                                            <button onClick={() => handleSwitchWorld(world.name)} disabled={switching} className="shrink-0 rounded-md border border-white/10 px-2.5 py-1 text-xs font-medium text-ink-dim hover:bg-white/5 hover:text-ink">
+                                                {t('worlds.use_world')}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </Card>
+                        <p className="flex gap-2 px-1 text-xs text-ink-faint"><AlertTriangle size={13} className="mt-0.5 shrink-0 text-gold" />{t('worlds.restart_note')}</p>
+                    </section>
+                </aside>
             </div>
         </div>
     );
