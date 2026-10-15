@@ -185,3 +185,6 @@ jobs:
           npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tags like v2.0.0-beta.1 publish as a GitHub pre-release, which the
+          # auto-updater of existing installs ignores (allowPrerelease=false).
+          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
