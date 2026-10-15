@@ -165,6 +165,14 @@ export const api = {
             body: JSON.stringify({ accept_eula: true, lang })
         });
     },
+    // Player skin (with worn armor) as a same-origin blob URL for the 3D viewer.
+    getPlayerSkinUrl: async (uuid, name = '', bust = '') => {
+        const res = await fetch(`${API_URL}/players/skin/${encodeURIComponent(uuid)}.png?name=${encodeURIComponent(name || '')}&armor=1&t=${encodeURIComponent(bust)}`, {
+            headers: API_TOKEN ? { 'X-MLSG-Token': API_TOKEN } : {},
+        });
+        if (!res.ok) throw new Error(`Skin unavailable (${res.status})`);
+        return URL.createObjectURL(await res.blob());
+    },
     // Plain URL for <img src>: the backend serves these without the token.
     itemIconUrl: (id, version = '') => `${API_URL}/mc-assets/icon?id=${encodeURIComponent(id)}&v=${encodeURIComponent(version || '')}`,
     opPlayer: async (name) => {

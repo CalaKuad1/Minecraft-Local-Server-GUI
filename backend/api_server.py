@@ -1770,6 +1770,32 @@ def inventory_player(uuid: str, lang: str = Query("en")):
     return data
 
 
+@app.get("/players/skin/{uuid}.png")
+def player_skin_image(uuid: str, name: str = Query(""), armor: int = Query(1)):
+    """Player skin (Mojang, else Steve) with the worn armor painted on."""
+    from fastapi.responses import Response
+    from utils import player_data, player_skin
+
+    if not player_skin.valid_uuid(uuid):
+        raise HTTPException(status_code=400, detail="Invalid player id")
+    mc, _ = _assets()
+    roots, worn = None, {}
+    if state and state.server_handler:
+        server_path, world, version = _inventory_ctx()
+        icons_version = mc.pick_version(state.app_data_dir, version)
+        if icons_version:
+            roots = mc.Roots(state.app_data_dir, icons_version, server_path)
+        if armor:
+            try:
+                worn = player_data.read_player(server_path, world, uuid).get("armor") or {}
+            except Exception:
+                worn = {}
+    png = player_skin.skin_png(state.app_data_dir, uuid, name, worn, roots)
+    if not png:
+        raise HTTPException(status_code=404, detail="No skin available")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/mc-assets/status")
 def mc_assets_status():
     mc, dl = _assets()

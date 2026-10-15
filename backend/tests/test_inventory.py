@@ -168,7 +168,8 @@ def vanilla(tmp_path):
     _json(os.path.join(base, "models", "block", "stone.json"), {"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone"}})
     _json(os.path.join(base, "models", "item", "stone.json"), {"parent": "minecraft:block/stone"})
     _json(os.path.join(base, "items", "stone.json"), {"model": {"type": "minecraft:model", "model": "minecraft:block/stone"}})
-    open(os.path.join(base, ".complete"), "w").close()
+    with open(os.path.join(base, ".complete"), "w") as f:
+        f.write(f"1.21.1 {mc_assets.ASSET_SCHEMA}")
     return app
 
 
@@ -228,3 +229,42 @@ def test_players_folder_of_minecraft_26():
         assert player_data.read_player(srv, "world", UUID)["inventory"]
         with pytest.raises(FileNotFoundError):
             player_data.read_player(srv, "world", "00000000-0000-4000-8000-000000000000")
+
+
+# ------------------------------------------------------------ player skins
+
+def test_armor_is_painted_on_skin_overlay(vanilla):
+    from utils import player_skin
+
+    base = mc_assets._version_dir(vanilla, "1.21.1")
+    # current (1.21.2+) and legacy armor layouts
+    _png(os.path.join(base, "textures", "entity", "equipment", "humanoid", "diamond.png"), (0, 220, 220, 255), 64)
+    _png(os.path.join(base, "textures", "models", "armor", "iron_layer_2.png"), (200, 200, 200, 255), 64)
+    roots = mc_assets.Roots(vanilla, "1.21.1")
+    skin = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    out = player_skin.apply_armor(skin, {
+        "head": {"id": "minecraft:diamond_helmet"},
+        "legs": {"id": "minecraft:iron_leggings"},
+        "chest": {"id": "create:fancy_chestplate"},  # modded: skipped, no crash
+    }, roots)
+    assert out.getpixel((40, 4))[:3] == (0, 220, 220)    # hat layer = helmet
+    assert out.getpixel((4, 52))[:3] == (200, 200, 200)  # left pants = leggings
+    assert out.getpixel((20, 36))[:3] == (200, 200, 200)  # jacket waist = leggings
+    assert skin.getpixel((40, 4))[3] == 0  # original untouched
+
+
+def test_legacy_64x32_skin_is_expanded():
+    from utils import player_skin
+
+    old = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+    old.paste((10, 20, 30, 255), (0, 16, 16, 32))  # right leg
+    out = player_skin._to_64x64(old)
+    assert out.size == (64, 64)
+    assert out.getpixel((20, 52))[:3] == (10, 20, 30)  # copied to the left leg
+
+
+def test_skin_uuid_validation():
+    from utils import player_skin
+
+    assert player_skin.valid_uuid("86ec76c5-839d-3ed3-8606-baaba34759a3")
+    assert not player_skin.valid_uuid("../../etc/passwd")

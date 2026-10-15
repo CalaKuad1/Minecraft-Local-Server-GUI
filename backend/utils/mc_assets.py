@@ -39,7 +39,12 @@ _KEEP_VANILLA_EXTRA = (
     "textures/entity/player/wide/steve.png", "textures/entity/zombie/zombie.png",
     "textures/entity/skeleton/skeleton.png", "textures/entity/skeleton/wither_skeleton.png",
     "textures/entity/creeper/creeper.png",
+    # worn armor for the 3D player view (pre-1.21.2 and current layouts)
+    "textures/models/armor/", "textures/entity/equipment/humanoid/",
+    "textures/entity/equipment/humanoid_leggings/",
 )
+# Bump when the set of extracted files changes: older caches are re-fetched.
+ASSET_SCHEMA = 2
 # App language -> Mojang locale file.
 LOCALES = {"en": "en_us", "es": "es_es", "fr": "fr_fr", "ru": "ru_ru"}
 
@@ -86,9 +91,18 @@ def _version_dir(app_data_dir, version):
 
 def cached_versions(app_data_dir):
     root = _cache_root(app_data_dir)
+
+    def complete(d):
+        try:
+            with open(os.path.join(root, d, ".complete"), "r", encoding="utf-8") as f:
+                lines = f.read().split()
+            return len(lines) > 1 and int(lines[1]) >= ASSET_SCHEMA
+        except (OSError, ValueError):
+            return False
+
     try:
         return sorted(
-            (d for d in os.listdir(root) if os.path.exists(os.path.join(root, d, ".complete"))),
+            (d for d in os.listdir(root) if complete(d)),
             key=lambda d: os.path.getmtime(os.path.join(root, d, ".complete")),
             reverse=True,
         )
@@ -200,7 +214,7 @@ def download_version(app_data_dir, version, locale="en_us", progress=lambda p: N
         if locale and locale != "en_us":
             fetch_locale(dest, meta, locale)
         with open(os.path.join(dest, ".complete"), "w") as f:
-            f.write(version)
+            f.write(f"{version} {ASSET_SCHEMA}")
         progress(100)
     finally:
         try:

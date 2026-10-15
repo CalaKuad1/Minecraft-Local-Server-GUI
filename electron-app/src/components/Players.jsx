@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from './ui/DialogContext';
 import { Search, Plus, Shield, ShieldOff, Ban, CheckCircle, User, Copy, Check, X } from './ui/PixelIcons';
 import Cubi from './ui/Cubi';
 import PlayerInventoryView from './PlayerInventoryView';
+
+// three.js is large: load the 3D viewer only when a player card opens.
+const SkinViewer3D = lazy(() => import('./SkinViewer3D'));
 
 // Everyone the server knows about, in one list: who is online, operators,
 // whitelist, bans, and anyone who has ever joined (saved player files).
@@ -97,7 +100,15 @@ function PlayerDetail({ player, onAction, onClose, t }) {
     return (
         <div className="rounded-lg border border-white/[0.06] bg-panel/60 p-5">
             <div className="flex items-start gap-4">
-                <Avatar player={player} size={72} className="shadow-lg" />
+                {player.uuid ? (
+                    <div className="shrink-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[radial-gradient(circle_at_50%_38%,rgb(var(--grass)/0.2),transparent_68%)]">
+                        <Suspense fallback={<div className="grid place-items-center" style={{ width: 170, height: 240 }}><Avatar player={player} size={64} /></div>}>
+                            <SkinViewer3D uuid={player.uuid} name={player.name} bust={player.lastSaved || ''} width={170} height={240} />
+                        </Suspense>
+                    </div>
+                ) : (
+                    <Avatar player={player} size={72} className="shadow-lg" />
+                )}
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate font-display text-2xl font-semibold text-ink">{player.name || t('players.unknown')}</h3>
@@ -111,26 +122,26 @@ function PlayerDetail({ player, onAction, onClose, t }) {
                             {player.uuid} {copied ? <Check size={12} className="text-mint" /> : <Copy size={12} />}
                         </button>
                     )}
+                {player.name && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {player.op
+                            ? action(neutral, () => onAction('deop', player), ShieldOff, t('players.deop'))
+                            : action(neutral, () => onAction('op', player), Shield, t('players.op'))}
+                        {player.whitelisted
+                            ? action(neutral, () => onAction('unwhitelist', player), X, t('players.unwhitelist'))
+                            : action(neutral, () => onAction('whitelist', player), CheckCircle, t('players.whitelist_add'))}
+                        {player.online && action('border-orange-400/30 bg-orange-400/10 text-orange-200 hover:bg-orange-400/20', () => onAction('kick', player), User, t('players.kick'))}
+                        {player.banned
+                            ? action('border-grass/30 bg-grass/10 text-mint hover:bg-grass/20', () => onAction('pardon', player), CheckCircle, t('players.pardon'))
+                            : action('border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20', () => onAction('ban', player), Ban, t('players.ban'))}
+                    </div>
+                )}
                 </div>
                 <button onClick={onClose} className="rounded-md p-1.5 text-ink-faint hover:bg-white/5 hover:text-ink lg:hidden" aria-label={t('common.close')}>
                     <X size={16} />
                 </button>
             </div>
 
-            {player.name && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                    {player.op
-                        ? action(neutral, () => onAction('deop', player), ShieldOff, t('players.deop'))
-                        : action(neutral, () => onAction('op', player), Shield, t('players.op'))}
-                    {player.whitelisted
-                        ? action(neutral, () => onAction('unwhitelist', player), X, t('players.unwhitelist'))
-                        : action(neutral, () => onAction('whitelist', player), CheckCircle, t('players.whitelist_add'))}
-                    {player.online && action('border-orange-400/30 bg-orange-400/10 text-orange-200 hover:bg-orange-400/20', () => onAction('kick', player), User, t('players.kick'))}
-                    {player.banned
-                        ? action('border-grass/30 bg-grass/10 text-mint hover:bg-grass/20', () => onAction('pardon', player), CheckCircle, t('players.pardon'))
-                        : action('border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20', () => onAction('ban', player), Ban, t('players.ban'))}
-                </div>
-            )}
 
             <div className="mt-5 border-t border-white/[0.06] pt-4">
                 {player.hasData ? (
