@@ -427,7 +427,32 @@
         "kick": "Kick",
         "ban": "Ban",
         "pardon": "Unban",
-        "unwhitelist": "Remove"
+        "unwhitelist": "Remove",
+        "never_joined": "Never joined",
+        "badge_op": "Operator",
+        "badge_whitelist": "Whitelisted",
+        "badge_banned": "Banned",
+        "unknown": "Unknown player",
+        "copy_uuid": "Copy UUID",
+        "whitelist_add": "Add to whitelist",
+        "no_saved_data": "No saved data yet: it appears once this player has joined the world.",
+        "subtitle_new": "Everyone who plays on your server. Click a player to see their info and inventory.",
+        "add_player": "Add player",
+        "search": "Search by name...",
+        "empty_all": "Nobody has joined this server yet.",
+        "no_matches": "No players match.",
+        "select_title": "Pick a player",
+        "select_desc": "You'll see their status, inventory and quick actions: operator, whitelist, kick and ban.",
+        "ban_confirm": "Ban {name} from this server?",
+        "kick_confirm": "Kick {name} from the server?",
+        "action_failed": "The action failed.",
+        "filters": {
+            "all": "All",
+            "online": "Online",
+            "ops": "Operators",
+            "whitelist": "Whitelist",
+            "banned": "Banned"
+        }
     },
     "worlds": {
         "title": "Worlds",
@@ -661,6 +686,9 @@
         "assets_desc": "Cubi downloads the official game graphics from Mojang (about 25 MB, only once for all your servers) and draws the icons on your PC. Modded items use the mods you already have.",
         "assets_eula": "I accept the Minecraft EULA (aka.ms/MinecraftEULA)",
         "assets_button": "Download graphics",
-        "assets_auto": "Getting the item graphics ready (about 25 MB from Mojang, only once for all your servers)..."
+        "assets_auto": "Getting the item graphics ready (about 25 MB from Mojang, only once for all your servers)...",
+        "health": "Health",
+        "food": "Hunger",
+        "mode": "Game mode"
     }
 }

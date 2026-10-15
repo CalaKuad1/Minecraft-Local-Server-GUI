@@ -109,6 +109,10 @@ function App() {
   const [showWizard, setShowWizard] = useState(false);
   // Set when the wizard finishes so the new server starts by itself.
   const [autoStartServer, setAutoStartServer] = useState(false);
+  // Player name clicked anywhere (dashboard, console): opens their card in Players.
+  const [focusPlayer, setFocusPlayer] = useState(null);
+  const openPlayer = useCallback((name) => { setFocusPlayer(name); setActiveTab('players'); }, []);
+  const clearFocusPlayer = useCallback(() => setFocusPlayer(null), []);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -291,13 +295,13 @@ function App() {
           <div className="mx-auto w-full flex-1 min-h-0 flex flex-col">
             {/* Dashboard - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'dashboard' ? 'none' : undefined }} className={activeTab === 'dashboard' ? 'flex-1 min-h-0 flex flex-col' : ''}>
-              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} autoStart={autoStartServer} onAutoStartHandled={() => setAutoStartServer(false)} />
+              <Dashboard status={serverStatus} onRefresh={triggerRefresh} active={activeTab === 'dashboard'} onNavigate={setActiveTab} autoStart={autoStartServer} onAutoStartHandled={() => setAutoStartServer(false)} onOpenPlayer={openPlayer} />
             </div>
 
 
             {/* Console - always mounted to preserve log state */}
             <div style={{ display: activeTab !== 'console' ? 'none' : undefined }}>
-              <Console key={selectedServer?.server_id || selectedServer?.id} serverId={selectedServer?.server_id || selectedServer?.id} />
+              <Console key={selectedServer?.server_id || selectedServer?.id} serverId={selectedServer?.server_id || selectedServer?.id} onOpenPlayer={openPlayer} />
             </div>
 
             {/* Animated transitions for other tabs */}
@@ -310,7 +314,7 @@ function App() {
                   exit={{ opacity: 0, scale: 0.99, y: -10, filter: 'blur(4px)' }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  {activeTab === 'players' && <Players status={serverStatus} />}
+                  {activeTab === 'players' && <Players status={serverStatus} focusPlayer={focusPlayer} onFocusHandled={clearFocusPlayer} />}
                   {activeTab === 'worlds' && <Worlds />}
                   {activeTab === 'mods' && <Mods status={serverStatus} onOpenWizard={() => setShowWizard(true)} />}
                   {activeTab === 'plugins' && <Plugins status={serverStatus} />}

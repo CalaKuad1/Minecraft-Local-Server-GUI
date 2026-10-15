@@ -427,7 +427,32 @@
         "kick": "Expulser",
         "ban": "Bannir",
         "pardon": "Débannir",
-        "unwhitelist": "Retirer"
+        "unwhitelist": "Retirer",
+        "never_joined": "Jamais venu",
+        "badge_op": "Opérateur",
+        "badge_whitelist": "Liste blanche",
+        "badge_banned": "Banni",
+        "unknown": "Joueur inconnu",
+        "copy_uuid": "Copier l'UUID",
+        "whitelist_add": "Ajouter à la liste blanche",
+        "no_saved_data": "Pas encore de données : elles apparaissent quand ce joueur rejoint le monde.",
+        "subtitle_new": "Tous ceux qui jouent sur ton serveur. Clique sur un joueur pour voir ses infos et son inventaire.",
+        "add_player": "Ajouter un joueur",
+        "search": "Rechercher un nom...",
+        "empty_all": "Personne n'a encore rejoint ce serveur.",
+        "no_matches": "Aucun joueur ne correspond.",
+        "select_title": "Choisis un joueur",
+        "select_desc": "Tu verras son état, son inventaire et des actions rapides : opérateur, liste blanche, expulser et bannir.",
+        "ban_confirm": "Bannir {name} de ce serveur ?",
+        "kick_confirm": "Expulser {name} du serveur ?",
+        "action_failed": "L'action a échoué.",
+        "filters": {
+            "all": "Tous",
+            "online": "En ligne",
+            "ops": "Opérateurs",
+            "whitelist": "Liste blanche",
+            "banned": "Bannis"
+        }
     },
     "worlds": {
         "title": "Mondes",
@@ -659,6 +684,9 @@
         "assets_desc": "Cubi télécharge les graphismes officiels du jeu depuis Mojang (environ 25 Mo, une seule fois pour tous tes serveurs) et dessine les icônes sur ton PC. Les objets moddés utilisent les mods que tu as déjà.",
         "assets_eula": "J'accepte l'EULA de Minecraft (aka.ms/MinecraftEULA)",
         "assets_button": "Télécharger les graphismes",
-        "assets_auto": "Préparation des graphismes des objets (environ 25 Mo depuis Mojang, une seule fois pour tous tes serveurs)..."
+        "assets_auto": "Préparation des graphismes des objets (environ 25 Mo depuis Mojang, une seule fois pour tous tes serveurs)...",
+        "health": "Vie",
+        "food": "Faim",
+        "mode": "Mode de jeu"
     }
 }

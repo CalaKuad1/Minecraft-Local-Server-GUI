@@ -8,12 +8,13 @@ import { Modal } from './ui/Modal';
 import { Button, IconButton } from './ui/Button';
 import { Badge } from './ui/Badge';
 import Cubi from './ui/Cubi';
+import { LinkifiedLog } from './ui/PlayerLinks';
 import { useToast } from './ui/toastContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useDialog } from './ui/DialogContext';
 
-const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true }) => {
+const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true, footer = null }) => {
     return (
         <div className="bg-panel/60 border border-white/5 rounded-sm p-4 flex flex-col transition-colors group cursor-default hover:border-white/10 relative overflow-hidden h-[92px] min-w-0">
             <div className="flex items-center gap-2 mb-3 relative z-10">
@@ -21,7 +22,7 @@ const StatCard = ({ icon: Icon, label, value, sublabel, data = [], active = true
                 <h3 className="text-ink-faint text-xs font-bold uppercase tracking-widest">{label}</h3>
             </div>
             <div className="text-2xl font-minecraft text-white tracking-tight leading-none mb-1 mt-auto relative z-10 tabular-nums">{value}</div>
-            <div className="text-[10px] text-ink-faint font-bold uppercase tracking-widest relative z-10">{sublabel}</div>
+            {footer || <div className="text-[10px] text-ink-faint font-bold uppercase tracking-widest relative z-10">{sublabel}</div>}
 
             {data.length > 0 && active && (
                 <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity flex items-end">
@@ -123,7 +124,7 @@ const ShutdownTimerModal = ({ onClose, onSchedule, onCancel, activeTimer, t }) =
 
 const STATUS_PRIORITY = { offline: 0, starting: 1, stopping: 2, online: 3 };
 
-export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate, autoStart = false, onAutoStartHandled }) {
+export default function Dashboard({ status: serverStatus, onRefresh, active = true, onNavigate, autoStart = false, onAutoStartHandled, onOpenPlayer }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
     const dialog = useDialog();
@@ -184,6 +185,8 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const onlinePlayersLen = Array.isArray(status.online_players) ? status.online_players.length : 0;
     const playersValue = (status.players !== undefined && status.players !== null) ? Number(status.players) : null;
     const onlineCount = (Number.isFinite(playersValue) && playersValue > 0) ? playersValue : onlinePlayersLen;
+    const onlineNames = (Array.isArray(status.online_players) ? status.online_players : [])
+        .map((p) => (typeof p === 'string' ? p : p?.name)).filter(Boolean);
 
     // Sync with polling props
     useEffect(() => {
@@ -1312,7 +1315,22 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
             {/* Stats Grid */}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
-                <StatCard icon={Users} label={t('dashboard.players_online')} value={onlineCount !== undefined ? `${onlineCount}` : '-'} sublabel={`/ ${status.max_players || 20} ${t('status.online')}`} />
+                <StatCard
+                    icon={Users}
+                    label={t('dashboard.players_online')}
+                    value={onlineCount !== undefined ? `${onlineCount}` : '-'}
+                    sublabel={`/ ${status.max_players || 20} ${t('status.online')}`}
+                    footer={onlineNames.length > 0 && onOpenPlayer ? (
+                        <div className="relative z-10 flex items-center gap-1">
+                            {onlineNames.slice(0, 6).map((n) => (
+                                <button key={n} onClick={() => onOpenPlayer(n)} title={n} aria-label={n} className="rounded-sm ring-mint/60 transition hover:ring-2">
+                                    <img src={`https://minotar.net/helm/${encodeURIComponent(n)}/32`} alt="" className="h-5 w-5 rounded-sm" style={{ imageRendering: 'pixelated' }} />
+                                </button>
+                            ))}
+                            {onlineNames.length > 6 && <span className="text-[10px] text-ink-faint">+{onlineNames.length - 6}</span>}
+                        </div>
+                    ) : null}
+                />
                 <StatCard icon={Cpu} label={t('dashboard.cpu_usage')} value={status.cpu !== undefined ? `${status.cpu}%` : '--'} sublabel={t('dashboard.cpu_sub')} data={history.cpu} active={active} />
                 <StatCard icon={HardDrive} label={t('dashboard.ram_usage')} value={status.ram || '--'} sublabel={t('dashboard.ram_sub')} data={history.ram} active={active} />
                 <StatCard icon={Activity} label={t('dashboard.uptime')} value={status.uptime || '--'} sublabel={t('dashboard.uptime_sub')} />
@@ -1346,7 +1364,7 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
                                         log.level === 'input' ? 'text-white font-bold tracking-tight' :
                                             'text-zinc-300'
                                     }`}>
-                                    {log.message}
+                                    <LinkifiedLog text={log.message} onOpenPlayer={onOpenPlayer} />
                                 </div>
                             </div>
                             );

@@ -427,7 +427,32 @@
         "kick": "Expulsar",
         "ban": "Banear",
         "pardon": "Desbanear",
-        "unwhitelist": "Quitar"
+        "unwhitelist": "Quitar",
+        "never_joined": "Nunca ha entrado",
+        "badge_op": "Operador",
+        "badge_whitelist": "En lista blanca",
+        "badge_banned": "Baneado",
+        "unknown": "Jugador desconocido",
+        "copy_uuid": "Copiar UUID",
+        "whitelist_add": "Añadir a lista blanca",
+        "no_saved_data": "Aún no hay datos guardados: aparecen cuando este jugador entra en el mundo.",
+        "subtitle_new": "Todos los que juegan en tu servidor. Haz clic en un jugador para ver su información e inventario.",
+        "add_player": "Añadir jugador",
+        "search": "Buscar por nombre...",
+        "empty_all": "Todavía no ha entrado nadie en este servidor.",
+        "no_matches": "Ningún jugador coincide.",
+        "select_title": "Elige un jugador",
+        "select_desc": "Verás su estado, su inventario y acciones rápidas: operador, lista blanca, expulsar y banear.",
+        "ban_confirm": "¿Banear a {name} de este servidor?",
+        "kick_confirm": "¿Expulsar a {name} del servidor?",
+        "action_failed": "La acción ha fallado.",
+        "filters": {
+            "all": "Todos",
+            "online": "En línea",
+            "ops": "Operadores",
+            "whitelist": "Lista blanca",
+            "banned": "Baneados"
+        }
     },
     "worlds": {
         "title": "Mundos",
@@ -659,6 +684,9 @@
         "assets_desc": "Cubi descarga los gráficos oficiales del juego desde Mojang (unos 25 MB, una sola vez para todos tus servidores) y dibuja los iconos en tu PC. Los objetos de mods usan los mods que ya tienes.",
         "assets_eula": "Acepto el EULA de Minecraft (aka.ms/MinecraftEULA)",
         "assets_button": "Descargar gráficos",
-        "assets_auto": "Preparando los gráficos de los objetos (unos 25 MB de Mojang, una sola vez para todos tus servidores)..."
+        "assets_auto": "Preparando los gráficos de los objetos (unos 25 MB de Mojang, una sola vez para todos tus servidores)...",
+        "health": "Vida",
+        "food": "Hambre",
+        "mode": "Modo de juego"
     }
 }

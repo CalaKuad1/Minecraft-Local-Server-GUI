@@ -3,6 +3,7 @@ import { Download, Send } from './ui/PixelIcons';
 import { api } from '../api';
 import { useWebSocket, getStoredLogs } from '../contexts/WebSocketContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import { LinkifiedLog } from './ui/PlayerLinks';
 
 const LogBadge = ({ level }) => {
     if (level === 'input') return <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded mr-2 text-[10px] font-bold">CMD</span>;
@@ -25,7 +26,7 @@ const MC_COMMANDS = [
 
 const MAX_LOGS = 800;
 
-export default function Console({ serverId }) {
+export default function Console({ serverId, onOpenPlayer }) {
     const { t } = useTranslation();
     const { isConnected, subscribe, send } = useWebSocket();
     const logIdRef = useRef(0);
@@ -322,7 +323,7 @@ export default function Console({ serverId }) {
                                 log.level === 'input' ? 'text-white font-bold tracking-tight' :
                                     'text-zinc-300'
                             }`}>
-                            {log.message}
+                            <LinkifiedLog text={log.message} onOpenPlayer={onOpenPlayer} />
                         </div>
                     </div>
                 ))}

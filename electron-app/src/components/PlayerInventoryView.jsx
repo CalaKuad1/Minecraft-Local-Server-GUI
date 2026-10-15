@@ -181,27 +181,16 @@ function AssetsBanner({ onReady }) {
     );
 }
 
-export default function InventoryInspector() {
+// Saved state of one player (stats, inventory, armor, ender chest). Used by
+// the player detail panel in Players.
+export default function PlayerInventoryView({ uuid, refreshKey = 0 }) {
     const { t, locale } = useTranslation();
-    const [players, setPlayers] = useState(null);
-    const [selected, setSelected] = useState(null);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [view, setView] = useState('inventory');
 
-    const loadPlayers = useCallback(async () => {
-        try {
-            const r = await api.getInventoryPlayers();
-            setPlayers(r.players || []);
-            setSelected((cur) => cur || r.players?.[0]?.uuid || null);
-        } catch (e) {
-            setError(e.message);
-            setPlayers([]);
-        }
-    }, []);
-
-    const loadPlayer = useCallback(async (uuid) => {
+    const load = useCallback(async () => {
         if (!uuid) return;
         setLoading(true);
         setError('');
@@ -213,98 +202,75 @@ export default function InventoryInspector() {
         } finally {
             setLoading(false);
         }
-    }, [locale]);
+    }, [uuid, locale]);
 
-    useEffect(() => { loadPlayers(); }, [loadPlayers]);
-    useEffect(() => { loadPlayer(selected); }, [selected, loadPlayer]);
+    useEffect(() => { setData(null); load(); }, [load, refreshKey]);
 
-    if (players && players.length === 0) {
+    if (!data) {
         return (
-            <div className="flex flex-col items-center rounded-lg border border-dashed border-white/10 bg-panel/40 py-16 text-center">
-                <Cubi mood="sleep" size={84} className="mb-3" />
-                <p className="font-display text-lg font-semibold text-ink">{t('inventory.empty_title')}</p>
-                <p className="mt-1 max-w-sm text-sm text-ink-faint">{t('inventory.empty_desc')}</p>
+            <div className="rounded-lg border border-white/[0.06] bg-ground/40 p-4 text-sm text-ink-faint">
+                {error ? <span className="text-red-300">{error}</span> : t('common.loading')}
             </div>
         );
     }
 
-    const st = data?.stats;
-    const iconVersion = data?.icons_version;
+    const st = data.stats;
+    const iconVersion = data.icons_version;
     const armorOrder = ['head', 'chest', 'legs', 'feet'];
+    const dimension = (() => { const k = `inventory.dimension.${st.dimension}`; const v = t(k); return v === k ? st.dimension : v; })();
 
     return (
-        <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-            <div className="flex max-h-[28rem] flex-col gap-1 overflow-y-auto rounded-lg border border-white/[0.06] bg-panel/60 p-2">
-                {!players && <div className="p-3 text-sm text-ink-faint">{t('common.loading')}</div>}
-                {players?.map((p) => (
-                    <button
-                        key={p.uuid}
-                        onClick={() => setSelected(p.uuid)}
-                        className={`flex items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${selected === p.uuid ? 'bg-grass/10 text-ink' : 'text-ink-dim hover:bg-white/5'}`}
-                    >
-                        <img src={`https://minotar.net/helm/${p.name || p.uuid}/32`} alt="" className="h-8 w-8 rounded-sm" style={{ imageRendering: 'pixelated' }} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
-                        <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold">{p.name || p.uuid.slice(0, 8)}</div>
-                            <div className="text-xs text-ink-faint">{p.online ? t('status.online') : relTime(p.last_saved, locale)}</div>
-                        </div>
-                        {p.online && <span className="h-2 w-2 shrink-0 rounded-full bg-grass" />}
+        <div className="space-y-4">
+            {!iconVersion && <AssetsBanner onReady={load} />}
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                    { label: t('inventory.health'), value: `${st.health} / 20`, tone: 'text-red-300' },
+                    { label: t('inventory.food'), value: `${st.food} / 20`, tone: 'text-amber-200' },
+                    { label: t('inventory.level'), value: st.xp_level, tone: 'text-lime-300' },
+                    { label: t('inventory.mode'), value: t(`inventory.gamemode.${st.gamemode}`), tone: 'text-ink' },
+                ].map((c) => (
+                    <div key={c.label} className="rounded-md border border-white/[0.06] bg-ground/40 px-3 py-2">
+                        <div className="text-[11px] text-ink-faint">{c.label}</div>
+                        <div className={`font-display text-lg font-semibold tabular-nums ${c.tone}`}>{c.value}</div>
+                    </div>
+                ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+                <span>{dimension}{st.position ? ` · X ${Math.round(st.position[0])}, Y ${Math.round(st.position[1])}, Z ${Math.round(st.position[2])}` : ''}</span>
+                <span className="ml-auto">{t('inventory.saved')} {relTime(data.last_saved, locale)}</span>
+                <button onClick={load} disabled={loading} className="rounded-md p-1 hover:bg-white/5 hover:text-ink" title={t('common.refresh')} aria-label={t('common.refresh')}>
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                </button>
+            </div>
+
+            <div className="flex w-fit gap-1 rounded-md bg-ground/60 p-1">
+                {['inventory', 'ender'].map((v) => (
+                    <button key={v} onClick={() => setView(v)} className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${view === v ? 'bg-white/10 text-ink' : 'text-ink-faint hover:text-ink'}`}>
+                        {t(`inventory.view_${v}`)}
                     </button>
                 ))}
             </div>
 
-            <div className="min-w-0 space-y-4">
-                {data && !iconVersion && <AssetsBanner onReady={() => loadPlayer(selected)} />}
-                {error && <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-300">{error}</div>}
-
-                {data && (
-                    <div className="rounded-lg border border-white/[0.06] bg-panel/60 p-4">
-                        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-                            <div className="font-display text-xl font-semibold text-ink">{data.name || data.uuid.slice(0, 8)}</div>
-                            <div className="flex flex-wrap gap-1.5 text-xs">
-                                <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-red-300">♥ {st.health} / 20</span>
-                                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-200">🍖 {st.food} / 20</span>
-                                <span className="rounded-full bg-lime-500/10 px-2 py-0.5 text-lime-300">{t('inventory.level')} {st.xp_level}</span>
-                                <span className="rounded-full bg-white/5 px-2 py-0.5 text-ink-dim">{t(`inventory.gamemode.${st.gamemode}`)}</span>
-                                <span className="rounded-full bg-white/5 px-2 py-0.5 text-ink-dim">{(() => { const k = `inventory.dimension.${st.dimension}`; const v = t(k); return v === k ? st.dimension : v; })()}{st.position ? ` · ${st.position.map(Math.round).join(', ')}` : ''}</span>
-                            </div>
-                            <div className="ml-auto flex items-center gap-2">
-                                <span className="text-xs text-ink-faint">{t('inventory.saved')} {relTime(data.last_saved, locale)}</span>
-                                <button onClick={() => loadPlayer(selected)} disabled={loading} className="rounded-md p-1.5 text-ink-faint hover:bg-white/5 hover:text-ink" title={t('common.refresh')} aria-label={t('common.refresh')}>
-                                    {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="mb-3 flex gap-1 rounded-md bg-ground/60 p-1 w-fit">
-                            {['inventory', 'ender'].map((v) => (
-                                <button key={v} onClick={() => setView(v)} className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${view === v ? 'bg-white/10 text-ink' : 'text-ink-faint hover:text-ink'}`}>
-                                    {t(`inventory.view_${v}`)}
-                                </button>
-                            ))}
-                        </div>
-
-                        {view === 'inventory' ? (
-                            <div className="flex flex-wrap gap-5">
-                                <div className="grid w-12 shrink-0 gap-1.5 self-start">
-                                    {armorOrder.map((k) => (
-                                        <ItemSlot key={k} item={data.armor?.[k]} iconVersion={iconVersion} empty={t(`inventory.armor.${k}`)} />
-                                    ))}
-                                    <div className="h-1" />
-                                    <ItemSlot item={data.offhand} iconVersion={iconVersion} empty={t('inventory.offhand')} />
-                                </div>
-                                <div className="min-w-[18rem] max-w-[34rem] flex-1 space-y-3">
-                                    <Grid slots={range(9, 36)} items={data.inventory} iconVersion={iconVersion} />
-                                    <Grid slots={range(0, 9)} items={data.inventory} iconVersion={iconVersion} selectedSlot={st.selected_slot} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="max-w-[34rem]">
-                                <Grid slots={range(0, 27)} items={data.ender_chest} iconVersion={iconVersion} />
-                            </div>
-                        )}
+            {view === 'inventory' ? (
+                <div className="flex flex-wrap gap-4">
+                    <div className="grid w-11 shrink-0 gap-1.5 self-start">
+                        {armorOrder.map((k) => (
+                            <ItemSlot key={k} item={data.armor?.[k]} iconVersion={iconVersion} empty={t(`inventory.armor.${k}`)} />
+                        ))}
+                        <div className="h-1" />
+                        <ItemSlot item={data.offhand} iconVersion={iconVersion} empty={t('inventory.offhand')} />
                     </div>
-                )}
-            </div>
+                    <div className="min-w-[16rem] max-w-[30rem] flex-1 space-y-3">
+                        <Grid slots={range(9, 36)} items={data.inventory} iconVersion={iconVersion} />
+                        <Grid slots={range(0, 9)} items={data.inventory} iconVersion={iconVersion} selectedSlot={st.selected_slot} />
+                    </div>
+                </div>
+            ) : (
+                <div className="max-w-[30rem]">
+                    <Grid slots={range(0, 27)} items={data.ender_chest} iconVersion={iconVersion} />
+                </div>
+            )}
         </div>
     );
 }

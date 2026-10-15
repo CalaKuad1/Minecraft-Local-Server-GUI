@@ -1697,7 +1697,10 @@ def inventory_players():
     online = set()
     try:
         if state.server_handler.get_status() == "online":
-            online = {n.lower() for n in (state.server_handler.get_active_players_list(trigger_refresh=False) or [])}
+            online = {
+                str(p.get("name") if isinstance(p, dict) else p).lower()
+                for p in (state.server_handler.get_active_players_list(trigger_refresh=False) or [])
+            }
             # Player files are only written on autosave/logout; save first so
             # someone who just joined shows up.
             _save_players_if_stale()
