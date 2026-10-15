@@ -28,6 +28,8 @@ from PIL import Image, ImageDraw, ImageEnhance
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 RESOURCES_URL = "https://resources.download.minecraft.net"
 ICON_SIZE = 128
+# Bump when rendering changes so cached icons are drawn again.
+RENDER_VERSION = 2
 _NS_RE = re.compile(r"^[a-z0-9_.-]{1,64}$")
 _PATH_RE = re.compile(r"^[a-z0-9_./-]{1,128}$")
 # Kept from jars (relative to assets/<namespace>/).
@@ -337,13 +339,13 @@ class Roots:
 
     def icon_dir(self, ns):
         if ns == "minecraft":
-            return os.path.join(self.vanilla, "icons")
+            return os.path.join(self.vanilla, f"icons-v{RENDER_VERSION}")
         jars = mod_namespaces(self.server_path).get(ns) if self.server_path else None
         if not jars:
             return None
         # Keyed by the mods folder's contents, so updating a mod re-renders its icons.
         sig, _ = _mods_signature(os.path.join(self.server_path, "mods"))
-        return os.path.join(self.app_data_dir, "mod_assets", "icons", (sig or "none")[:12], ns)
+        return os.path.join(self.app_data_dir, "mod_assets", f"icons-v{RENDER_VERSION}", (sig or "none")[:12], ns)
 
 
 # ------------------------------------------------------------------ names
@@ -525,14 +527,19 @@ def _shade(img, factor):
 
 
 def _cube(top, left, right, height=1.0):
+    """Block icon with the in-game GUI projection (rotate 45° then tilt 30°):
+    the top is a 2:1 rhombus and vertical edges are 0.612x the full width."""
     s = ICON_SIZE
     m = s / 64.0
-    h = 30 * m * height
-    drop = 30 * m * (1 - height)
+    hw, th = 28 * m, 14 * m              # half width, half height of the top rhombus
+    full_v = 2 * hw * 0.6124             # vertical edge of a full cube
+    vh = full_v * height
+    y0 = 1 * m + full_v * (1 - height)   # slabs sit at the bottom
+    x0 = 4 * m
     out = Image.new("RGBA", (s, s))
-    _face(_shade(left, 0.82), s, (2 * m, 17 * m + drop), (30 * m, 15 * m), (0, h), out)
-    _face(_shade(right, 0.62), s, (32 * m, 32 * m + drop), (30 * m, -15 * m), (0, h), out)
-    _face(top, s, (2 * m, 17 * m + drop), (30 * m, -15 * m), (30 * m, 15 * m), out)
+    _face(_shade(left, 0.82), s, (x0, y0 + th), (hw, th), (0, vh), out)
+    _face(_shade(right, 0.62), s, (x0 + hw, y0 + 2 * th), (hw, -th), (0, vh), out)
+    _face(top, s, (x0, y0 + th), (hw, -th), (hw, th), out)
     return out
 
 
@@ -565,7 +572,7 @@ def _render_special(roots, item_path):
         if latch.getbbox():
             m = ICON_SIZE / 64.0
             latch = latch.resize((int(4 * m), int(7 * m)), Image.NEAREST)
-            icon.alpha_composite(latch, (int(45 * m), int(33 * m)))
+            icon.alpha_composite(latch, (int(44 * m), int(34 * m)))
         return icon
     if kind == "shield":
         return _fit(c(1, 1, 13, 23))

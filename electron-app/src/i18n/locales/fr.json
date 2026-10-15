@@ -658,6 +658,7 @@
         "assets_title": "Afficher les objets avec leur vrai look",
         "assets_desc": "Cubi télécharge les graphismes officiels du jeu depuis Mojang (environ 25 Mo, une seule fois pour tous tes serveurs) et dessine les icônes sur ton PC. Les objets moddés utilisent les mods que tu as déjà.",
         "assets_eula": "J'accepte l'EULA de Minecraft (aka.ms/MinecraftEULA)",
-        "assets_button": "Télécharger les graphismes"
+        "assets_button": "Télécharger les graphismes",
+        "assets_auto": "Préparation des graphismes des objets (environ 25 Mo depuis Mojang, une seule fois pour tous tes serveurs)..."
     }
 }

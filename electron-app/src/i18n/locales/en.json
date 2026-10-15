@@ -660,6 +660,7 @@
         "assets_title": "Show items with their real look",
         "assets_desc": "Cubi downloads the official game graphics from Mojang (about 25 MB, only once for all your servers) and draws the icons on your PC. Modded items use the mods you already have.",
         "assets_eula": "I accept the Minecraft EULA (aka.ms/MinecraftEULA)",
-        "assets_button": "Download graphics"
+        "assets_button": "Download graphics",
+        "assets_auto": "Getting the item graphics ready (about 25 MB from Mojang, only once for all your servers)..."
     }
 }

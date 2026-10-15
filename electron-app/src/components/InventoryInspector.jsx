@@ -102,6 +102,28 @@ function AssetsBanner({ onReady }) {
     const { t, locale } = useTranslation();
     const [accepted, setAccepted] = useState(false);
     const [dl, setDl] = useState(null);
+    // null = still checking; true = the server's EULA is already accepted, so
+    // the graphics download by themselves (no second consent prompt).
+    const [eulaDone, setEulaDone] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.getItemAssetsStatus().then(async (s) => {
+            if (cancelled) return;
+            setEulaDone(!!s.eula_accepted);
+            if (s.download?.running) {
+                setDl(s.download);
+            } else if (s.eula_accepted) {
+                try {
+                    const r = await api.downloadItemAssets(locale);
+                    if (!cancelled) setDl({ ...r.download, running: true });
+                } catch (e) {
+                    if (!cancelled) setDl({ running: false, error: e.message });
+                }
+            }
+        }).catch(() => !cancelled && setEulaDone(false));
+        return () => { cancelled = true; };
+    }, [locale]);
 
     useEffect(() => {
         if (!dl?.running) return undefined;
@@ -132,8 +154,8 @@ function AssetsBanner({ onReady }) {
             <Cubi mood={dl?.running ? 'busy' : 'idle'} size={48} className="shrink-0" />
             <div className="min-w-[16rem] flex-1">
                 <div className="font-display text-base font-semibold text-ink">{t('inventory.assets_title')}</div>
-                <p className="mt-0.5 text-sm text-ink-dim">{t('inventory.assets_desc')}</p>
-                {!dl?.running && (
+                <p className="mt-0.5 text-sm text-ink-dim">{eulaDone ? t('inventory.assets_auto') : t('inventory.assets_desc')}</p>
+                {!dl?.running && eulaDone === false && (
                     <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-ink-dim">
                         <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="accent-emerald-500" />
                         {t('inventory.assets_eula')}
@@ -146,10 +168,10 @@ function AssetsBanner({ onReady }) {
                 )}
                 {dl?.error && <p className="mt-2 text-xs text-red-300">{dl.error}</p>}
             </div>
-            {!dl?.running && (
+            {!dl?.running && (eulaDone === false || dl?.error) && (
                 <button
                     onClick={start}
-                    disabled={!accepted}
+                    disabled={!accepted && !eulaDone}
                     className="inline-flex items-center gap-2 rounded-md bg-grass px-4 py-2 text-sm font-semibold text-ground transition-colors hover:bg-mint disabled:opacity-40"
                 >
                     <Download size={15} /> {t('inventory.assets_button')}

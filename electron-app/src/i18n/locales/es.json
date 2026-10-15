@@ -658,6 +658,7 @@
         "assets_title": "Ver los objetos con su aspecto real",
         "assets_desc": "Cubi descarga los gráficos oficiales del juego desde Mojang (unos 25 MB, una sola vez para todos tus servidores) y dibuja los iconos en tu PC. Los objetos de mods usan los mods que ya tienes.",
         "assets_eula": "Acepto el EULA de Minecraft (aka.ms/MinecraftEULA)",
-        "assets_button": "Descargar gráficos"
+        "assets_button": "Descargar gráficos",
+        "assets_auto": "Preparando los gráficos de los objetos (unos 25 MB de Mojang, una sola vez para todos tus servidores)..."
     }
 }

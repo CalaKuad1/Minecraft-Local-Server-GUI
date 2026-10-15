@@ -165,6 +165,18 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def slow_request_logger(request: Request, call_next):
+    """Log requests slower than 2 s: the UI times out at 8 s, and a blocking
+    call inside an async endpoint stalls every other request meanwhile."""
+    started = time.monotonic()
+    response = await call_next(request)
+    elapsed = time.monotonic() - started
+    if elapsed > 2:
+        logging.warning(f"[slow] {request.method} {request.url.path} took {elapsed:.1f}s")
+    return response
+
+
+@app.middleware("http")
 async def token_auth_middleware(request: Request, call_next):
     """Require the shared token on every request when configured.
 
@@ -888,7 +900,7 @@ async def select_server(req: SelectServerRequest):
 
 
 @app.delete("/servers/{server_id}")
-async def delete_server(server_id: str, delete_files: bool = False):
+def delete_server(server_id: str, delete_files: bool = False):
     # Get server info before deleting profile
     server_info = state.config_manager.get_server(server_id)
     server_path = server_info.get("path") if server_info else None
@@ -1340,6 +1352,11 @@ def install_server(req: InstallRequest):
                 data = {"type": "progress", "value": pct, "message": msg}
                 data.update(kwargs)
                 state.broadcast_log_sync(data)
+                if pct >= 100:
+                    try:
+                        _auto_fetch_assets(req.version)
+                    except Exception as e:
+                        logging.warning(f"Item graphics download not started: {e}")
 
             # Reset progress state at start
             state.install_progress = 0
@@ -1644,6 +1661,34 @@ def _locale(lang):
     return mc.LOCALES.get((lang or "en")[:2], "en_us")
 
 
+def _app_language():
+    try:
+        return (state.config_manager.config.get("app_settings") or {}).get("language") or "en"
+    except Exception:
+        return "en"
+
+
+def _server_eula_accepted(server_path):
+    """The user accepted the Minecraft EULA for this server (wizard checkbox,
+    written to eula.txt), which also covers fetching the game's graphics."""
+    try:
+        with open(os.path.join(server_path, "eula.txt"), "r", encoding="utf-8", errors="replace") as f:
+            return any(line.strip().lower() == "eula=true" for line in f)
+    except OSError:
+        return False
+
+
+def _auto_fetch_assets(version):
+    """Background download of item graphics for a version, if not cached yet."""
+    if not version:
+        return False
+    mc, dl = _assets()
+    safe = os.path.basename(mc._version_dir(state.app_data_dir, version))
+    if safe in mc.cached_versions(state.app_data_dir):
+        return False
+    return dl.start(state.app_data_dir, version, _locale(_app_language()))
+
+
 @app.get("/inventory/players")
 def inventory_players():
     from utils import player_data
@@ -1693,6 +1738,8 @@ def inventory_player(uuid: str, lang: str = Query("en")):
         raise HTTPException(status_code=500, detail=f"Could not read player data: {e}")
 
     icons_version = mc.pick_version(state.app_data_dir, version)
+    if not icons_version and _server_eula_accepted(server_path):
+        _auto_fetch_assets(version)  # EULA already accepted for this server: no need to ask again
     locale = _locale(lang)
     names = {}
     if icons_version:
@@ -1724,8 +1771,10 @@ def inventory_player(uuid: str, lang: str = Query("en")):
 def mc_assets_status():
     mc, dl = _assets()
     version = state.server_handler.minecraft_version if state and state.server_handler else None
+    server_path = state.server_handler.server_path if state and state.server_handler else None
     return {
         "wanted": version,
+        "eula_accepted": bool(server_path and _server_eula_accepted(server_path)),
         "ready_version": mc.pick_version(state.app_data_dir, version),
         "cached": mc.cached_versions(state.app_data_dir),
         "download": dl.status(),
@@ -1734,7 +1783,8 @@ def mc_assets_status():
 
 @app.post("/mc-assets/download")
 def mc_assets_download(payload: dict):
-    if not payload.get("accept_eula"):
+    server_path = state.server_handler.server_path if state.server_handler else None
+    if not payload.get("accept_eula") and not (server_path and _server_eula_accepted(server_path)):
         raise HTTPException(status_code=400, detail="The Minecraft EULA must be accepted")
     mc, dl = _assets()
     version = payload.get("version") or (state.server_handler.minecraft_version if state.server_handler else None)
@@ -3854,7 +3904,7 @@ async def set_dns_subdomain(request: Request):
     old_subdomain = _get_server_slug(state)  # capture BEFORE changing
 
     # Reserve the name for this installation (fails if another user has it).
-    ok, data = _call_dns_proxy(state, "reserve", subdomain)
+    ok, data = await asyncio.to_thread(_call_dns_proxy, state, "reserve", subdomain)
     if not ok:
         raise HTTPException(
             status_code=409, detail=data.get("error") or "Subdomain not available"
@@ -3867,10 +3917,10 @@ async def set_dns_subdomain(request: Request):
 
     # Free the previous name (record + reservation) when renaming.
     if old_subdomain and old_subdomain != subdomain:
-        _call_dns_proxy(state, "release", old_subdomain)
+        await asyncio.to_thread(_call_dns_proxy, state, "release", old_subdomain)
 
     if state.tunnel_address and state.tunnel_process and state.tunnel_process.poll() is None:
-        ok, data = _call_dns_proxy(state, "create", subdomain, _dns_target(state))
+        ok, data = await asyncio.to_thread(_call_dns_proxy, state, "create", subdomain, _dns_target(state))
         if ok:
             state.dns_address = address
             _track_dns_subdomain(state, subdomain)
