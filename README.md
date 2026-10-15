@@ -36,11 +36,6 @@
 2. **Start** — the server starts by itself and gets a public address. No router setup.
 3. **Share** — copy the address and send it to your friends. They paste it in *Multiplayer → Add Server*.
 
-<p align="center">
-  <img src="images/screenshots/wizard-type.png" alt="Pick how you want to play" width="420">
-  <img src="images/screenshots/library.png" alt="Your servers" width="420">
-</p>
-
 ## Features
 
 | | |
@@ -54,14 +49,17 @@
 | 📱 **Bedrock crossplay** | With GeyserMC, phone and console players can join your Java server. |
 | 🌐 **4 languages** | English, Spanish, French and Russian. |
 
-<p align="center">
-  <img src="images/screenshots/players.png" alt="Player card with 3D skin and inventory" width="420">
-  <img src="images/screenshots/mods.png" alt="Mods browser" width="420">
-</p>
-<p align="center">
-  <img src="images/screenshots/worlds.png" alt="Worlds and backups" width="420">
-  <img src="images/screenshots/settings.png" alt="Server settings" width="420">
-</p>
+<details>
+<summary><strong>📸 More screenshots</strong></summary>
+<br>
+
+| | |
+|:--:|:--:|
+| <img src="images/screenshots/players.png" alt="Player card with 3D skin and inventory" width="400"><br><sub>Players</sub> | <img src="images/screenshots/mods.png" alt="Mods browser" width="400"><br><sub>Mods</sub> |
+| <img src="images/screenshots/worlds.png" alt="Worlds and backups" width="400"><br><sub>Worlds & backups</sub> | <img src="images/screenshots/settings.png" alt="Server settings" width="400"><br><sub>Settings</sub> |
+| <img src="images/screenshots/wizard-type.png" alt="Setup wizard" width="400"><br><sub>Setup wizard</sub> | <img src="images/screenshots/library.png" alt="Your servers" width="400"><br><sub>Your servers</sub> |
+
+</details>
 
 ## Download
 
