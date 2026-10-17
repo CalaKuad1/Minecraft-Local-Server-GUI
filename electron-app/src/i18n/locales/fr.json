@@ -210,12 +210,7 @@
         "language": "Langue",
         "appearance": "Apparence",
         "about": "À propos",
-        "save": "Enregistrer",
-        "saved": "Enregistré !",
-        "auto_start": {
-            "title": "Démarrage Automatique",
-            "desc": "Démarrer automatiquement le dernier serveur au lancement."
-        },
+        "saved": "Enregistré",
         "auto_update": {
             "title": "Mises à jour Automatiques",
             "desc": "Choisissez la gestion des nouvelles versions par l'application.",
@@ -228,37 +223,15 @@
                 "off_desc": "Ne jamais vérifier les mises à jour automatiquement."
             }
         },
-        "notifications": {
-            "title": "Notifications Bureau",
-            "desc": "Alertes sur l'état et les événements du serveur."
-        },
         "general_settings": {
-            "title": "Paramètres Généraux",
-            "desc": "Configurer le comportement de l'application."
-        },
-        "language_settings": {
-            "title": "Langue",
-            "desc": "Sélectionnez votre langue d'affichage."
+            "desc": "Langue et apparence de l'application."
         },
         "appearance_settings": {
-            "title": "Apparence",
-            "desc": "Personnalisez l'apparence de l'application.",
             "reduce_effects": "Réduire les effets visuels",
             "reduce_effects_desc": "Désactive le flou d'arrière-plan et le grain. Utile sur les ordinateurs anciens ou si l'application est lente."
         },
-        "about_settings": {
-            "title": "À propos",
-            "desc": "Informations sur l'application."
-        },
         "version": "Version",
-        "developer": "Développeur",
-        "framework": "Framework",
-        "license": "Licence",
         "view_github": "Voir sur GitHub",
-        "tray": {
-            "title": "Réduire dans la barre",
-            "desc": "L'app continue de tourner dans la barre système quand tu fermes la fenêtre."
-        },
         "dns": {
             "nav": "Adresse fixe",
             "title": "Adresse fixe",
@@ -268,10 +241,36 @@
             "url": "URL du proxy DNS",
             "url_placeholder": "Laisse vide pour utiliser le proxy communautaire gratuit",
             "url_hint": "Avancé : ne change ceci que si tu héberges ton propre proxy.",
-            "info": "Au démarrage du tunnel, ton serveur reçoit automatiquement une adresse fixe [nom].play.ariser.app. Gratuit pour tous."
+            "info": "Au démarrage du tunnel, ton serveur reçoit automatiquement une adresse fixe [nom].play.ariser.app. Gratuit pour tous.",
+            "advanced": "Avancé"
         },
         "about_tagline": "Crée un serveur Minecraft sur ton propre PC et joue avec tes amis en une minute. Gratuit et sans limites. Compatible Vanilla, Paper, Fabric, Forge et NeoForge.",
-        "about_disclaimer": "PRODUIT NON OFFICIEL DE MINECRAFT. NON APPROUVÉ PAR MOJANG OU MICROSOFT ET NON ASSOCIÉ À EUX."
+        "about_disclaimer": "PRODUIT NON OFFICIEL DE MINECRAFT. NON APPROUVÉ PAR MOJANG OU MICROSOFT ET NON ASSOCIÉ À EUX.",
+        "autosave": "Les modifications sont enregistrées automatiquement.",
+        "website": "Site web",
+        "report_issue": "Signaler un problème",
+        "open_logs": "Ouvrir le dossier des journaux",
+        "open_logs_desc": "Le dossier du journal et des données de l'application. Joignez le journal quand vous signalez un problème.",
+        "made_by": "Créé par",
+        "updates": {
+            "nav": "Mises à jour",
+            "title": "Mises à jour",
+            "check": "Vérifier",
+            "download": "Télécharger",
+            "restart": "Redémarrer et installer",
+            "current": "Vous avez la version {version}",
+            "idle": "Appuyez sur « Vérifier » pour chercher une nouvelle version.",
+            "checking": "Recherche de mises à jour…",
+            "up_to_date": "Vous êtes à jour.",
+            "available": "La version {version} est disponible",
+            "available_ask": "Téléchargez-la quand vous voulez.",
+            "available_auto": "Téléchargement en arrière-plan.",
+            "downloading": "Téléchargement de la mise à jour… {percent} %",
+            "ready": "La version {version} est prête",
+            "ready_desc": "Elle s'installe au redémarrage de l'application.",
+            "error": "Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet.",
+            "disabled": "Les mises à jour ne fonctionnent que dans l'application installée."
+        }
     },
     "common": {
         "back": "Retour",

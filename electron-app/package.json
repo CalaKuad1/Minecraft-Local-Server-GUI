@@ -1,12 +1,12 @@
 {
   "name": "minecraft-server-gui",
   "private": true,
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/CalaKuad1/Minecraft-Local-Server-GUI.git"
   },
-  "description": "The ultimate tool for installing and managing Minecraft servers — beautiful, modern, and effortless.",
+  "description": "Cubi: host a Minecraft server on your PC and play with your friends",
   "author": "CalaKuad <calakuad.dev@gmail.com>",
   "type": "module",
   "main": "electron/main.cjs",
@@ -54,7 +54,7 @@
   },
   "build": {
     "appId": "com.minecraft.localservergui",
-    "productName": "Minecraft Local Server GUI",
+    "productName": "Cubi",
     "publish": [
       {
         "provider": "github",
@@ -88,7 +88,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/images/icon.ico"
+      "icon": "public/images/icon.ico",
+      "artifactName": "Cubi-Setup-${version}.${ext}"
     },
     "linux": {
       "target": [
@@ -96,14 +97,31 @@
         "deb"
       ],
       "icon": "public/images/logo2.png",
-      "category": "Game"
+      "category": "Game",
+      "artifactName": "Cubi-${version}.${ext}",
+      "synopsis": "Host a Minecraft server on your PC and play with friends",
+      "desktop": {
+        "Name": "Cubi",
+        "Comment": "Host a Minecraft server on your PC and play with friends",
+        "Keywords": "minecraft;server;"
+      }
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "installerIcon": "public/images/icon.ico",
       "uninstallerIcon": "public/images/icon.ico",
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "shortcutName": "Cubi",
+      "uninstallDisplayName": "Cubi",
+      "installerHeaderIcon": "public/images/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "copyright": "Copyright (c) CalaKuad1. MIT License.",
+    "deb": {
+      "artifactName": "cubi_${version}_${arch}.${ext}"
     }
   }
 }

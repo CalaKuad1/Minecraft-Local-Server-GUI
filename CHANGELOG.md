@@ -25,6 +25,11 @@ MLSG is now **Cubi**: a redesigned app focused on one goal — get a Minecraft s
 - Server settings with plain explanations, sliders, RAM presets and an unsaved-changes bar.
 - Worlds & backups redesigned.
 
+### App & installer
+- The installer, shortcuts and window are now called **Cubi**. Updating from 1.x keeps your servers, settings and shortcuts.
+- Redesigned App Settings: language, updates (with "Check now"), fixed address and About, saved automatically. Removed options that had no effect.
+- Links open in your browser instead of inside the app.
+
 ### Fixes
 - Backend falls back to a free port when 8000 is in use.
 - Blocking endpoints no longer freeze the UI; slow requests are logged.

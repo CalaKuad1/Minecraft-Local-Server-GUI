@@ -6,14 +6,11 @@
   <p><strong>Host a Minecraft server on your own PC and play with your friends in a minute.<br>Free, no limits, no port forwarding.</strong></p>
 
   <p>
-    <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/tag/v2.0.0-beta.1">
-      <img src="https://img.shields.io/badge/Try_the_v2_beta-Cubi-10b981?style=for-the-badge" alt="Download the Cubi v2 beta">
+    <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
+      <img src="https://img.shields.io/badge/Download-Windows-10b981?style=for-the-badge&logo=windows" alt="Download for Windows">
     </a>
     <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
-      <img src="https://img.shields.io/badge/Stable-Windows-00d26a?style=for-the-badge&logo=windows" alt="Download for Windows">
-    </a>
-    <a href="https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest">
-      <img src="https://img.shields.io/badge/Stable-Linux-fcc624?style=for-the-badge&logo=linux&logoColor=black" alt="Download for Linux">
+      <img src="https://img.shields.io/badge/Download-Linux-10b981?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux">
     </a>
   </p>
 
@@ -68,8 +65,7 @@
 | **Windows 10/11** (64-bit) | `.exe` installer |
 | **Linux** | `.AppImage` or `.deb` |
 
-- **v2 beta (Cubi):** [v2.0.0-beta.1](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/tag/v2.0.0-beta.1) — the new app. Feedback welcome in [Issues](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/issues).
-- **Stable:** [latest release](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest). Existing installs are not moved to the beta automatically.
+[Download the latest version](https://github.com/CalaKuad1/Minecraft-Local-Server-GUI/releases/latest). Already using MLSG 1.x? The app will update to Cubi and keep your servers and settings.
 
 No Python or Java needed. See the [changelog](CHANGELOG.md) for what's new.
 

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
     apiToken,
     apiPort,
     getAppInfo: () => ipcRenderer.invoke('app:info'),
+    openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
     openFile: () => ipcRenderer.invoke('dialog:openFile'),
     onCloseRequested: (callback) => {

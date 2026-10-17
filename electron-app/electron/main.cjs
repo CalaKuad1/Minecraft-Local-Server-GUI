@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell } = require('electron');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -73,8 +74,11 @@ try {
 try {
   app.setAppUserModelId('com.minecraft.localservergui');
 } catch (_) { }
+// The installer is called "Cubi" since v2.0.0, but userData stays in the
+// pre-rename folder so existing installs keep their local settings.
 try {
   app.setName('Minecraft Local Server GUI');
+  app.setPath('userData', path.join(app.getPath('appData'), 'Minecraft Local Server GUI'));
 } catch (_) { }
 
 function createWindow() {
@@ -99,6 +103,21 @@ function createWindow() {
     frame: false,
     backgroundColor: '#0f0f0f',
     show: true
+  });
+
+  // Links with target=_blank (GitHub, playit.gg, Modrinth...) open in the
+  // user's browser. Never as a child window: it would inherit the preload
+  // bridge and the API token.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const appUrl = mainWindow.webContents.getURL();
+    if (url !== appUrl && /^https?:\/\//i.test(url) && !url.startsWith('http://localhost:5173')) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   // Load the app
@@ -170,6 +189,15 @@ ipcMain.handle('app:info', () => ({
   home: app.getPath('home'),
   documents: app.getPath('documents')
 }));
+
+// Folder with the backend log and app data (same paths as backend/api_server.py).
+ipcMain.handle('app:openDataFolder', async () => {
+  const dir = process.platform === 'win32'
+    ? path.join(process.env.APPDATA || app.getPath('appData'), 'MinecraftServerGUI')
+    : path.join(os.homedir(), '.minecraft_server_gui');
+  const err = await shell.openPath(dir);
+  return { ok: !err, error: err || undefined };
+});
 
 // --- Auto-update IPC ---
 ipcMain.handle('update:check', async () => {

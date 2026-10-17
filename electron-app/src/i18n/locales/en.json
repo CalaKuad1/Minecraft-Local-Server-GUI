@@ -210,12 +210,7 @@
         "language": "Language",
         "appearance": "Appearance",
         "about": "About",
-        "save": "Save Settings",
-        "saved": "Saved!",
-        "auto_start": {
-            "title": "Auto-Start Last Server",
-            "desc": "Automatically boot the last active server on launch."
-        },
+        "saved": "Saved",
         "auto_update": {
             "title": "Automatic Updates",
             "desc": "Choose how the app handles new versions.",
@@ -228,37 +223,15 @@
                 "off_desc": "Never check for updates automatically."
             }
         },
-        "notifications": {
-            "title": "Desktop Notifications",
-            "desc": "Alerts for server status and events."
-        },
         "general_settings": {
-            "title": "General Settings",
-            "desc": "Configure core application behavior."
-        },
-        "language_settings": {
-            "title": "Language",
-            "desc": "Select your preferred display language."
+            "desc": "Language and how the app looks."
         },
         "appearance_settings": {
-            "title": "Appearance",
-            "desc": "Customize the look and feel of the application.",
             "reduce_effects": "Reduce visual effects",
             "reduce_effects_desc": "Turns off background blur and film grain. Helps on older computers or when the app feels slow."
         },
-        "about_settings": {
-            "title": "About",
-            "desc": "Application information and credits."
-        },
         "version": "Version",
-        "developer": "Developer",
-        "framework": "Framework",
-        "license": "License",
         "view_github": "View on GitHub",
-        "tray": {
-            "title": "Minimize to tray",
-            "desc": "Keep the app running in the system tray when you close the window."
-        },
         "dns": {
             "nav": "Fixed address",
             "title": "Fixed address",
@@ -268,10 +241,36 @@
             "url": "DNS proxy URL",
             "url_placeholder": "Leave empty to use the free community proxy",
             "url_hint": "Advanced: only change this if you host your own proxy.",
-            "info": "When the tunnel starts, your server automatically gets a fixed address at [name].play.ariser.app. Free for everyone."
+            "info": "When the tunnel starts, your server automatically gets a fixed address at [name].play.ariser.app. Free for everyone.",
+            "advanced": "Advanced"
         },
         "about_tagline": "Create a Minecraft server on your own PC and play with your friends in a minute. Free, no limits. Supports Vanilla, Paper, Fabric, Forge and NeoForge.",
-        "about_disclaimer": "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT."
+        "about_disclaimer": "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.",
+        "autosave": "Changes are saved automatically.",
+        "website": "Website",
+        "report_issue": "Report a problem",
+        "open_logs": "Open logs folder",
+        "open_logs_desc": "The folder with the app's log and data. Attach the log when you report a problem.",
+        "made_by": "Made by",
+        "updates": {
+            "nav": "Updates",
+            "title": "Updates",
+            "check": "Check now",
+            "download": "Download",
+            "restart": "Restart and install",
+            "current": "You have version {version}",
+            "idle": "Press \"Check now\" to look for a new version.",
+            "checking": "Looking for updates…",
+            "up_to_date": "You're up to date.",
+            "available": "Version {version} is available",
+            "available_ask": "Download it when you're ready.",
+            "available_auto": "Downloading in the background.",
+            "downloading": "Downloading update… {percent}%",
+            "ready": "Version {version} is ready",
+            "ready_desc": "It installs when you restart the app.",
+            "error": "Couldn't check for updates. Check your internet connection.",
+            "disabled": "Updates are only available in the installed app."
+        }
     },
     "common": {
         "back": "Back",

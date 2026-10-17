@@ -210,12 +210,7 @@
         "language": "Idioma",
         "appearance": "Apariencia",
         "about": "Acerca de",
-        "save": "Guardar Ajustes",
-        "saved": "¡Guardado!",
-        "auto_start": {
-            "title": "Auto-Inicio Último Servidor",
-            "desc": "Arranca automáticamente el último servidor activo al iniciar."
-        },
+        "saved": "Guardado",
         "auto_update": {
             "title": "Actualizaciones Automáticas",
             "desc": "Elige cómo gestiona la app las nuevas versiones.",
@@ -228,37 +223,15 @@
                 "off_desc": "No comprobar actualizaciones automáticamente."
             }
         },
-        "notifications": {
-            "title": "Notificaciones de Escritorio",
-            "desc": "Alertas sobre el estado y eventos del servidor."
-        },
         "general_settings": {
-            "title": "Ajustes Generales",
-            "desc": "Configura el comportamiento principal de la app."
-        },
-        "language_settings": {
-            "title": "Idioma",
-            "desc": "Selecciona el idioma de la interfaz."
+            "desc": "Idioma y aspecto de la app."
         },
         "appearance_settings": {
-            "title": "Apariencia",
-            "desc": "Personaliza el aspecto de la aplicación.",
             "reduce_effects": "Reducir efectos visuales",
             "reduce_effects_desc": "Desactiva el desenfoque del fondo y el grano de película. Ayuda en equipos antiguos o si la app va lenta."
         },
-        "about_settings": {
-            "title": "Acerca de",
-            "desc": "Información y créditos de la aplicación."
-        },
         "version": "Versión",
-        "developer": "Desarrollador",
-        "framework": "Framework",
-        "license": "Licencia",
         "view_github": "Ver en GitHub",
-        "tray": {
-            "title": "Minimizar a la bandeja",
-            "desc": "La app sigue funcionando en la bandeja del sistema al cerrar la ventana."
-        },
         "dns": {
             "nav": "Dirección fija",
             "title": "Dirección fija",
@@ -268,10 +241,36 @@
             "url": "URL del proxy DNS",
             "url_placeholder": "Déjalo vacío para usar el proxy comunitario gratuito",
             "url_hint": "Avanzado: cámbialo solo si tienes tu propio proxy.",
-            "info": "Al arrancar el túnel, tu servidor recibe automáticamente una dirección fija en [nombre].play.ariser.app. Gratis para todos."
+            "info": "Al arrancar el túnel, tu servidor recibe automáticamente una dirección fija en [nombre].play.ariser.app. Gratis para todos.",
+            "advanced": "Avanzado"
         },
         "about_tagline": "Crea un servidor de Minecraft en tu propio PC y juega con tus amigos en un minuto. Gratis y sin límites. Compatible con Vanilla, Paper, Fabric, Forge y NeoForge.",
-        "about_disclaimer": "NO ES UN PRODUCTO OFICIAL DE MINECRAFT. NO ESTÁ APROBADO POR MOJANG NI MICROSOFT NI ASOCIADO CON ELLOS."
+        "about_disclaimer": "NO ES UN PRODUCTO OFICIAL DE MINECRAFT. NO ESTÁ APROBADO POR MOJANG NI MICROSOFT NI ASOCIADO CON ELLOS.",
+        "autosave": "Los cambios se guardan solos.",
+        "website": "Página web",
+        "report_issue": "Informar de un problema",
+        "open_logs": "Abrir carpeta de registros",
+        "open_logs_desc": "La carpeta con el registro y los datos de la app. Adjunta el registro cuando informes de un problema.",
+        "made_by": "Hecho por",
+        "updates": {
+            "nav": "Actualizaciones",
+            "title": "Actualizaciones",
+            "check": "Buscar ahora",
+            "download": "Descargar",
+            "restart": "Reiniciar e instalar",
+            "current": "Tienes la versión {version}",
+            "idle": "Pulsa \"Buscar ahora\" para ver si hay una versión nueva.",
+            "checking": "Buscando actualizaciones…",
+            "up_to_date": "Tienes la última versión.",
+            "available": "Hay una versión nueva: {version}",
+            "available_ask": "Descárgala cuando quieras.",
+            "available_auto": "Descargando en segundo plano.",
+            "downloading": "Descargando actualización… {percent}%",
+            "ready": "La versión {version} está lista",
+            "ready_desc": "Se instala al reiniciar la app.",
+            "error": "No se pudo buscar actualizaciones. Revisa tu conexión a internet.",
+            "disabled": "Las actualizaciones solo funcionan en la app instalada."
+        }
     },
     "common": {
         "back": "Atrás",
