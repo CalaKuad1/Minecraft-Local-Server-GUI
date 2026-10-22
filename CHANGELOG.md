@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.1
+
+### Mods
+- **Server-mod filter**: Browse and Modpacks show only mods that work on a server by default. Choose "Server-only (no client mod)" to see just the mods your friends don't need to install, or "Any side" to see everything. Those mods also get a "Server-only" badge.
+- **Mod updates**: the Installed tab checks your Modrinth mods for newer versions for your loader and Minecraft version, with an Update button per mod and "Update all". The old mod is only replaced once the new one has downloaded and passed a checksum check, so a failed update never breaks your server.
+- **Auto-update on start**: optional per-server switch that installs mod updates before the server launches. If Modrinth can't be reached, the server still starts.
+
 ## v2.0.0 — Cubi
 
 MLSG is now **Cubi**: a redesigned app focused on one goal — get a Minecraft server running and your friends in, in a minute.
