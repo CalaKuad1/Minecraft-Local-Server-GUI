@@ -469,11 +469,35 @@ export const api = {
     },
 
     // --- Mods ---
-    searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod', sort = 'downloads', category = null) => {
+    searchMods: async (query, loader = 'fabric', version = null, projectType = 'mod', sort = 'downloads', category = null, side = null) => {
         let url = `${API_URL}/mods/search?q=${encodeURIComponent(query)}&loader=${loader}&project_type=${projectType}&sort=${sort}`;
         if (version) url += `&version=${version}`;
         if (category && category !== 'all') url += `&category=${category}`;
+        if (side && side !== 'all') url += `&side=${side}`;
         return await fetchJson(url);
+    },
+    checkModUpdates: async (loader = null, version = null) => {
+        const params = new URLSearchParams();
+        if (loader && loader !== 'any') params.set('loader', loader);
+        if (version) params.set('version', version);
+        return await fetchJson(`${API_URL}/mods/updates?${params}`, {}, 30000);
+    },
+    updateMods: async (updates) => {
+        return await fetchJson(`${API_URL}/mods/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates })
+        });
+    },
+    getModAutoUpdate: async () => {
+        return await fetchJson(`${API_URL}/mods/auto-update`);
+    },
+    setModAutoUpdate: async (enabled) => {
+        return await fetchJson(`${API_URL}/mods/auto-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
     },
     getModVersions: async (slug, loader = 'fabric', version = null) => {
         let url = `${API_URL}/mods/versions/${slug}?loader=${loader}`;

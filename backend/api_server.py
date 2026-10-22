@@ -778,6 +778,19 @@ class ModDeleteRequest(BaseModel):
     filename: str
 
 
+class ModUpdateItem(BaseModel):
+    filename: str
+    version_id: str
+
+
+class ModUpdateRequest(BaseModel):
+    updates: List[ModUpdateItem]
+
+
+class ModAutoUpdateRequest(BaseModel):
+    enabled: bool
+
+
 class ScheduleStopRequest(BaseModel):
     minutes: int
 
@@ -1117,8 +1130,31 @@ def start_server():
         raise HTTPException(status_code=400, detail="Server not configured")
 
     try:
+        if _mod_update_lock.locked():
+            return {"message": "Mods are updating; the server will start afterwards"}
+
+        handler = state.server_handler
+        cfg = state.config_manager.get_server(state.selected_server_id) or {}
+        if (
+            cfg.get("auto_update_mods")
+            and handler.get_status() == "offline"
+            and _server_mod_loader()
+            and state.mods_manager.get_installed_mods(handler.server_path)
+            and _mod_update_lock.acquire(blocking=False)
+        ):
+
+            def update_then_start():
+                try:
+                    _auto_update_mods(handler)
+                finally:
+                    _mod_update_lock.release()
+                handler.start()
+
+            threading.Thread(target=update_then_start, daemon=True).start()
+            return {"message": "Updating mods before start"}
+
         logging.info("API: Triggering server_handler.start()...")
-        state.server_handler.start()
+        handler.start()
         return {"message": "Start command issued"}
     except Exception as e:
         logging.exception("API: Critical error in /start endpoint")
@@ -4139,6 +4175,7 @@ def search_mods(
     project_type: str = "mod",
     sort: str = "downloads",
     category: str = None,
+    side: str = None,
 ):
     if not state:
         raise HTTPException(status_code=500, detail="State not initialized")
@@ -4148,7 +4185,7 @@ def search_mods(
         version = state.server_handler.minecraft_version
 
     return state.mods_manager.search_mods(
-        q, loader, version, project_type, sort, category
+        q, loader, version, project_type, sort, category, side
     )
 
 
@@ -4254,6 +4291,132 @@ def delete_mod(req: ModDeleteRequest):
         raise HTTPException(status_code=400, detail="Failed to delete mod")
 
     return {"status": "success"}
+
+
+# Serializes mod updates (manual "Update" and the pre-start auto-update) so two
+# runs never swap the same jar at once, and /start can wait for one to finish.
+_mod_update_lock = threading.Lock()
+
+
+def _server_mod_loader():
+    """Modrinth loader for the active server, or None for unmodded servers."""
+    server_type = (state.server_handler.server_type or "").lower()
+    # neoforge must be tested before forge (substring).
+    for loader in ("neoforge", "forge", "quilt", "fabric"):
+        if loader in server_type:
+            return loader
+    return None
+
+
+def _run_mod_updates(updates, server_path):
+    """Apply [(filename, version_id)] updates, reporting each over the WS."""
+    updated = 0
+    for filename, version_id in updates:
+
+        def progress(pct, msg, filename=filename):
+            state.broadcast_log_sync(
+                {"type": "progress", "value": pct, "message": msg, "slug": filename}
+            )
+
+        result = state.mods_manager.update_mod(
+            filename, version_id, server_path, progress_callback=progress
+        )
+        if result.get("success"):
+            updated += 1
+            state.broadcast_log_sync(
+                f"Mod updated: {filename} -> {result['filename']}", "success"
+            )
+        else:
+            state.broadcast_log_sync(
+                f"Mod update failed ({filename}): {result.get('error')}", "error"
+            )
+        state.broadcast_log_sync(
+            {
+                "type": "mod_update_complete",
+                "filename": filename,
+                "success": bool(result.get("success")),
+                **({"new_filename": result["filename"]} if result.get("success") else {}),
+            }
+        )
+    return updated
+
+
+def _auto_update_mods(handler):
+    """Pre-start auto-update: install every available compatible update."""
+    try:
+        state.broadcast_log_sync("Checking mods for updates...", "info")
+        mods = state.mods_manager.check_updates(
+            handler.server_path, _server_mod_loader(), handler.minecraft_version
+        )
+    except Exception as e:
+        # Never block a start because Modrinth is unreachable.
+        state.broadcast_log_sync(f"Mod update check failed: {e}", "warning")
+        return
+    pending = [(m["filename"], m["update"]["version_id"]) for m in mods if m["update"]]
+    if not pending:
+        state.broadcast_log_sync("All mods are up to date.", "info")
+        return
+    updated = _run_mod_updates(pending, handler.server_path)
+    state.broadcast_log_sync(f"Updated {updated}/{len(pending)} mod(s).", "info")
+
+
+@app.get("/mods/updates")
+def check_mod_updates(loader: str = None, version: str = None):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    handler = state.server_handler
+    try:
+        return state.mods_manager.check_updates(
+            handler.server_path,
+            loader or _server_mod_loader(),
+            version or handler.minecraft_version,
+        )
+    except Exception as e:
+        logging.error(f"Mod update check failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Modrinth unavailable: {e}")
+
+
+@app.post("/mods/update")
+def update_mods(req: ModUpdateRequest):
+    if not state or not state.server_handler:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    handler = state.server_handler
+    # A running server holds its jars open (and locked on Windows).
+    if handler.get_status() != "offline":
+        raise HTTPException(status_code=409, detail="Stop the server before updating mods")
+    if not req.updates:
+        return {"status": "nothing to update"}
+    if not _mod_update_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Mods are already updating")
+
+    def run():
+        try:
+            _run_mod_updates(
+                [(u.filename, u.version_id) for u in req.updates], handler.server_path
+            )
+        finally:
+            _mod_update_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"status": "started"}
+
+
+@app.get("/mods/auto-update")
+def get_mod_auto_update():
+    if not state or not state.selected_server_id:
+        return {"enabled": False}
+    cfg = state.config_manager.get_server(state.selected_server_id) or {}
+    return {"enabled": bool(cfg.get("auto_update_mods"))}
+
+
+@app.post("/mods/auto-update")
+def set_mod_auto_update(req: ModAutoUpdateRequest):
+    if not state or not state.selected_server_id:
+        raise HTTPException(status_code=400, detail="Server not configured")
+    state.config_manager.update_server(
+        state.selected_server_id, {"auto_update_mods": req.enabled}
+    )
+    return {"enabled": req.enabled}
 
 
 @app.post("/mods/open-folder")

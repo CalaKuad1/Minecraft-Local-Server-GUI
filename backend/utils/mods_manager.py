@@ -1,5 +1,6 @@
 import requests
 import os
+import hashlib
 import logging
 import json
 import time
@@ -10,6 +11,17 @@ from .api_client import download_file_from_url
 
 class ModsManager:
     BASE_URL = "https://api.modrinth.com/v2"
+
+    # Modrinth environment facets. A server can only load a mod whose
+    # server_side isn't "unsupported"; "server_only" additionally requires the
+    # mod not to be needed on the client, so players can join with vanilla.
+    SIDE_FACETS = {
+        "server": [["server_side:required", "server_side:optional"]],
+        "server_only": [
+            ["server_side:required", "server_side:optional"],
+            ["client_side:optional", "client_side:unsupported"],
+        ],
+    }
 
     def __init__(self):
         self.headers = {"User-Agent": "MinecraftLocalServerGUI/1.0 (internal-dev)"}
@@ -22,6 +34,7 @@ class ModsManager:
         project_type: str = "mod",
         sort: str = "downloads",
         category: str = None,
+        side: str = None,
     ) -> List[Dict]:
         """
         Search for mods or modpacks on Modrinth.
@@ -38,6 +51,8 @@ class ModsManager:
 
             if category and category.lower() != "all":
                 facets.append([f"categories:{category}"])
+
+            facets.extend(self.SIDE_FACETS.get((side or "").lower(), []))
 
             params = {"query": query, "limit": 20, "facets": json.dumps(facets)}
 
@@ -421,6 +436,182 @@ class ModsManager:
         except Exception as e:
             logging.error(f"Modpack installation failed: {e}")
             cleanup_partial()
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _sha1(path: str) -> str:
+        h = hashlib.sha1()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def check_updates(
+        self, server_path: str, loader: str = None, version: str = None
+    ) -> List[Dict]:
+        """
+        Resolve installed jars to Modrinth by SHA-1 and report the newest
+        compatible version of each. Jars Modrinth doesn't know (manual imports,
+        CurseForge downloads) are left out. Raises on network/API errors.
+        """
+        hashes = {}
+        for mod in self.get_installed_mods(server_path):
+            try:
+                hashes[self._sha1(mod["path"])] = mod["filename"]
+            except OSError as e:
+                logging.warning(f"Could not hash {mod['filename']}: {e}")
+        if not hashes:
+            return []
+
+        body = {"hashes": list(hashes), "algorithm": "sha1"}
+        response = requests.post(
+            f"{self.BASE_URL}/version_files",
+            json=body,
+            headers=self.headers,
+            timeout=15,
+        )
+        response.raise_for_status()
+        current = response.json()
+        if not current:
+            return []
+
+        update_body = dict(body)
+        if loader and loader.lower() not in ("any", "all"):
+            update_body["loaders"] = [loader.lower()]
+        if version and version.strip():
+            update_body["game_versions"] = [version.strip()]
+        response = requests.post(
+            f"{self.BASE_URL}/version_files/update",
+            json=update_body,
+            headers=self.headers,
+            timeout=15,
+        )
+        response.raise_for_status()
+        latest = response.json()
+
+        projects = {}
+        ids = sorted({v["project_id"] for v in current.values() if v.get("project_id")})
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/projects",
+                params={"ids": json.dumps(ids)},
+                headers=self.headers,
+                timeout=15,
+            )
+            response.raise_for_status()
+            projects = {p["id"]: p for p in response.json()}
+        except Exception as e:
+            # Titles/icons are cosmetic; the update data is still valid.
+            logging.warning(f"Could not fetch project details: {e}")
+
+        results = []
+        for sha1, filename in hashes.items():
+            cur = current.get(sha1)
+            if not cur:
+                continue
+            project = projects.get(cur.get("project_id"), {})
+            entry = {
+                "filename": filename,
+                "project_id": cur.get("project_id"),
+                "slug": project.get("slug"),
+                "title": project.get("title"),
+                "icon_url": project.get("icon_url"),
+                "current_version": cur.get("version_number"),
+                "update": None,
+            }
+            new = latest.get(sha1)
+            # Modrinth returns the newest version matching the filters, which
+            # can be *older* than the installed one (e.g. a build for another
+            # game version was installed by hand) — only offer real upgrades.
+            if (
+                new
+                and new.get("id") != cur.get("id")
+                and (new.get("date_published") or "") > (cur.get("date_published") or "")
+            ):
+                files = new.get("files", [])
+                primary = next(
+                    (f for f in files if f.get("primary")), files[0] if files else None
+                )
+                if primary:
+                    entry["update"] = {
+                        "version_id": new["id"],
+                        "version_number": new.get("version_number"),
+                        "filename": primary.get("filename"),
+                    }
+            results.append(entry)
+        results.sort(key=lambda r: (r["title"] or r["filename"]).lower())
+        return results
+
+    def update_mod(
+        self, filename: str, version_id: str, server_path: str, progress_callback=None
+    ) -> Dict:
+        """
+        Replace an installed jar with another Modrinth version. The new file is
+        downloaded next to it first, so a failed download leaves the old jar
+        untouched; the old jar is removed only once the new one is verified.
+        """
+        old_name = os.path.basename(filename or "")
+        mods_dir = os.path.join(server_path, "mods")
+        old_path = os.path.join(mods_dir, old_name)
+        if not old_name or not os.path.isfile(old_path):
+            return {"success": False, "error": f"{filename} is not installed"}
+        tmp_path = None
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/version/{version_id}",
+                headers=self.headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            files = response.json().get("files", [])
+            primary = next(
+                (f for f in files if f.get("primary")), files[0] if files else None
+            )
+            if not primary or not primary.get("filename", "").endswith(".jar"):
+                return {"success": False, "error": "No .jar file in this version"}
+
+            new_name = os.path.basename(primary["filename"])
+            new_path = os.path.join(mods_dir, new_name)
+            tmp_path = new_path + ".part"
+
+            def dl_progress(p):
+                if progress_callback:
+                    progress_callback(p, f"Updating {old_name}...")
+
+            if not download_file_from_url(primary["url"], tmp_path, dl_progress):
+                reason = getattr(
+                    download_file_from_url, "last_error", None
+                ) or "Unknown error"
+                return {
+                    "success": False,
+                    "error": f"Failed to download {new_name}: {reason}",
+                }
+
+            expected = (primary.get("hashes") or {}).get("sha1")
+            if expected and self._sha1(tmp_path) != expected:
+                os.remove(tmp_path)
+                return {"success": False, "error": f"Checksum mismatch for {new_name}"}
+
+            os.replace(tmp_path, new_path)
+            if new_name.lower() != old_name.lower():
+                try:
+                    os.remove(old_path)
+                except OSError as e:
+                    # Never leave two versions of the same mod side by side:
+                    # back out the new jar and keep the old one.
+                    os.remove(new_path)
+                    return {
+                        "success": False,
+                        "error": f"Could not remove {old_name}: {e}",
+                    }
+            return {"success": True, "filename": new_name, "previous": old_name}
+        except Exception as e:
+            logging.error(f"Error updating mod {old_name}: {e}")
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
             return {"success": False, "error": str(e)}
 
     def get_installed_mods(self, server_path: str) -> List[Dict]:
