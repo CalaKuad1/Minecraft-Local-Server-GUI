@@ -210,3 +210,142 @@ def test_modpack_rollback_restores_overwritten_files(server, tmp_path, no_sleep)
     assert pre_existing.read_bytes() == b"user-content", "overwritten file must be restored"
     assert not (mods_dir / "missing.jar").exists()
     assert not (server_path / "temp_modpack").exists()
+
+
+# --- Side filter and mod updates -------------------------------------------
+
+import hashlib  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+import utils.mods_manager as mods_module  # noqa: E402
+
+
+class _Resp:
+    def __init__(self, data, status=200):
+        self._data = data
+        self.status_code = status
+        self.text = json.dumps(data)
+
+    def json(self):
+        return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def _fake_requests(monkeypatch, get=None, post=None):
+    calls = []
+
+    def _get(url, **kw):
+        calls.append(("GET", url, kw))
+        return get(url, **kw)
+
+    def _post(url, **kw):
+        calls.append(("POST", url, kw))
+        return post(url, **kw)
+
+    monkeypatch.setattr(mods_module, "requests", SimpleNamespace(get=_get, post=_post))
+    return calls
+
+
+def test_search_side_filter_adds_environment_facets(monkeypatch):
+    calls = _fake_requests(monkeypatch, get=lambda url, **kw: _Resp({"hits": []}))
+    manager = ModsManager()
+
+    manager.search_mods("", side="server")
+    manager.search_mods("", side="server_only")
+    manager.search_mods("", side="all")
+
+    facets = [json.loads(c[2]["params"]["facets"]) for c in calls]
+    assert ["server_side:required", "server_side:optional"] in facets[0]
+    assert ["client_side:optional", "client_side:unsupported"] not in facets[0]
+    assert ["client_side:optional", "client_side:unsupported"] in facets[1]
+    assert not any("server_side" in f for group in facets[2] for f in group)
+
+
+def _install_jar(tmp_path, name, content):
+    mods = tmp_path / "mods"
+    mods.mkdir(exist_ok=True)
+    (mods / name).write_bytes(content)
+    return hashlib.sha1(content).hexdigest()
+
+
+def test_check_updates_reports_only_newer_versions(tmp_path, monkeypatch):
+    old = _install_jar(tmp_path, "sodium-0.5.jar", b"sodium-old")
+    cur = _install_jar(tmp_path, "lithium-0.12.jar", b"lithium-current")
+    _install_jar(tmp_path, "manual.jar", b"not-on-modrinth")
+
+    current = {
+        old: {"id": "s1", "project_id": "P1", "version_number": "0.5", "date_published": "2024-01-01T00:00:00Z"},
+        cur: {"id": "l2", "project_id": "P2", "version_number": "0.12", "date_published": "2024-06-01T00:00:00Z"},
+    }
+    latest = {
+        old: {"id": "s2", "version_number": "0.6", "date_published": "2024-05-01T00:00:00Z",
+              "files": [{"filename": "sodium-0.6.jar", "primary": True}]},
+        # Modrinth's "latest for these filters" is older than what's installed.
+        cur: {"id": "l1", "version_number": "0.11", "date_published": "2024-02-01T00:00:00Z",
+              "files": [{"filename": "lithium-0.11.jar", "primary": True}]},
+    }
+    seen = {}
+
+    def post(url, json=None, **kw):
+        seen[url.rsplit("/", 1)[-1]] = json
+        return _Resp(latest if url.endswith("/update") else current)
+
+    def get(url, **kw):
+        return _Resp([{"id": "P1", "title": "Sodium", "slug": "sodium"},
+                      {"id": "P2", "title": "Lithium", "slug": "lithium"}])
+
+    _fake_requests(monkeypatch, get=get, post=post)
+    result = ModsManager().check_updates(str(tmp_path), loader="fabric", version="1.21.1")
+
+    by_name = {r["filename"]: r for r in result}
+    assert set(by_name) == {"sodium-0.5.jar", "lithium-0.12.jar"}
+    assert by_name["sodium-0.5.jar"]["title"] == "Sodium"
+    assert by_name["sodium-0.5.jar"]["update"]["version_id"] == "s2"
+    assert by_name["lithium-0.12.jar"]["update"] is None
+    assert seen["update"]["loaders"] == ["fabric"]
+    assert seen["update"]["game_versions"] == ["1.21.1"]
+
+
+def test_update_mod_replaces_jar(tmp_path, server, monkeypatch, no_sleep):
+    _install_jar(tmp_path, "sodium-0.5.jar", b"sodium-old")
+    new = b"sodium-new"
+    _serve(server, "/sodium-0.6.jar", new)
+    version = {"files": [{"filename": "sodium-0.6.jar", "primary": True,
+                          "url": _url(server, "/sodium-0.6.jar"),
+                          "hashes": {"sha1": hashlib.sha1(new).hexdigest()}}]}
+    _fake_requests(monkeypatch, get=lambda url, **kw: _Resp(version))
+
+    result = ModsManager().update_mod("sodium-0.5.jar", "s2", str(tmp_path))
+
+    assert result == {"success": True, "filename": "sodium-0.6.jar", "previous": "sodium-0.5.jar"}
+    assert sorted(os.listdir(tmp_path / "mods")) == ["sodium-0.6.jar"]
+    assert (tmp_path / "mods" / "sodium-0.6.jar").read_bytes() == new
+
+
+def test_update_mod_keeps_old_jar_on_bad_checksum(tmp_path, server, monkeypatch, no_sleep):
+    _install_jar(tmp_path, "sodium-0.5.jar", b"sodium-old")
+    _serve(server, "/sodium-0.6.jar", b"tampered")
+    version = {"files": [{"filename": "sodium-0.6.jar", "primary": True,
+                          "url": _url(server, "/sodium-0.6.jar"),
+                          "hashes": {"sha1": "0" * 40}}]}
+    _fake_requests(monkeypatch, get=lambda url, **kw: _Resp(version))
+
+    result = ModsManager().update_mod("sodium-0.5.jar", "s2", str(tmp_path))
+
+    assert result["success"] is False
+    assert sorted(os.listdir(tmp_path / "mods")) == ["sodium-0.5.jar"]
+
+
+def test_update_mod_keeps_old_jar_when_download_fails(tmp_path, server, monkeypatch, no_sleep):
+    _install_jar(tmp_path, "sodium-0.5.jar", b"sodium-old")
+    version = {"files": [{"filename": "sodium-0.6.jar", "primary": True,
+                          "url": _url(server, "/missing.jar")}]}
+    _fake_requests(monkeypatch, get=lambda url, **kw: _Resp(version))
+
+    result = ModsManager().update_mod("sodium-0.5.jar", "s2", str(tmp_path))
+
+    assert result["success"] is False
+    assert sorted(os.listdir(tmp_path / "mods")) == ["sodium-0.5.jar"]

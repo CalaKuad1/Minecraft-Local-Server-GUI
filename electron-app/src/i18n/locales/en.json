@@ -538,6 +538,23 @@
         "deps_title": "Required dependencies",
         "deps_confirm": "{name} requires {count} mod(s). Dependencies must be installed separately.\n\nInstall anyway?",
         "install_anyway": "Install anyway",
+        "sides": {
+            "server": "Works on servers",
+            "server_only": "Server-only (no client mod)",
+            "all": "Any side"
+        },
+        "server_only_badge": "Server-only",
+        "server_only_hint": "Players can join without installing this mod.",
+        "check_updates": "Check for updates",
+        "update_all": "Update all ({count})",
+        "up_to_date": "All mods up to date",
+        "update": "Update",
+        "updating": "Updating",
+        "auto_update": "Auto-update on start",
+        "auto_update_hint": "Install compatible mod updates from Modrinth every time the server starts.",
+        "update_stop_first": "Stop the server before updating mods.",
+        "update_check_error": "Could not check for mod updates.",
+        "update_error": "Failed to update {name}",
         "loaders": {
             "any": "Any Loader",
             "fabric": "Fabric",

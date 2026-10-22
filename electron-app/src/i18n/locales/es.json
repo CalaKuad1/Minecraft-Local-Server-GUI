@@ -537,6 +537,23 @@
         "deps_title": "Dependencias requeridas",
         "deps_confirm": "{name} requiere {count} mod(s). Las dependencias deben instalarse por separado.\n\n¿Instalar igualmente?",
         "install_anyway": "Instalar igualmente",
+        "sides": {
+            "server": "Funcionan en servidor",
+            "server_only": "Solo servidor (sin mod en cliente)",
+            "all": "Cualquier lado"
+        },
+        "server_only_badge": "Solo servidor",
+        "server_only_hint": "Los jugadores pueden entrar sin instalar este mod.",
+        "check_updates": "Buscar actualizaciones",
+        "update_all": "Actualizar todo ({count})",
+        "up_to_date": "Todos los mods están al día",
+        "update": "Actualizar",
+        "updating": "Actualizando",
+        "auto_update": "Actualizar al iniciar",
+        "auto_update_hint": "Instala las actualizaciones compatibles de Modrinth cada vez que se inicia el servidor.",
+        "update_stop_first": "Detén el servidor antes de actualizar mods.",
+        "update_check_error": "No se pudieron buscar actualizaciones de mods.",
+        "update_error": "No se pudo actualizar {name}",
         "loaders": {
             "any": "Cualquier loader",
             "fabric": "Fabric",
