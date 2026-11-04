@@ -3484,8 +3484,14 @@ def get_playit_status():
 
 
 @app.post("/tunnel/playit/link")
-def link_playit():
-    """Starts the one-time link: opens playit.gg in the browser for approval."""
+def link_playit(open_browser: bool = True):
+    """Starts the one-time link: opens playit.gg in the browser for approval.
+
+    The Electron app passes open_browser=false and opens the claim URL itself
+    via shell.openExternal: Python's webbrowser fails silently inside the
+    frozen backend on Linux (no browser found, or xdg-open breaking on the
+    bundled LD_LIBRARY_PATH), which made the "Activate free" button a no-op.
+    """
     from utils import playit_manager as pm
     import webbrowser
 
@@ -3494,7 +3500,8 @@ def link_playit():
     if pm.pick_agent_asset() is None:
         raise HTTPException(status_code=400, detail="playit.gg is not available on this OS")
     if state.playit_link:
-        webbrowser.open(state.playit_link["url"])
+        if open_browser:
+            webbrowser.open(state.playit_link["url"])
         return {"status": "linking", "claim_url": state.playit_link["url"]}
 
     code = pm.generate_claim_code()
@@ -3520,7 +3527,8 @@ def link_playit():
                 state.playit_link = None
 
     threading.Thread(target=wait, daemon=True).start()
-    webbrowser.open(link["url"])
+    if open_browser:
+        webbrowser.open(link["url"])
     return {"status": "linking", "claim_url": link["url"]}
 
 

@@ -418,7 +418,7 @@ export const api = {
         return await fetchJson(`${API_URL}/tunnel/playit/status`);
     },
     linkPlayit: async () => {
-        return await fetchJson(`${API_URL}/tunnel/playit/link`, { method: 'POST' }, 20000);
+        return await fetchJson(`${API_URL}/tunnel/playit/link?open_browser=false`, { method: 'POST' }, 20000);
     },
     cancelPlayitLink: async () => {
         return await fetchJson(`${API_URL}/tunnel/playit/link/cancel`, { method: 'POST' });

@@ -503,6 +503,9 @@ export default function Dashboard({ status: serverStatus, onRefresh, active = tr
     const handleLinkPlayit = async () => {
         try {
             const r = await api.linkPlayit();
+            // Opened from the renderer: setWindowOpenHandler hands it to
+            // shell.openExternal, which works on Linux where the backend can't.
+            if (r?.claim_url) window.open(r.claim_url, '_blank', 'noopener');
             setPlayit(p => ({ ...p, linking: true, claim_url: r?.claim_url || null }));
         } catch (err) {
             toast.error(err.response?.data?.detail || err.message, { title: t('dashboard.tunnel.playit_link_failed') });
