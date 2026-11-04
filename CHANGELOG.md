@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.2
+
+### Fixes
+- **playit.gg "Activate free" now opens your browser on Linux.** The button did nothing on some Linux systems (e.g. Arch) because the link was opened from the bundled backend. The app now opens it directly (#23).
+
 ## v2.0.1
 
 ### Mods
